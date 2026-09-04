@@ -1,11 +1,7 @@
-import { Login } from './Login'
+import { ScalePage } from './pages/ScalePage';
 
 function App() {
-  return (
-      <main>
-        <Login />
-      </main>
-  )
+    return <ScalePage />;
 }
 
-export default App
+export default App;

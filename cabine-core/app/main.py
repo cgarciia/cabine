@@ -13,6 +13,9 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
 from app.api.fhir_patient import router as fhir_patient_router
 
+# 1. IMPORTANDO O ROUTER DO BLUETOOTH AQUI 👇
+from app.api.bluetooth import router as bluetooth_router
+
 app = FastAPI(
     title="Cabine API",
     version="1.0.0",
@@ -104,3 +107,5 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
 
 # --- ROTAS FHIR ---
 app.include_router(fhir_patient_router)
+
+app.include_router(bluetooth_router, tags=["Bluetooth"])

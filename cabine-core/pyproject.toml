@@ -8,6 +8,7 @@ dependencies = [
     "alembic>=1.19.1",
     "asyncpg>=0.31.0",
     "bcrypt>=5.0.0",
+    "bleak>=3.0.2",
     "fastapi>=0.141.1",
     "fhir-resources>=7.0.0",
     "pydantic>=2.13.5",
