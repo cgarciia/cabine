@@ -1,15 +1,15 @@
-from typing import AsyncGenerator
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from collections.abc import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from app.core.config import settings
 
-# Cria a engine assíncrona (com echo=True para ver as queries no terminal durante o dev)
 engine = create_async_engine(
     settings.ASYNC_DATABASE_URI,
-    echo=True,
-    future=True
+    echo=settings.SQL_ECHO,
+    future=True,
 )
 
-# Fábrica de sessões do banco
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
@@ -18,10 +18,7 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
 )
 
-# Dependência para injetar a conexão nas rotas do FastAPI
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+        yield session
