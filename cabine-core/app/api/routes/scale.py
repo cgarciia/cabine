@@ -68,6 +68,7 @@ async def delete_scale(scale_id: UUID, db: AsyncSession = Depends(get_db)):
 async def scale_endpoint(
     websocket: WebSocket,
     scale_id: UUID | None = None,
-    db: AsyncSession = Depends(get_db),
 ):
-    await stream_scale(websocket, db, scale_id)
+    # Sessão de banco é aberta só para carregar a balança (dentro de stream_scale).
+    # Não usar Depends(get_db) aqui: o WS fica aberto minutos/horas e esgotava o pool.
+    await stream_scale(websocket, scale_id)

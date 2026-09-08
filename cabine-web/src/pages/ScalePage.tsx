@@ -20,16 +20,19 @@ export const ScalePage = () => {
     const [scaleName, setScaleName] = useState<string>('Buscando dispositivo...');
     const [lastUpdate, setLastUpdate] = useState<string>('--:--:--');
     const [status, setStatus] = useState('Desconectado');
+    const [loadError, setLoadError] = useState('');
     const wsRef = useRef<WebSocket | null>(null);
 
     useEffect(() => {
         api.get<Scale[]>('/scales').then(({ data }) => {
+            setLoadError('');
             setScales(data);
             const preferred = data.find((item) => item.is_default && item.is_active)
                 ?? data.find((item) => item.is_active)
                 ?? data[0];
             if (preferred) setSelectedId(preferred.id);
         }).catch(() => {
+            setLoadError('Não foi possível carregar as balanças cadastradas.');
             setStatus('Não foi possível carregar as balanças cadastradas.');
         });
     }, []);
@@ -162,7 +165,9 @@ export const ScalePage = () => {
                         </div>
                     </header>
 
-                    {scales.length === 0 ? (
+                    {loadError ? (
+                        <p style={{ color: '#B91C1C', textAlign: 'center' }}>{loadError}</p>
+                    ) : scales.length === 0 ? (
                         <p style={{ color: '#64748B', textAlign: 'center' }}>
                             Nenhuma balança cadastrada.{' '}
                             <Link to="/balancas" style={{ color: '#2563EB' }}>Cadastrar agora</Link>

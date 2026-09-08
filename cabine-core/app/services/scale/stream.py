@@ -4,41 +4,43 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import WebSocket, WebSocketDisconnect
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import AsyncSessionLocal
 from app.crud import scale as scale_crud
 from app.services.scale.registry import get_adapter, resolve_parser
+from app.services.scale.spec import ScaleSpec
 
 logger = logging.getLogger(__name__)
 
 
+async def _load_scale_spec(scale_id: UUID | None) -> tuple[ScaleSpec | None, str | None]:
+    """Busca a balança e libera a conexão do pool antes do stream BLE longo."""
+    async with AsyncSessionLocal() as db:
+        if scale_id is not None:
+            record = await scale_crud.get_by_id(db, scale_id)
+        else:
+            record = await scale_crud.get_default(db)
+
+        if record is None:
+            return None, "Nenhuma balança cadastrada. Cadastre uma na tela de balanças."
+
+        if not record.is_active:
+            return None, f"A balança '{record.name}' está inativa."
+
+        return scale_crud.to_spec(record), None
+
+
 async def stream_scale(
     websocket: WebSocket,
-    db: AsyncSession,
     scale_id: UUID | None = None,
 ) -> None:
     await websocket.accept()
 
-    if scale_id is not None:
-        record = await scale_crud.get_by_id(db, scale_id)
-    else:
-        record = await scale_crud.get_default(db)
-
-    if record is None:
-        await websocket.send_json(
-            {"type": "STATUS", "msg": "Nenhuma balança cadastrada. Cadastre uma na tela de balanças."}
-        )
+    spec, error = await _load_scale_spec(scale_id)
+    if error or spec is None:
+        await websocket.send_json({"type": "STATUS", "msg": error})
         await websocket.close()
         return
-
-    if not record.is_active:
-        await websocket.send_json(
-            {"type": "STATUS", "msg": f"A balança '{record.name}' está inativa."}
-        )
-        await websocket.close()
-        return
-
-    spec = scale_crud.to_spec(record)
 
     try:
         adapter = get_adapter(spec.adapter)
