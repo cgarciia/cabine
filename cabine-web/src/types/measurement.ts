@@ -1,3 +1,10 @@
+export interface Destaque {
+    codigo: string;
+    gravidade?: string;
+    titulo?: string;
+    texto?: string;
+}
+
 export interface ScaleMetrics {
     imc?: number;
     imc_status?: string;
@@ -13,14 +20,24 @@ export interface ScaleMetrics {
     agua_status?: string;
     musculo_esqueletico_kg?: number;
     gordura_visceral?: number;
+    gordura_visceral_status?: string;
     idade_corporal?: number;
     musculo_pct?: number;
     osso_kg?: number;
     score?: number;
     metodo?: string;
+    versao?: number;
     aviso?: string;
     z_corpo_ohm?: number;
+    z_20khz?: number[];
+    z_100khz?: number[];
     equilibrio?: { bracos_diff_pct?: number; pernas_diff_pct?: number };
+    gordura_subcutanea_pct?: number;
+    proteina_pct?: number;
+    proteina_kg?: number;
+    smi?: number;
+    tipo_corporal?: string;
+    destaques?: Destaque[];
 }
 
 export interface Segmento {

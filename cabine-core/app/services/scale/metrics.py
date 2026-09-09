@@ -104,6 +104,90 @@ def _band(value: float, low: float, high: float) -> str:
     return "saudavel"
 
 
+def _visceral_status(level: int) -> str:
+    if level >= 10:
+        return "alto"
+    return "saudavel"
+
+
+def _body_type(imc: float, fat_pct: float, sex: str, people_type: str) -> str:
+    fat_lo, fat_hi = (8.0, 20.0) if sex == "male" else (18.0, 28.0)
+    high_fat = fat_pct > fat_hi
+    low_fat = fat_pct < fat_lo
+    if imc >= 30 and high_fat:
+        return "obesidade"
+    if imc >= 25 and not high_fat:
+        return "atleta"
+    if imc >= 25:
+        return "sobrepeso"
+    if imc < 18.5 and high_fat:
+        return "skinny-fat"
+    if imc < 18.5:
+        return "baixo"
+    if high_fat:
+        return "sobrepeso"
+    if low_fat or people_type == "athlete":
+        return "magro" if low_fat else "atleta"
+    return "adequado"
+
+
+def _highlights(result: dict) -> list[dict]:
+    items: list[dict] = []
+    if result.get("gordura_pct_status") == "alto":
+        items.append({
+            "codigo": "gordura_alta",
+            "gravidade": "alta",
+            "titulo": "Gordura corporal acima",
+            "texto": "O percentual de gordura ficou fora da faixa para o perfil.",
+        })
+    if result.get("gordura_visceral") is not None and int(result["gordura_visceral"]) >= 10:
+        items.append({
+            "codigo": "visceral_alta",
+            "gravidade": "alta",
+            "titulo": "Gordura visceral elevada",
+            "texto": "O nível de gordura na região do tronco está alto.",
+        })
+    if result.get("agua_status") == "baixo":
+        items.append({
+            "codigo": "agua_baixa",
+            "gravidade": "media",
+            "titulo": "Água corporal abaixo",
+            "texto": "A fração de água ficou abaixo da faixa usual.",
+        })
+    if result.get("imc_status") == "alto" and result.get("gordura_pct_status") != "alto":
+        items.append({
+            "codigo": "imc_alto",
+            "gravidade": "media",
+            "titulo": "IMC acima",
+            "texto": "O peso está acima da faixa de referência para a altura.",
+        })
+    if result.get("imc_status") == "baixo":
+        items.append({
+            "codigo": "imc_baixo",
+            "gravidade": "media",
+            "titulo": "IMC abaixo",
+            "texto": "O peso ficou abaixo da faixa de referência para a altura.",
+        })
+    balance = result.get("equilibrio") or {}
+    arms = balance.get("bracos_diff_pct") if isinstance(balance, dict) else None
+    legs = balance.get("pernas_diff_pct") if isinstance(balance, dict) else None
+    if (arms is not None and arms >= 10) or (legs is not None and legs >= 10):
+        items.append({
+            "codigo": "assimetria",
+            "gravidade": "media",
+            "titulo": "Assimetria entre os lados",
+            "texto": "A impedância esquerda/direita divergiu mais de 10%.",
+        })
+    if not items:
+        items.append({
+            "codigo": "ok",
+            "gravidade": "baixa",
+            "titulo": "Composição na faixa",
+            "texto": "Os indicadores principais ficaram dentro das referências usadas neste relatório.",
+        })
+    return items[:3]
+
+
 def compute_basic_metrics(peso_kg: float, profile: PersonProfile) -> dict:
     height_m = profile.height_cm / 100.0
     imc = peso_kg / (height_m**2)
@@ -123,7 +207,7 @@ def compute_basic_metrics(peso_kg: float, profile: PersonProfile) -> dict:
     gordura_kg = peso_kg * gordura_pct / 100.0
     massa_magra_kg = max(0.0, peso_kg - gordura_kg)
 
-    return {
+    payload = {
         "imc": round(imc, 1),
         "imc_status": _band(imc, 18.5, 24.9),
         "gordura_pct": round(gordura_pct, 1),
@@ -134,8 +218,12 @@ def compute_basic_metrics(peso_kg: float, profile: PersonProfile) -> dict:
         "peso_ideal_kg": round(peso_ideal, 1),
         "controle_peso_kg": round(peso_ideal - peso_kg, 1),
         "metodo": "imc_deurenberg",
+        "versao": 1,
+        "tipo_corporal": _body_type(imc, gordura_pct, profile.sex, profile.people_type),
         "aviso": "Estimativas por IMC/perfil. Diferem do relatório RelaxFit (algoritmo proprietário).",
     }
+    payload["destaques"] = _highlights(payload)
+    return payload
 
 
 def _segment_payload(segmentos: list[SegmentImpedance]) -> list[dict]:
@@ -212,6 +300,8 @@ def compute_report(
             balance = {"bracos_diff_pct": arms, "pernas_diff_pct": legs}
 
     idade = body_age(profile.age, wla.fat_pct, sex_code)
+    skeletal_kg = round(wla.skeletal_muscle_pct / 100.0 * wla.weight_kg, 1)
+    height_m = profile.height_cm / 100.0
     result.update(
         {
             "imc": wla.bmi,
@@ -223,21 +313,27 @@ def compute_report(
             "agua_kg": round(wla.lbm_kg * 0.733, 1),
             "agua_pct": wla.water_pct,
             "agua_status": _band(wla.water_pct, water_lo, water_hi),
-            "musculo_esqueletico_kg": round(wla.skeletal_muscle_pct / 100.0 * wla.weight_kg, 1),
+            "musculo_esqueletico_kg": skeletal_kg,
             "musculo_pct": wla.muscle_pct,
             "gordura_visceral": wla.visceral_fat,
+            "gordura_visceral_status": _visceral_status(wla.visceral_fat),
             "gordura_subcutanea_pct": wla.subcutaneous_fat_pct,
             "proteina_pct": wla.protein_pct,
+            "proteina_kg": round(wla.protein_pct / 100.0 * wla.weight_kg, 1),
             "osso_kg": wla.bone_kg,
             "tmb_kcal": wla.bmr_kcal,
             "idade_corporal": idade,
+            "smi": round(skeletal_kg / (height_m**2), 1) if height_m > 0 else None,
             "score": score,
             "equilibrio": balance,
+            "tipo_corporal": _body_type(wla.bmi, wla.fat_pct, profile.sex, profile.people_type),
             "metodo": "wla25",
+            "versao": 1,
             "aviso": (
                 "Composição via algoritmo WLA25 (mesmo do app Fitdays/RelaxFit / openScale). "
                 "Valores de osso podem diferir 0,1 kg do visor."
             ),
         }
     )
+    result["destaques"] = _highlights(result)
     return result

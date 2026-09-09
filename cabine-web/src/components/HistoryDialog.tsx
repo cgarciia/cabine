@@ -23,9 +23,9 @@ export function HistoryDialog({ person, records, loading, error, selected, onSel
     const report = selected ?? items[0] ?? null;
 
     return (
-        <div className="cabine-overlay no-print" style={{ zIndex: 60 }} onClick={onClose}>
+        <div className="cabine-overlay" style={{ zIndex: 60 }} onClick={onClose}>
             <div className="cabine-dialog" onClick={(event) => event.stopPropagation()}>
-                <div className="cabine-dialog-head">
+                <div className="cabine-dialog-head no-print">
                     <div>
                         <p className="cabine-kicker">Histórico</p>
                         <h2 style={{ margin: '4px 0 0', fontSize: '1.6rem' }}>{person.name}</h2>
@@ -44,7 +44,7 @@ export function HistoryDialog({ person, records, loading, error, selected, onSel
                     </p>
                 ) : (
                     <div className="cabine-history-layout">
-                        <div className="cabine-history-list">
+                        <div className="cabine-history-list no-print">
                             {items.map((item) => (
                                 <button
                                     key={item.id}
@@ -67,15 +67,19 @@ export function HistoryDialog({ person, records, loading, error, selected, onSel
                                     scaleName={report.scale_name}
                                     heightCm={String(report.height_cm)}
                                     age={String(report.age)}
+                                    sex={report.sex}
+                                    peopleType={report.people_type}
                                     pesoKg={report.peso_kg}
                                     metrics={report.metricas}
                                     supportsBia={report.adapter === 'ble_icomon'}
                                     weightOnly={report.adapter === 'ble_icomon' && !report.completo}
                                     saved
+                                    segmentos={report.segmentos ?? undefined}
+                                    measuredAt={formatWhen(report.created_at)}
                                 />
                                 <button
                                     type="button"
-                                    className="cabine-btn cabine-btn-primary"
+                                    className="cabine-btn cabine-btn-primary no-print"
                                     style={{ marginTop: 12 }}
                                     onClick={() => window.print()}
                                 >
