@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from app.services.scale.icomon import parser_icomon_ffb2
 from app.services.scale.spec import ScaleSpec
 
 ParserFn = Callable[..., float | None]
@@ -38,11 +39,13 @@ def parser_broadcast_big_endian(manufacturer_data: dict) -> float | None:
 PARSERS: dict[str, ParserFn] = {
     "gatt_16bit_overflow": parser_gatt_16bit_overflow,
     "broadcast_big_endian": parser_broadcast_big_endian,
+    "icomon_ffb2": parser_icomon_ffb2,
 }
 
 PARSER_LABELS: dict[str, str] = {
     "gatt_16bit_overflow": "Yolanda / AC27 (GATT 16-bit overflow)",
     "broadcast_big_endian": "Advertising BLE (2 bytes big-endian / 100)",
+    "icomon_ffb2": "ICOMON / RelaxFit (FFB2 peso 3 bytes / 1000)",
 }
 
 

@@ -5,7 +5,7 @@ db-down:
 	docker compose down
 
 run:
-	uv run uvicorn app.main:app --reload --port 8000
+	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 m ?= "autogenerate"
 makemigrations:

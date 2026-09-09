@@ -53,6 +53,9 @@ class BleGattAdapter(ScaleAdapter):
         dispatch: DispatchFn,
         send_status: StatusFn,
         queue,
+        profile=None,
+        profile_box=None,
+        profile_sync_box=None,
     ) -> None:
         await send_status("Aguardando rádio Bluetooth...")
         async with ble_radio_lock:

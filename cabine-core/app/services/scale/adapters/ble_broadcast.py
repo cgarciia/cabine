@@ -10,6 +10,7 @@ from app.services.scale.adapters.ble_common import (
     watch_websocket_closed,
 )
 from app.services.scale.parsers import ParserFn
+from app.services.scale.reading import ScaleReading
 from app.services.scale.spec import ScaleSpec
 
 
@@ -31,10 +32,15 @@ class BleBroadcastAdapter(ScaleAdapter):
         dispatch: DispatchFn,
         send_status: StatusFn,
         queue,
+        profile=None,
+        profile_box=None,
+        profile_sync_box=None,
     ) -> None:
         def scan_callback(ble_device, adv) -> None:
             if ble_device.address.upper() == spec.address:
-                dispatch(parse(adv.manufacturer_data))
+                result = parse(adv.manufacturer_data)
+                if result is not None:
+                    dispatch(ScaleReading(peso_kg=float(result)))
 
         async with ble_radio_lock:
             scanner = BleakScanner(detection_callback=scan_callback)

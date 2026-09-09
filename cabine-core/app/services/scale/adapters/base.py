@@ -4,10 +4,12 @@ from typing import Any
 
 from fastapi import WebSocket
 
+from app.services.scale.metrics import PersonProfile
 from app.services.scale.parsers import ParserFn
+from app.services.scale.reading import ScaleReading
 from app.services.scale.spec import ScaleSpec
 
-DispatchFn = Callable[[float | None], None]
+DispatchFn = Callable[[ScaleReading | float | None], None]
 StatusFn = Callable[[str], Awaitable[None]]
 
 
@@ -17,6 +19,7 @@ class ScaleAdapter(ABC):
     address_kind: str
     address_label: str
     parsers: tuple[str, ...]
+    supports_bia: bool = False
 
     def normalize_address(self, address: str) -> str:
         return address.strip()
@@ -36,5 +39,12 @@ class ScaleAdapter(ABC):
         dispatch: DispatchFn,
         send_status: StatusFn,
         queue: Any,
+        profile: PersonProfile | None = None,
+        profile_box: list | None = None,
+        profile_sync_box: list | None = None,
     ) -> None:
-        """Lê o hardware e empilha leituras até o WebSocket encerrar."""
+        """Lê o hardware e empilha leituras até o WebSocket encerrar.
+
+        `profile_box` / `profile_sync_box` permitem atualizar o perfil e forçar
+        regravação do slot P-1 (altura, idade, sexo, tipo, peso esperado).
+        """
