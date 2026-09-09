@@ -10,11 +10,13 @@ from app.services.scale.registry import adapter_accepts_parser, list_catalog, no
 class ScaleAdapter(StrEnum):
     ble_gatt = "ble_gatt"
     ble_broadcast = "ble_broadcast"
+    ble_icomon = "ble_icomon"
 
 
 class ScaleParser(StrEnum):
     gatt_16bit_overflow = "gatt_16bit_overflow"
     broadcast_big_endian = "broadcast_big_endian"
+    icomon_ffb2 = "icomon_ffb2"
 
 
 class ScaleBase(BaseModel):

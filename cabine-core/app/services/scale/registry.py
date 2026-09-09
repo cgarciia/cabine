@@ -1,12 +1,13 @@
 from app.services.scale.adapters.base import ScaleAdapter
 from app.services.scale.adapters.ble_broadcast import BleBroadcastAdapter
 from app.services.scale.adapters.ble_gatt import BleGattAdapter
+from app.services.scale.adapters.ble_icomon import BleIcomonGattAdapter
 from app.services.scale.parsers import PARSER_LABELS, PARSERS
 from app.services.scale.spec import ScaleSpec
 
 _ADAPTERS: dict[str, ScaleAdapter] = {
     adapter.key: adapter
-    for adapter in (BleGattAdapter(), BleBroadcastAdapter())
+    for adapter in (BleGattAdapter(), BleBroadcastAdapter(), BleIcomonGattAdapter())
 }
 
 
@@ -41,6 +42,7 @@ def list_catalog() -> list[dict]:
                 "label": adapter.label,
                 "address_kind": adapter.address_kind,
                 "address_label": adapter.address_label,
+                "supports_bia": adapter.supports_bia,
                 "parsers": [
                     {"key": parser_key, "label": PARSER_LABELS.get(parser_key, parser_key)}
                     for parser_key in adapter.parsers

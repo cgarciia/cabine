@@ -8,6 +8,7 @@ export interface ScaleAdapterOption {
     label: string;
     address_kind: string;
     address_label: string;
+    supports_bia?: boolean;
     parsers: ScaleParserOption[];
 }
 
