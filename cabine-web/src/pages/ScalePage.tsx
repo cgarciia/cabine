@@ -682,11 +682,14 @@ export const ScalePage = () => {
                             scaleName={scaleName}
                             heightCm={heightCm}
                             age={age}
+                            sex={sex}
+                            peopleType={peopleType}
                             pesoKg={currentWeight}
                             metrics={metrics}
                             supportsBia={supportsBia}
                             weightOnly={weightOnlyResult}
                             saved={reportSaved}
+                            segmentos={segments}
                         />
                         <div className="no-print" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
                             <button type="button" className="cabine-btn cabine-btn-primary" onClick={() => window.print()}>
