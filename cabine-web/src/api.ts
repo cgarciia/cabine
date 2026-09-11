@@ -1,6 +1,8 @@
 import axios from 'axios';
 
+import type { FormSubmission } from './types/form';
 import type { MeasurementRecord } from './types/measurement';
+import type { OximeterReading } from './types/oximeter';
 
 export function apiBaseUrl() {
     const env = import.meta.env.VITE_API_URL as string | undefined;
@@ -68,4 +70,26 @@ export async function fetchPersonMeasurements(personId: string): Promise<Measure
         throw lastError;
     }
     return last;
+}
+
+export async function saveFormSubmission(body: {
+    person_id: string;
+    module: 'health' | 'mental';
+    status: string;
+    payload: Record<string, unknown>;
+}): Promise<FormSubmission> {
+    const { data } = await api.post<FormSubmission>('/forms', body);
+    return data;
+}
+
+export async function fetchPersonForms(personId: string): Promise<FormSubmission[]> {
+    const id = encodeURIComponent(personId);
+    const { data } = await api.get<FormSubmission[]>(`/people/${id}/forms`);
+    return Array.isArray(data) ? data : [];
+}
+
+export async function fetchPersonOximeter(personId: string): Promise<OximeterReading[]> {
+    const id = encodeURIComponent(personId);
+    const { data } = await api.get<OximeterReading[]>(`/people/${id}/oximeter`);
+    return Array.isArray(data) ? data : [];
 }

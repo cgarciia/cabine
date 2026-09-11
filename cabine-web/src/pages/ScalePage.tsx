@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
-import { api, apiErrorMessage, fetchPersonMeasurements, wsBaseUrl } from '../api';
+import { api, apiErrorMessage, wsBaseUrl } from '../api';
 import { AppLayout } from '../components/AppLayout';
-import { BodyReport } from '../components/BodyReport';
-import { HistoryDialog } from '../components/HistoryDialog';
+import { PatientBodySummary } from '../components/PatientBodySummary';
 import { emptyPersonForm, PersonForm, type PersonFormValues } from '../components/PersonForm';
-import type { MeasurementPayload, MeasurementRecord, ScaleMetrics, Segmento } from '../types/measurement';
+import { saveCurrentPersonId, loadCurrentPersonId } from '../session/currentPerson';
+import type { MeasurementPayload, ScaleMetrics, Segmento } from '../types/measurement';
 import type { ScalePerson } from '../types/person';
 import type { Scale } from '../types/scale';
 
@@ -70,6 +70,7 @@ function friendlyStatus(raw: string, ready: boolean) {
 }
 
 export const ScalePage = () => {
+    const navigate = useNavigate();
     const [scales, setScales] = useState<Scale[]>([]);
     const [people, setPeople] = useState<ScalePerson[]>([]);
     const [selectedId, setSelectedId] = useState('');
@@ -98,11 +99,6 @@ export const ScalePage = () => {
     const [status, setStatus] = useState('Escolha quem vai se avaliar');
     const [guideStep, setGuideStep] = useState('step_on');
     const [guideMsg, setGuideMsg] = useState(BIA_GUIDE[0].detail);
-    const [historyOpen, setHistoryOpen] = useState(false);
-    const [historyRecords, setHistoryRecords] = useState<MeasurementRecord[]>([]);
-    const [historyLoading, setHistoryLoading] = useState(false);
-    const [historyError, setHistoryError] = useState('');
-    const [selectedHistory, setSelectedHistory] = useState<MeasurementRecord | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     const savedKeyRef = useRef('');
     const liveStartedRef = useRef(false);
@@ -243,7 +239,7 @@ export const ScalePage = () => {
     }, []);
 
     const applyPerson = useCallback((person: ScalePerson) => {
-        window.sessionStorage.setItem('cabine-person-id', person.id);
+        saveCurrentPersonId(person.id);
         setSelectedPersonId(person.id);
         setHeightCm(String(person.height_cm));
         setAge(String(person.age));
@@ -262,7 +258,7 @@ export const ScalePage = () => {
     }, [heightCm, age, sex, birthDate, peopleType, expectedWeight, selectedPersonName, sendProfile]);
 
     useEffect(() => {
-        const remembered = window.sessionStorage.getItem('cabine-person-id');
+        const remembered = loadCurrentPersonId();
         api.get<Scale[]>('/scales').then(({ data }) => {
             setScales(data);
             const preferred = data.find((item) => item.is_default && item.is_active)
@@ -431,7 +427,6 @@ export const ScalePage = () => {
 
     const activeGuide = stepIndex(guide, guideStep);
     const currentGuide = guide[activeGuide] ?? guide[0];
-    const weightOnlyResult = supportsBia && view === 'report' && !complete;
     const readyLabel = friendlyStatus(status, view === 'ready');
 
     async function handleAddPerson(event: FormEvent) {
@@ -475,22 +470,6 @@ export const ScalePage = () => {
         setReconnectKey((value) => value + 1);
     }
 
-    async function openHistory() {
-        if (!selectedPersonId) return;
-        setHistoryOpen(true);
-        setHistoryLoading(true);
-        setHistoryError('');
-        try {
-            const data = await fetchPersonMeasurements(selectedPersonId);
-            setHistoryRecords(data);
-            setSelectedHistory(data[0] ?? null);
-        } catch (err) {
-            setHistoryError(apiErrorMessage(err, 'Não foi possível carregar o histórico.'));
-        } finally {
-            setHistoryLoading(false);
-        }
-    }
-
     return (
         <AppLayout>
             <div className="cabine-stage">
@@ -499,8 +478,7 @@ export const ScalePage = () => {
                         <p className="cabine-kicker">Configuração</p>
                         <h1 style={{ margin: '8px 0', fontSize: '1.8rem' }}>Nenhuma balança cadastrada</h1>
                         <p style={{ color: '#64748b' }}>
-                            Cadastre o equipamento para iniciar as avaliações.{' '}
-                            <Link to="/balancas">Ir para balanças</Link>
+                            A balança ainda não está pronta. Peça ao profissional da cabine para configurar o equipamento.
                         </p>
                     </div>
                 ) : (
@@ -523,7 +501,7 @@ export const ScalePage = () => {
                             </div>
                         </div>
 
-                        <div className="no-print" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr auto', gap: 12, marginTop: 20, alignItems: 'end' }}>
+                        <div className="no-print" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12, marginTop: 20, alignItems: 'end' }}>
                             <button type="button" className="cabine-person-chip" onClick={() => { setPickerOpen(true); setAddingPerson(false); }}>
                                 <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700 }}>QUEM ESTÁ NA CABINE</div>
                                 <div style={{ fontSize: '1.1rem', fontWeight: 800, marginTop: 2 }}>
@@ -545,15 +523,6 @@ export const ScalePage = () => {
                                     ))}
                                 </select>
                             </label>
-                            <button
-                                type="button"
-                                className="cabine-btn cabine-btn-ghost"
-                                disabled={!selectedPersonId}
-                                onClick={() => { void openHistory(); }}
-                                style={{ height: 52, whiteSpace: 'nowrap' }}
-                            >
-                                Histórico
-                            </button>
                         </div>
 
                         <div style={{ textAlign: 'center', marginTop: 28 }}>
@@ -632,9 +601,6 @@ export const ScalePage = () => {
                                 >
                                     Adicionar pessoa
                                 </button>
-                                <Link to="/pessoas" style={{ display: 'block', marginTop: 10, textAlign: 'center', color: '#0f766e' }}>
-                                    Ver cadastro completo
-                                </Link>
                             </>
                         )}
                     </div>
@@ -677,49 +643,18 @@ export const ScalePage = () => {
             {view === 'report' ? (
                 <div className="cabine-overlay">
                     <div className="cabine-dialog" onClick={(event) => event.stopPropagation()}>
-                        <BodyReport
+                        <PatientBodySummary
                             personName={selectedPersonName}
-                            scaleName={scaleName}
-                            heightCm={heightCm}
-                            age={age}
-                            sex={sex}
-                            peopleType={peopleType}
                             pesoKg={currentWeight}
                             metrics={metrics}
-                            supportsBia={supportsBia}
-                            weightOnly={weightOnlyResult}
                             saved={reportSaved}
-                            segmentos={segments}
+                            onHome={() => navigate('/')}
+                            onAgain={startNewSession}
                         />
-                        <div className="no-print" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
-                            <button type="button" className="cabine-btn cabine-btn-primary" onClick={() => window.print()}>
-                                Imprimir
-                            </button>
-                            <button type="button" className="cabine-btn cabine-btn-ghost" onClick={() => { void openHistory(); }}>
-                                Ver histórico
-                            </button>
-                            <button type="button" className="cabine-btn cabine-btn-ghost" onClick={startNewSession}>
-                                Nova avaliação
-                            </button>
-                            {savingReport ? <span style={{ color: '#64748b', alignSelf: 'center' }}>Salvando relatório...</span> : null}
-                            {saveMsg && !reportSaved ? (
-                                <span style={{ color: '#b91c1c', alignSelf: 'center' }}>{saveMsg}</span>
-                            ) : null}
-                        </div>
+                        {savingReport ? <p style={{ color: '#64748b' }}>Salvando registro...</p> : null}
+                        {saveMsg && !reportSaved ? <p style={{ color: '#b91c1c' }}>{saveMsg}</p> : null}
                     </div>
                 </div>
-            ) : null}
-
-            {historyOpen && selectedPerson ? (
-                <HistoryDialog
-                    person={selectedPerson}
-                    records={historyRecords}
-                    loading={historyLoading}
-                    error={historyError}
-                    selected={selectedHistory}
-                    onSelect={setSelectedHistory}
-                    onClose={() => setHistoryOpen(false)}
-                />
             ) : null}
         </AppLayout>
     );

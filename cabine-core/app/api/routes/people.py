@@ -4,9 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.crud import form_submission as form_crud
 from app.crud import measurement as measurement_crud
+from app.crud import oximeter_reading as oximeter_crud
 from app.crud import person as person_crud
+from app.schemas.form_submission import FormSubmissionResponse
 from app.schemas.measurement import MeasurementResponse
+from app.schemas.oximeter import OximeterReadingResponse
 from app.schemas.person import PersonCreate, PersonResponse, PersonUpdate
 
 router = APIRouter(prefix="/people", tags=["People"])
@@ -22,12 +26,28 @@ async def create_person(payload: PersonCreate, db: AsyncSession = Depends(get_db
     return await person_crud.create(db, payload)
 
 
+@router.get("/{person_id}/forms", response_model=list[FormSubmissionResponse])
+async def list_person_forms(person_id: UUID, db: AsyncSession = Depends(get_db)):
+    person = await person_crud.get_by_id(db, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
+    return await form_crud.list_by_person(db, person_id)
+
+
 @router.get("/{person_id}/measurements", response_model=list[MeasurementResponse])
 async def list_person_measurements(person_id: UUID, db: AsyncSession = Depends(get_db)):
     person = await person_crud.get_by_id(db, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
     return await measurement_crud.list_by_person(db, person_id)
+
+
+@router.get("/{person_id}/oximeter", response_model=list[OximeterReadingResponse])
+async def list_person_oximeter(person_id: UUID, db: AsyncSession = Depends(get_db)):
+    person = await person_crud.get_by_id(db, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
+    return await oximeter_crud.list_by_person(db, person_id)
 
 
 @router.patch("/{person_id}", response_model=PersonResponse)

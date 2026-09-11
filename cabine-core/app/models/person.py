@@ -18,3 +18,5 @@ class ScalePerson(Base):
     expected_weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     measurements = relationship("ScaleMeasurement", back_populates="person")
+    forms = relationship("FormSubmission", back_populates="person")
+    oximeter_readings = relationship("OximeterReading", back_populates="person")

@@ -15,6 +15,8 @@ export default defineConfig({
       '/scales': { target: backend, changeOrigin: true },
       '/people': { target: backend, changeOrigin: true },
       '/measurements': { target: backend, changeOrigin: true },
+      '/forms': { target: backend, changeOrigin: true },
+      '/oximeters': { target: backend, changeOrigin: true },
       '/users': { target: backend, changeOrigin: true },
       '/login': { target: backend, changeOrigin: true },
       '/health': { target: backend, changeOrigin: true },

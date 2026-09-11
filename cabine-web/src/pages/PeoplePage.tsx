@@ -1,11 +1,14 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
 
-import { api, apiErrorMessage, fetchPersonMeasurements } from '../api';
+import { api, apiErrorMessage, fetchPersonForms, fetchPersonMeasurements, fetchPersonOximeter } from '../api';
 import { AppLayout } from '../components/AppLayout';
+import { FormHistoryDialog } from '../components/FormHistoryDialog';
 import { HistoryDialog } from '../components/HistoryDialog';
+import { OximeterHistoryDialog } from '../components/OximeterHistoryDialog';
 import { emptyPersonForm, PersonForm, type PersonFormValues } from '../components/PersonForm';
+import type { FormSubmission } from '../types/form';
 import type { MeasurementRecord } from '../types/measurement';
+import type { OximeterReading } from '../types/oximeter';
 import type { PersonPayload, ScalePerson } from '../types/person';
 
 function toPayload(values: PersonFormValues): PersonPayload {
@@ -46,6 +49,14 @@ export function PeoplePage() {
     const [historyLoading, setHistoryLoading] = useState(false);
     const [historyError, setHistoryError] = useState('');
     const [selectedReport, setSelectedReport] = useState<MeasurementRecord | null>(null);
+    const [formsPerson, setFormsPerson] = useState<ScalePerson | null>(null);
+    const [formRecords, setFormRecords] = useState<FormSubmission[]>([]);
+    const [formsLoading, setFormsLoading] = useState(false);
+    const [formsError, setFormsError] = useState('');
+    const [oxiPerson, setOxiPerson] = useState<ScalePerson | null>(null);
+    const [oxiRecords, setOxiRecords] = useState<OximeterReading[]>([]);
+    const [oxiLoading, setOxiLoading] = useState(false);
+    const [oxiError, setOxiError] = useState('');
 
     async function load() {
         const { data } = await api.get<ScalePerson[]>('/people');
@@ -88,6 +99,8 @@ export function PeoplePage() {
             await api.delete(`/people/${person.id}`);
             if (editingId === person.id) resetForm();
             if (historyPerson?.id === person.id) setHistoryPerson(null);
+            if (formsPerson?.id === person.id) setFormsPerson(null);
+            if (oxiPerson?.id === person.id) setOxiPerson(null);
             await load();
         } catch (err) {
             setError(apiErrorMessage(err, 'Não foi possível excluir.'));
@@ -108,6 +121,35 @@ export function PeoplePage() {
             setHistoryError(apiErrorMessage(err, 'Não foi possível carregar o histórico.'));
         } finally {
             setHistoryLoading(false);
+        }
+    }
+
+    async function openOximeter(person: ScalePerson) {
+        setOxiPerson(person);
+        setOxiRecords([]);
+        setOxiLoading(true);
+        setOxiError('');
+        try {
+            setOxiRecords(await fetchPersonOximeter(person.id));
+        } catch (err) {
+            setOxiError(apiErrorMessage(err, 'Não foi possível carregar a oximetria.'));
+        } finally {
+            setOxiLoading(false);
+        }
+    }
+
+    async function openForms(person: ScalePerson) {
+        setFormsPerson(person);
+        setFormRecords([]);
+        setFormsLoading(true);
+        setFormsError('');
+        try {
+            const data = await fetchPersonForms(person.id);
+            setFormRecords(data);
+        } catch (err) {
+            setFormsError(apiErrorMessage(err, 'Não foi possível carregar os questionários.'));
+        } finally {
+            setFormsLoading(false);
         }
     }
 
@@ -158,16 +200,14 @@ export function PeoplePage() {
                                     {person.expected_weight_kg != null ? ` · último peso ${person.expected_weight_kg} kg` : ''}
                                 </div>
                                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                                    <Link
-                                        to="/"
-                                        className="cabine-btn cabine-btn-primary"
-                                        style={{ textDecoration: 'none' }}
-                                        onClick={() => window.sessionStorage.setItem('cabine-person-id', person.id)}
-                                    >
-                                        Avaliar
-                                    </Link>
-                                    <button type="button" onClick={() => { void openHistory(person); }} className="cabine-btn cabine-btn-ghost">
+                                    <button type="button" onClick={() => { void openHistory(person); }} className="cabine-btn cabine-btn-primary">
                                         Ver relatórios
+                                    </button>
+                                    <button type="button" onClick={() => { void openForms(person); }} className="cabine-btn cabine-btn-ghost">
+                                        Ver questionários
+                                    </button>
+                                    <button type="button" onClick={() => { void openOximeter(person); }} className="cabine-btn cabine-btn-ghost">
+                                        Ver oximetria
                                     </button>
                                     <button type="button" onClick={() => { setEditingId(person.id); setForm(fromPerson(person)); }} style={ghostButton}>
                                         Editar
@@ -190,6 +230,24 @@ export function PeoplePage() {
                         selected={selectedReport}
                         onSelect={setSelectedReport}
                         onClose={() => setHistoryPerson(null)}
+                    />
+                ) : null}
+                {oxiPerson ? (
+                    <OximeterHistoryDialog
+                        person={oxiPerson}
+                        records={oxiRecords}
+                        loading={oxiLoading}
+                        error={oxiError}
+                        onClose={() => setOxiPerson(null)}
+                    />
+                ) : null}
+                {formsPerson ? (
+                    <FormHistoryDialog
+                        person={formsPerson}
+                        records={formRecords}
+                        loading={formsLoading}
+                        error={formsError}
+                        onClose={() => setFormsPerson(null)}
                     />
                 ) : null}
             </div>
