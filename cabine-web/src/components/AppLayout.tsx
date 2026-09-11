@@ -13,7 +13,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                     </div>
                 </div>
                 <nav className="cabine-nav">
-                    <NavLink to="/" end>Avaliação</NavLink>
+                    <NavLink to="/admin/avaliacao" end>Avaliação</NavLink>
                     <NavLink to="/pessoas">Pessoas</NavLink>
                     <NavLink to="/balancas">Balanças</NavLink>
                 </nav>

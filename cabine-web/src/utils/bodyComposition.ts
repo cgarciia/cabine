@@ -63,10 +63,6 @@ function round1(value: number): number {
     return Math.round(value * 10) / 10;
 }
 
-function round2(value: number): number {
-    return Math.round(value * 100) / 100;
-}
-
 export function calculateBodyComposition(input: BodyCompositionInput): BodyCompositionResult | null {
     const { pesoKg, alturaCm, aniversario, sexo } = input;
     if (!(pesoKg > 0) || !(alturaCm > 0) || !aniversario || !sexo) return null;

@@ -93,11 +93,11 @@ export const ScalePage = () => {
     const [complete, setComplete] = useState(false);
     const [metrics, setMetrics] = useState<ScaleMetrics | null>(null);
     const [segments, setSegments] = useState<Segmento[]>([]);
-    const [impedanciasOhm, setImpedanciasOhm] = useState<number[]>([]);
+    const [, setImpedanciasOhm] = useState<number[]>([]);
     const [scaleName, setScaleName] = useState('Balança');
     const [status, setStatus] = useState('Escolha quem vai se avaliar');
     const [guideStep, setGuideStep] = useState('step_on');
-    const [guideMsg, setGuideMsg] = useState(BIA_GUIDE[0].detail);
+    const [guideMsg, setGuideMsg] = useState<string>(BIA_GUIDE[0].detail);
     const [historyOpen, setHistoryOpen] = useState(false);
     const [historyRecords, setHistoryRecords] = useState<MeasurementRecord[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);

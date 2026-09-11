@@ -159,7 +159,7 @@ export function PeoplePage() {
                                 </div>
                                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                                     <Link
-                                        to="/"
+                                        to="/admin/avaliacao"
                                         className="cabine-btn cabine-btn-primary"
                                         style={{ textDecoration: 'none' }}
                                         onClick={() => window.sessionStorage.setItem('cabine-person-id', person.id)}

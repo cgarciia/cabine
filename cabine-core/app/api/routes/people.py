@@ -19,7 +19,18 @@ async def list_people(db: AsyncSession = Depends(get_db)):
 
 @router.post("", response_model=PersonResponse, status_code=status.HTTP_201_CREATED)
 async def create_person(payload: PersonCreate, db: AsyncSession = Depends(get_db)):
-    return await person_crud.create(db, payload)
+    try:
+        return await person_crud.create(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.get("/matricula/{matricula}", response_model=PersonResponse)
+async def get_person_by_matricula(matricula: str, db: AsyncSession = Depends(get_db)):
+    person = await person_crud.get_by_matricula(db, matricula)
+    if not person:
+        raise HTTPException(status_code=404, detail="Matrícula não encontrada.")
+    return person
 
 
 @router.get("/{person_id}/measurements", response_model=list[MeasurementResponse])
@@ -35,7 +46,10 @@ async def update_person(person_id: UUID, payload: PersonUpdate, db: AsyncSession
     person = await person_crud.get_by_id(db, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
-    return await person_crud.update_person(db, person, payload)
+    try:
+        return await person_crud.update_person(db, person, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @router.delete("/{person_id}", status_code=status.HTTP_204_NO_CONTENT)

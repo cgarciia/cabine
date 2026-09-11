@@ -10,6 +10,7 @@ class ScalePerson(Base):
     __tablename__ = "people"
 
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    matricula: Mapped[str | None] = mapped_column(String(40), nullable=True, unique=True, index=True)
     height_cm: Mapped[float] = mapped_column(Float, nullable=False)
     age: Mapped[int] = mapped_column(Integer, nullable=False)
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
