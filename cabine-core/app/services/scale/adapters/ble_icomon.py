@@ -2,12 +2,14 @@ import asyncio
 import logging
 import os
 import time
+from dataclasses import replace
 
 from bleak import BleakClient, BleakError, BleakScanner
 from fastapi import WebSocket
+from starlette.websockets import WebSocketState
 
 from app.services.scale.adapters.base import DispatchFn, ScaleAdapter, StatusFn
-from app.services.scale.adapters.ble_common import normalize_mac
+from app.services.ble import normalize_mac
 from app.services.scale.icomon import (
     FFB1_UUID,
     FFB2_UUID,
@@ -21,6 +23,7 @@ from app.services.scale.icomon import (
     encode_profile_sync,
     encode_reply,
     frame_seq,
+    has_bia_impedances,
     ingest_frame,
     quality_hint,
 )
@@ -60,7 +63,6 @@ async def wait_for_advertising(
     address: str,
     consumer: asyncio.Task,
     send_status: StatusFn,
-    send_debug,
 ) -> object | None:
     """Espera o advertising. No Windows, conectar pelo MAC sem scan quase sempre falha.
 
@@ -76,13 +78,9 @@ async def wait_for_advertising(
             device = await BleakScanner.find_device_by_address(target, timeout=SCAN_SLICE_S)
         except Exception as exc:
             logger.warning("scan BLE falhou: %s", exc)
-            await send_debug(f"Scan falhou: {exc}")
             await asyncio.sleep(0.4)
             continue
         if device is not None:
-            await send_debug(
-                f"Advertising {device.address} name={getattr(device, 'name', None)!r}"
-            )
             await send_status("Balança encontrada. Conectando...")
             return device
         if round_n == 8:
@@ -131,7 +129,6 @@ class BleIcomonGattAdapter(ScaleAdapter):
         reply_idx = 0
         last_ba_at = 0.0
         last_ba_weight: float | None = None
-        memory_cleared_at: float | None = None
         ffb2_asm = IcomonAssembler()
         ffb3_asm = IcomonAssembler()
         write_lock = asyncio.Lock()
@@ -162,7 +159,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
             stabilized: bool = False,
             reset_memory: bool = False,
         ) -> None:
-            nonlocal last_ba_at, last_ba_weight, memory_cleared_at
+            nonlocal last_ba_at, last_ba_weight
             prof = active_profile()
             if prof is None:
                 return
@@ -202,15 +199,6 @@ class BleIcomonGattAdapter(ScaleAdapter):
                         }
                     ],
                 )
-                await send_debug(
-                    f"MEMÓRIA: RelaxFit C0/C1 para {display_name!r} ({ba_weight:.1f} kg)",
-                    topic="memory",
-                    phase="c0_c1",
-                    label=label,
-                    hexes=[frame.hex() for frame in c0 + c1],
-                    weight_kg=ba_weight,
-                    display_name=display_name,
-                )
                 await write_frames(c0, f"C0-{label}")
                 await write_frames(c1, f"C1-{label}")
                 await write_frames(
@@ -227,24 +215,6 @@ class BleIcomonGattAdapter(ScaleAdapter):
                 )
                 last_ba_at = time.monotonic()
                 last_ba_weight = ba_weight
-                queue.put_nowait(
-                    {
-                        "type": "DEBUG",
-                        "msg": f"Perfil aplicado label={label} peso={ba_weight:.1f}",
-                        "topic": "memory",
-                        "phase": "profile",
-                        "session_mode": "minimal",
-                        "height_cm": prof.height_cm,
-                        "age": prof.age,
-                        "sex": prof.sex,
-                        "weight_kg": ba_weight,
-                        "expected_weight_kg": prof.expected_weight_kg,
-                        "display_name": display_name,
-                        "guest": False,
-                        "reset_memory": False,
-                        "protocol": "c0_c1",
-                    }
-                )
                 await send_status(
                     f"Perfil RelaxFit C0/C1: {display_name} · {ba_weight:.1f} kg · "
                     f"{prof.height_cm:.0f} cm · {prof.age} anos. Pegue a barra e suba."
@@ -255,36 +225,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
             await write_frames(encode_reply(next_seq(), 0), f"B0-{label}")
             if reset_memory:
                 clear_frames = encode_clear_users(next_seq())
-                await send_debug(
-                    "MEMÓRIA: pedindo limpeza dos slots offline (BB count=0)",
-                    topic="memory",
-                    phase="start",
-                    label=label,
-                    frames=len(clear_frames),
-                    hexes=[frame.hex() for frame in clear_frames],
-                    envelopes=["openscale-20B" if len(frame) == 20 else f"nativo-{len(frame)}B" for frame in clear_frames],
-                    payload="bb00",
-                    guest_user_id=GUEST_USER_ID,
-                )
-                results = await write_frames(clear_frames, f"BB-clear-{label}")
-                ok_count = sum(1 for item in results if item.get("ok"))
-                memory_cleared_at = time.monotonic() if ok_count else None
-                await send_debug(
-                    (
-                        f"MEMÓRIA: BLE aceitou {ok_count}/{len(clear_frames) or 1} escritas BB-clear"
-                        if ok_count
-                        else "MEMÓRIA: FALHOU — FFB1 recusou BB-clear (lista offline NÃO foi apagada neste link)"
-                    ),
-                    topic="memory",
-                    phase="write_result",
-                    label=label,
-                    ok=ok_count > 0,
-                    writes=results,
-                    note=(
-                        "ACK do Bluetooth ≠ EEPROM limpa. Confirmação real: outra pessoa "
-                        "(Δ>2 kg do seu peso) subir com a barra e chegar A7."
-                    ),
-                )
+                await write_frames(clear_frames, f"BB-clear-{label}")
             if weight is None:
                 await send_status(
                     "Lista offline limpa. Sem peso na sessão ainda — suba com a barra; "
@@ -307,21 +248,6 @@ class BleIcomonGattAdapter(ScaleAdapter):
             )
             last_ba_at = time.monotonic()
             last_ba_weight = weight
-            queue.put_nowait(
-                {
-                    "type": "DEBUG",
-                    "msg": f"Perfil aplicado label={label} peso={weight:.1f}",
-                    "height_cm": prof.height_cm,
-                    "age": prof.age,
-                    "sex": prof.sex,
-                    "people_type": prof.people_type,
-                    "weight_kg": weight,
-                    "expected_weight_kg": prof.expected_weight_kg,
-                    "live_kg": live_kg,
-                    "guest": True,
-                    "reset_memory": reset_memory,
-                }
-            )
             await send_status(
                 f"Sessão convidado: {weight:.1f} kg · {prof.height_cm:.0f} cm · "
                 f"{prof.age} anos. Pegue a barra e suba (peso ao vivo precisa ficar a ±2 kg disso)."
@@ -377,23 +303,9 @@ class BleIcomonGattAdapter(ScaleAdapter):
         async def write_frames(frames: list[bytes], label: str) -> list[dict]:
             client = client_holder.get("client")
             results: list[dict] = []
-            topic = "memory" if ("BB-" in label or "C0" in label or "C1" in label) else None
             if client is None or not client.is_connected:
-                miss = {
-                    "ok": False,
-                    "error": "sem conexão GATT",
-                    "label": label,
-                }
                 logger.warning("icomon FFB1 write %s abortado: sem conexão", label)
-                queue.put_nowait(
-                    {
-                        "type": "DEBUG",
-                        "topic": topic,
-                        "msg": f"FFB1 write {label} FALHOU (sem conexão)",
-                        "ok": False,
-                    }
-                )
-                return [miss]
+                return [{"ok": False, "error": "sem conexão GATT", "label": label}]
             async with write_lock:
                 for frame in frames:
                     envelope = "openscale-20B" if len(frame) == 20 else f"nativo-{len(frame)}B"
@@ -405,7 +317,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
                         "label": label,
                     }
                     try:
-                        logger.info("icomon FFB1 write %s %s hex=%s", label, envelope, frame.hex())
+                        logger.debug("icomon FFB1 write %s %s hex=%s", label, envelope, frame.hex())
                         mode = "com-resposta"
                         try:
                             await client.write_gatt_char(FFB1_UUID, frame, response=True)
@@ -415,34 +327,10 @@ class BleIcomonGattAdapter(ScaleAdapter):
                         entry["ok"] = True
                         entry["ble_ack"] = mode
                         results.append(entry)
-                        queue.put_nowait(
-                            {
-                                "type": "DEBUG",
-                                "topic": topic,
-                                "channel": "FFB1",
-                                "msg": f"FFB1 write {label} OK ({envelope}, {mode})",
-                                "hex": frame.hex(),
-                                "envelope": envelope,
-                                "ble_ack": mode,
-                                "ok": True,
-                            }
-                        )
                     except BleakError as exc:
                         entry["error"] = str(exc)
                         results.append(entry)
                         logger.warning("FFB1 write falhou (%s): %s", label, exc)
-                        queue.put_nowait(
-                            {
-                                "type": "DEBUG",
-                                "topic": topic,
-                                "channel": "FFB1",
-                                "msg": f"FFB1 write {label} FALHOU ({envelope}): {exc}",
-                                "hex": frame.hex(),
-                                "envelope": envelope,
-                                "ok": False,
-                                "error": str(exc),
-                            }
-                        )
             return results
 
         def next_seq() -> int:
@@ -458,23 +346,23 @@ class BleIcomonGattAdapter(ScaleAdapter):
             reply_idx = (reply_idx + 1) & 0xFF
             schedule_write(frames, f"B0-ack/{frame_seq(raw)}")
 
-        async def send_debug(msg: str, **extra) -> None:
-            logger.info("icomon DEBUG %s %s", msg, extra or "")
-            payload = {"type": "DEBUG", "msg": msg, **extra}
-            try:
-                await websocket.send_json(payload)
-            except Exception:
-                queue.put_nowait(payload)
-
         def emit(reading: ScaleReading | None) -> None:
             nonlocal last, stable_since, saw_nonzero_z, saw_a7, done_weight
             if reading is None:
                 return
 
+            # Desceu no meio ou depois do A7: reinicia. Não trava em "somente peso".
+            if (
+                reading.fonte == "ffb2"
+                and reading.peso_kg < 8.0
+                and current_step != "step_on"
+                and last is not None
+                and last.peso_kg >= 20
+            ):
+                reset_session("Pessoa desceu. Próxima pode subir (atualize altura/idade/sexo).")
+                return
+
             if current_step == "done":
-                if reading.peso_kg < 8.0:
-                    reset_session("Pessoa desceu. Próxima pode subir (atualize altura/idade/sexo).")
-                    return
                 if (
                     done_weight is not None
                     and reading.peso_kg >= 20.0
@@ -485,57 +373,37 @@ class BleIcomonGattAdapter(ScaleAdapter):
                         f"Novo peso detectado ({reading.peso_kg:.1f} kg). "
                         "Reiniciando — atualize o perfil se for outra pessoa."
                     )
-                elif reading.completo and reading.impedancias_ohm:
-                    last = reading
-                    dispatch(reading)
-                    return
                 else:
+                    if reading.fonte == "ffb3" and has_bia_impedances(reading.impedancias_ohm):
+                        reading = replace(reading, completo=True, etapa="done")
+                        last = reading
+                        dispatch(reading)
+                        logger.info(
+                            "icomon A7 BIA após done peso=%.3f Z=%s",
+                            reading.peso_kg,
+                            reading.impedancias_ohm,
+                        )
                     return
 
             if reading.fonte == "ffb3":
                 saw_a7 = True
-
-            if reading.fonte == "ffb3" and not reading.completo:
-                nonzero = sum(1 for z in reading.impedancias_ohm if z >= 40)
-                if nonzero == 0:
-                    logger.info("icomon A7 só-pés Z=%s", reading.impedancias_ohm)
+                if has_bia_impedances(reading.impedancias_ohm):
+                    saw_nonzero_z = True
+                    reading = replace(reading, completo=True, etapa="done")
+                else:
+                    logger.info("icomon A7 sem corrente Z=%s — aguardando A7 de membros", reading.impedancias_ohm)
                     queue.put_nowait(
                         {
                             "type": "STATUS",
                             "msg": (
-                                f"A7 de {reading.peso_kg:.1f} kg sem impedância. "
-                                + (
-                                    "A balança travou o peso mas não fechou a corrente: "
-                                    "confira as duas mãos na barra, polegares e palmas no metal, "
-                                    "braços afastados do corpo."
-                                    if saw_lock
-                                    else "A balança nem chegou a travar o peso (status ficou 0x01), "
-                                    "o que indica contato ruim dos pés: pé totalmente descalço, "
-                                    "calcanhar e planta sobre os quatro contatos metálicos, "
-                                    "sola levemente úmida."
-                                )
+                                f"A7 de {reading.peso_kg:.1f} kg ainda sem bioimpedância. "
+                                "Mantenha as duas mãos na barra; a balança ainda pode enviar os canais."
                             ),
                         }
                     )
-                    # A balança já fechou o ciclo: sem impedância ela não tenta de novo
-                    # nesta sessão. Encerramos como "somente peso" em vez de deixar a
-                    # pessoa presa esperando um A7 que não vem.
-                    last = ScaleReading(
-                        peso_kg=reading.peso_kg,
-                        estavel=True,
-                        completo=False,
-                        fonte="ffb3",
-                        etapa="done",
-                    )
-                    done_weight = reading.peso_kg
-                    step(
-                        "done",
-                        f"Medição encerrada com {reading.peso_kg:.1f} kg — somente peso. "
-                        "A balança não conseguiu ler os eletrodos desta vez.",
-                    )
-                    dispatch(last)
+                    last = reading
+                    dispatch(reading)
                     return
-                saw_nonzero_z = True
 
             if (
                 last is not None
@@ -595,37 +463,15 @@ class BleIcomonGattAdapter(ScaleAdapter):
         def on_ffb2(_sender, data: bytearray) -> None:
             raw = bytes(data)
             reading = ingest_frame(ffb2_asm, raw)
-            logger.info(
+            logger.debug(
                 "icomon FFB2 hex=%s parsed=%s",
                 raw.hex(),
                 None if reading is None else f"{reading.peso_kg}kg estavel={reading.estavel}",
             )
             nonlocal saw_lock
-            # byte 5 do frame nativo: 0x01 medindo, 0x02/0x03 travado, 0x00 final.
             status = raw[5] if len(raw) > 5 else None
             if status in {0x02, 0x03}:
                 saw_lock = True
-            label = {
-                0x00: "final",
-                0x01: "medindo",
-                0x02: "travado",
-                0x03: "travado+bia",
-            }.get(status, "?")
-            queue.put_nowait(
-                {
-                    "type": "DEBUG",
-                    "channel": "FFB2",
-                    "msg": f"FFB2 status=0x{status:02x} ({label}) hex={raw.hex()}"
-                    if status is not None
-                    else f"FFB2 hex={raw.hex()}",
-                    "hex": raw.hex(),
-                    "a2_status": status,
-                    "a2_status_label": label,
-                    "parsed_kg": None if reading is None else reading.peso_kg,
-                    "estavel": None if reading is None else reading.estavel,
-                    "step": current_step,
-                }
-            )
             emit(reading)
 
         def on_ffb3(_sender, data: bytearray) -> None:
@@ -635,60 +481,13 @@ class BleIcomonGattAdapter(ScaleAdapter):
                 ack_control(raw)
 
             reading = ingest_frame(ffb3_asm, raw)
-            logger.info(
+            logger.debug(
                 "icomon FFB3 hex=%s parsed=%s",
                 raw.hex(),
                 None
                 if reading is None
                 else f"{reading.peso_kg}kg z={reading.impedancias_ohm} completo={reading.completo}",
             )
-            frame_type = f"0x{raw[4]:02x}" if len(raw) > 4 else None
-            zs = None if reading is None else reading.impedancias_ohm
-            zeros = sum(1 for z in zs if z < 5) if zs else 0
-            since_clear = (
-                round(time.monotonic() - memory_cleared_at, 2)
-                if memory_cleared_at is not None
-                else None
-            )
-            queue.put_nowait(
-                {
-                    "type": "DEBUG",
-                    "channel": "FFB3",
-                    "msg": f"FFB3 {frame_type} hex={raw.hex()}",
-                    "hex": raw.hex(),
-                    "frame_type": frame_type,
-                    "parsed_kg": None if reading is None else reading.peso_kg,
-                    "z": zs,
-                    "z_count": 0 if zs is None else len(zs),
-                    "z_zeros": zeros,
-                    "completo": None if reading is None else reading.completo,
-                    "step": current_step,
-                    "bia_started": bool(zs and zeros < 6),
-                    "seconds_since_clear": since_clear,
-                }
-            )
-            if frame_type in {"0xa7", "0xa3"} and since_clear is not None:
-                started = bool(zs and zeros < 6)
-                queue.put_nowait(
-                    {
-                        "type": "DEBUG",
-                        "topic": "memory",
-                        "phase": "scale_reply",
-                        "msg": (
-                            f"MEMÓRIA: A7 {since_clear:.1f}s após BB-clear — "
-                            + (
-                                "BIA veio (lista não impediu a corrente)."
-                                if started
-                                else "A7 com os 10 canais zerados — a BIA não rodou."
-                            )
-                        ),
-                        "frame_type": frame_type,
-                        "seconds_since_clear": since_clear,
-                        "bia_started": started,
-                        "z_zeros": zeros,
-                        "parsed_kg": None if reading is None else reading.peso_kg,
-                    }
-                )
             emit(reading)
 
         async def link_session(target) -> None:
@@ -698,20 +497,16 @@ class BleIcomonGattAdapter(ScaleAdapter):
             async with BleakClient(target, timeout=CONNECT_TIMEOUT_S) as client:
                 client_holder["client"] = client
                 await send_status("Conexão ICOMON estabelecida.")
-                await send_debug(f"Conectado a {spec.address}")
                 try:
                     await client.start_notify(FFB2_UUID, on_ffb2)
-                    await send_debug("Notify FFB2 (peso ao vivo) ativo")
                 except BleakError as exc:
                     await send_status(f"Falha ao assinar FFB2: {exc}")
                     return
                 try:
                     await client.start_notify(FFB3_UUID, on_ffb3)
-                    await send_debug("Indicate FFB3 (relatório completo) ativo")
                 except BleakError as exc:
                     logger.warning("FFB3 indicate indisponível: %s", exc)
                     await send_status("FFB3 indisponível; só peso ao vivo.")
-                    await send_debug(f"FFB3 falhou: {exc}")
 
                 # BD/B0 nativos + BA convidado (openScale). Sem gravar P-1.
                 try:
@@ -732,7 +527,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
                     "Se subir sem a barra, a balança decide medir só o peso.",
                 )
 
-                while client.is_connected:
+                while client.is_connected and websocket.client_state == WebSocketState.CONNECTED:
                     # Drena writes agendados (ACKs) sem bloquear o heartbeat.
                     while not pending_writes.empty():
                         label, frames = pending_writes.get_nowait()
@@ -798,7 +593,6 @@ class BleIcomonGattAdapter(ScaleAdapter):
                     ):
                         prof_live = active_profile()
                         if prof_live is not None:
-                            previous = last_ba_weight
                             await write_frames(
                                 encode_profile_sync(
                                     next_seq(),
@@ -815,16 +609,6 @@ class BleIcomonGattAdapter(ScaleAdapter):
                             )
                             last_ba_at = now
                             last_ba_weight = last.peso_kg
-                            await send_debug(
-                                f"BA ao vivo {last.peso_kg:.1f} kg (sem BD)",
-                                topic="memory",
-                                phase="ba_live",
-                                live_kg=last.peso_kg,
-                                previous_session_kg=previous,
-                                delta_kg=(
-                                    abs(last.peso_kg - previous) if previous is not None else None
-                                ),
-                            )
                             await send_status(
                                 f"Sessão alinhada a {last.peso_kg:.1f} kg. Mantenha a barra."
                             )
@@ -846,11 +630,6 @@ class BleIcomonGattAdapter(ScaleAdapter):
                             "já segurando."
                         )
                         await send_status(reason)
-                        await send_debug(
-                            "BIA não iniciou",
-                            live_kg=last.peso_kg,
-                            saw_a7=saw_a7,
-                        )
 
                     # Heartbeat só com prato vazio. Durante a pesagem o rádio fica livre para A7.
                     prof = active_profile()
@@ -885,15 +664,19 @@ class BleIcomonGattAdapter(ScaleAdapter):
         # reconhece quem já está gravado na memória dela.
         consumer = asyncio.create_task(_consume_queue(websocket, queue))
         try:
-            while True:
+            while websocket.client_state == WebSocketState.CONNECTED:
                 if consumer.done():
                     await consumer
                     return
 
                 target = await wait_for_advertising(
-                    spec.address, consumer, send_status, send_debug
+                    spec.address, consumer, send_status
                 )
-                if target is None or consumer.done():
+                if (
+                    target is None
+                    or consumer.done()
+                    or websocket.client_state != WebSocketState.CONNECTED
+                ):
                     if consumer.done():
                         await consumer
                     return
@@ -906,11 +689,14 @@ class BleIcomonGattAdapter(ScaleAdapter):
                 finally:
                     client_holder["client"] = None
 
-                if consumer.done():
-                    await consumer
+                if (
+                    consumer.done()
+                    or websocket.client_state != WebSocketState.CONNECTED
+                ):
+                    if consumer.done():
+                        await consumer
                     return
 
-                await send_debug(f"Link caiu — {reason}")
                 await send_status(
                     "Rádio caiu. Mantenha-se na balança — procurando o anúncio de novo."
                 )
@@ -929,6 +715,12 @@ class BleIcomonGattAdapter(ScaleAdapter):
 
 
 async def _consume_queue(websocket: WebSocket, queue: asyncio.Queue) -> None:
-    while True:
-        data = await queue.get()
-        await websocket.send_json(data)
+    while websocket.client_state == WebSocketState.CONNECTED:
+        try:
+            data = await asyncio.wait_for(queue.get(), timeout=0.4)
+        except TimeoutError:
+            continue
+        try:
+            await websocket.send_json(data)
+        except Exception:
+            return

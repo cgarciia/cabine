@@ -1,39 +1,19 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
-import { api, apiErrorMessage, fetchPersonMeasurements } from '../api';
-import { AppLayout } from '../components/AppLayout';
-import { HistoryDialog } from '../components/HistoryDialog';
-import { emptyPersonForm, PersonForm, type PersonFormValues } from '../components/PersonForm';
-import type { MeasurementRecord } from '../types/measurement';
-import type { PersonPayload, ScalePerson } from '../types/person';
-
-function toPayload(values: PersonFormValues): PersonPayload {
-    const height = Number(values.heightCm);
-    const age = Number(values.age);
-    const weight = Number(values.expectedWeight);
-    return {
-        name: values.name.trim(),
-        height_cm: height,
-        age: Number.isFinite(age) && age > 0 ? age : undefined,
-        birth_date: values.birthDate || null,
-        sex: values.sex,
-        people_type: values.peopleType,
-        expected_weight_kg: Number.isFinite(weight) && weight > 0 ? weight : null,
-    };
-}
-
-function fromPerson(person: ScalePerson): PersonFormValues {
-    return {
-        name: person.name,
-        heightCm: String(person.height_cm),
-        age: String(person.age),
-        birthDate: person.birth_date ?? '',
-        sex: person.sex,
-        peopleType: person.people_type,
-        expectedWeight: person.expected_weight_kg != null ? String(person.expected_weight_kg) : '',
-    };
-}
+import { api, apiErrorMessage, fetchPersonMeasurements } from '../../api';
+import { AppLayout } from '../../components/AppLayout';
+import { HistoryDialog } from '../../components/HistoryDialog';
+import {
+    emptyPersonForm,
+    PersonForm,
+    personFormToPayload,
+    personToFormValues,
+    type PersonFormValues,
+} from '../../components/PersonForm';
+import { saveCurrentPersonId } from '../../session/currentPerson';
+import type { MeasurementRecord } from '../../types/measurement';
+import type { ScalePerson } from '../../types/person';
 
 export function PeoplePage() {
     const [people, setPeople] = useState<ScalePerson[]>([]);
@@ -67,7 +47,7 @@ export function PeoplePage() {
         setSaving(true);
         setError('');
         try {
-            const payload = toPayload(form);
+            const payload = personFormToPayload(form);
             if (editingId) {
                 await api.patch(`/people/${editingId}`, payload);
             } else {
@@ -159,17 +139,17 @@ export function PeoplePage() {
                                 </div>
                                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                                     <Link
-                                        to="/"
+                                        to="/admin/avaliacao"
                                         className="cabine-btn cabine-btn-primary"
                                         style={{ textDecoration: 'none' }}
-                                        onClick={() => window.sessionStorage.setItem('cabine-person-id', person.id)}
+                                        onClick={() => saveCurrentPersonId(person.id)}
                                     >
                                         Avaliar
                                     </Link>
                                     <button type="button" onClick={() => { void openHistory(person); }} className="cabine-btn cabine-btn-ghost">
                                         Ver relatórios
                                     </button>
-                                    <button type="button" onClick={() => { setEditingId(person.id); setForm(fromPerson(person)); }} style={ghostButton}>
+                                    <button type="button" onClick={() => { setEditingId(person.id); setForm(personToFormValues(person)); }} style={ghostButton}>
                                         Editar
                                     </button>
                                     <button type="button" onClick={() => handleDelete(person)} style={{ ...ghostButton, color: '#b91c1c' }}>

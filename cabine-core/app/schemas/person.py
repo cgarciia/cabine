@@ -11,6 +11,7 @@ def _age_from_birth(birth: date) -> int:
 
 class PersonBase(BaseModel):
     name: str = Field(min_length=1, max_length=120)
+    matricula: str | None = Field(default=None, max_length=40)
     height_cm: float = Field(gt=0, le=250)
     age: int | None = Field(default=None, ge=1, le=120)
     birth_date: date | None = None
@@ -25,6 +26,14 @@ class PersonBase(BaseModel):
         if not stripped:
             raise ValueError("Nome é obrigatório.")
         return stripped
+
+    @field_validator("matricula")
+    @classmethod
+    def strip_matricula(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
 
     @field_validator("sex")
     @classmethod
@@ -59,6 +68,7 @@ class PersonCreate(PersonBase):
 
 class PersonUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
+    matricula: str | None = Field(default=None, max_length=40)
     height_cm: float | None = Field(default=None, gt=0, le=250)
     age: int | None = Field(default=None, ge=1, le=120)
     birth_date: date | None = None
@@ -75,6 +85,14 @@ class PersonUpdate(BaseModel):
         if not stripped:
             raise ValueError("Nome é obrigatório.")
         return stripped
+
+    @field_validator("matricula")
+    @classmethod
+    def strip_matricula(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
 
     @field_validator("sex")
     @classmethod
@@ -102,6 +120,7 @@ class PersonUpdate(BaseModel):
 class PersonResponse(BaseModel):
     id: UUID
     name: str
+    matricula: str | None
     height_cm: float
     age: int
     birth_date: date | None

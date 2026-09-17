@@ -5,6 +5,16 @@ export interface Destaque {
     texto?: string;
 }
 
+export type SegKey = 'braco_dir' | 'braco_esq' | 'tronco' | 'perna_dir' | 'perna_esq';
+
+export interface WlaSegmento {
+    key: SegKey;
+    fat_kg: number;
+    fat_vs_std_pct: number;
+    muscle_kg: number;
+    muscle_vs_std_pct: number;
+}
+
 export interface ScaleMetrics {
     imc?: number;
     imc_status?: string;
@@ -19,12 +29,15 @@ export interface ScaleMetrics {
     agua_pct?: number;
     agua_status?: string;
     musculo_esqueletico_kg?: number;
+    musculo_esqueletico_pct?: number;
+    musculo_kg?: number;
     gordura_visceral?: number;
     gordura_visceral_status?: string;
     idade_corporal?: number;
     musculo_pct?: number;
     osso_kg?: number;
     score?: number;
+    score_wla25?: number;
     metodo?: string;
     versao?: number;
     aviso?: string;
@@ -35,9 +48,24 @@ export interface ScaleMetrics {
     gordura_subcutanea_pct?: number;
     proteina_pct?: number;
     proteina_kg?: number;
+    proteina_status?: string;
     smi?: number;
     tipo_corporal?: string;
     destaques?: Destaque[];
+    musculo_esqueletico_status?: string;
+    musculo_status?: string;
+    massa_magra_status?: string;
+    controle_gordura_kg?: number;
+    controle_musculo_kg?: number;
+    faixas_kg?: {
+        gordura?: number[];
+        agua?: number[];
+        musculo?: number[];
+        esqueletico?: number[];
+        proteina?: number[];
+        magra?: number[];
+    };
+    segmentos_wla?: WlaSegmento[];
 }
 
 export interface Segmento {
@@ -65,6 +93,7 @@ export interface MeasurementRecord {
     impedancias_ohm: number[] | null;
     segmentos: Segmento[] | null;
     metricas: ScaleMetrics | null;
+    visit_id?: string | null;
     created_at: string;
 }
 
@@ -85,4 +114,37 @@ export interface MeasurementPayload {
     impedancias_ohm?: number[] | null;
     segmentos?: Segmento[] | null;
     metricas: ScaleMetrics | null;
+    visit_id?: string | null;
+}
+
+/** Mensagem do WebSocket `/ws/scale` (não confundir com `ScalePayload` de CRUD). */
+export interface ScaleLiveMessage {
+    type: string;
+    step?: string;
+    reset?: boolean;
+    balanca_nome?: string;
+    peso_kg?: number;
+    timestamp?: string;
+    msg?: string;
+    estavel?: boolean;
+    completo?: boolean;
+    metricas?: ScaleMetrics;
+    impedancias_ohm?: number[];
+    segmentos?: Segmento[];
+}
+
+export function hasBiaImpedances(values?: number[] | null): boolean {
+    if (!values || values.length < 8) return false;
+    return values.filter((z) => z >= 5).length >= 4;
+}
+
+export function isWeightOnlyReport(record: {
+    adapter?: string | null;
+    completo?: boolean;
+    impedancias_ohm?: number[] | null;
+    metricas?: ScaleMetrics | null;
+}): boolean {
+    if (hasBiaImpedances(record.impedancias_ohm)) return false;
+    if (record.metricas?.metodo === 'wla25' || record.metricas?.agua_pct != null) return false;
+    return record.adapter === 'ble_icomon' || !record.completo;
 }

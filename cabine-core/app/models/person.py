@@ -10,6 +10,7 @@ class ScalePerson(Base):
     __tablename__ = "people"
 
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    matricula: Mapped[str | None] = mapped_column(String(40), nullable=True, unique=True, index=True)
     height_cm: Mapped[float] = mapped_column(Float, nullable=False)
     age: Mapped[int] = mapped_column(Integer, nullable=False)
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -18,3 +19,5 @@ class ScalePerson(Base):
     expected_weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     measurements = relationship("ScaleMeasurement", back_populates="person")
+    forms = relationship("FormSubmission", back_populates="person")
+    oximeter_readings = relationship("OximeterReading", back_populates="person")

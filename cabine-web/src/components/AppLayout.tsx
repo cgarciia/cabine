@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
 
-export function AppLayout({ children }: { children: ReactNode }) {
+export function AppLayout({ children, bare }: { children: ReactNode; bare?: boolean }) {
     return (
         <div className="cabine-shell">
             <header className="cabine-topbar no-print">
@@ -12,11 +12,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
                         <div style={{ color: '#64748b', fontSize: '0.85rem' }}>Avaliação corporal</div>
                     </div>
                 </div>
-                <nav className="cabine-nav">
-                    <NavLink to="/" end>Avaliação</NavLink>
-                    <NavLink to="/pessoas">Pessoas</NavLink>
-                    <NavLink to="/balancas">Balanças</NavLink>
-                </nav>
+                {!bare ? (
+                    <nav className="cabine-nav">
+                        <NavLink to="/admin/avaliacao" end>Avaliação</NavLink>
+                        <NavLink to="/admin/oximetria">Oximetria</NavLink>
+                        <NavLink to="/admin/pessoas">Pessoas</NavLink>
+                        <NavLink to="/admin/balancas">Balanças</NavLink>
+                    </nav>
+                ) : null}
             </header>
             {children}
         </div>

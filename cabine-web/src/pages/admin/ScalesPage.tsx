@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react';
 
-import { api, apiErrorMessage } from '../api';
-import { AppLayout } from '../components/AppLayout';
-import type { Scale, ScaleAdapterOption, ScalePayload } from '../types/scale';
+import { api, apiErrorMessage } from '../../api';
+import { AppLayout } from '../../components/AppLayout';
+import type { Scale, ScaleAdapterOption, ScalePayload } from '../../types/scale';
 
 const emptyForm = (adapters: ScaleAdapterOption[]): ScalePayload => ({
     name: '',

@@ -35,5 +35,6 @@ class ScaleMeasurement(Base):
     impedancias_ohm: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     segmentos: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     metricas: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    visit_id: Mapped[UUID | None] = mapped_column(index=True, nullable=True)
 
     person = relationship("ScalePerson", back_populates="measurements")

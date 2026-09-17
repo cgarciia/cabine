@@ -1,6 +1,7 @@
 export interface ScalePerson {
     id: string;
     name: string;
+    matricula: string | null;
     height_cm: number;
     age: number;
     birth_date: string | null;
@@ -13,6 +14,7 @@ export interface ScalePerson {
 
 export interface PersonPayload {
     name: string;
+    matricula?: string | null;
     height_cm: number;
     age?: number;
     birth_date?: string | null;

@@ -7,6 +7,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from app.core.database import AsyncSessionLocal
 from app.crud import scale as scale_crud
+from app.services.scale.icomon import has_bia_impedances
 from app.services.scale.metrics import PersonProfile, compute_report
 from app.services.scale.persist import save_from_scale_event
 from app.services.scale.reading import ScaleReading
@@ -76,6 +77,7 @@ async def stream_scale(
     birth_date: str | None = None,
     display_name: str | None = None,
     person_id: UUID | None = None,
+    visit_id: UUID | None = None,
 ) -> None:
     await websocket.accept()
 
@@ -98,6 +100,7 @@ async def stream_scale(
     ]
     profile_sync_box: list[int] = [0]
     person_id_box: list[UUID | None] = [person_id]
+    visit_id_box: list[UUID | None] = [visit_id]
     last_reading_box: list[dict | None] = [None]
     saved_keys: set[tuple] = set()
 
@@ -119,7 +122,12 @@ async def stream_scale(
 
         async def _run() -> None:
             try:
-                await save_from_scale_event(person_id=pid, scale_id=spec.id, payload=item)
+                await save_from_scale_event(
+                    person_id=pid,
+                    scale_id=spec.id,
+                    payload=item,
+                    visit_id=visit_id_box[0],
+                )
             except Exception:
                 saved_keys.discard(key)
                 logger.exception("Falha ao salvar medição no banco")
@@ -134,10 +142,16 @@ async def stream_scale(
             if isinstance(item, dict):
                 if item.get("type") == "PESO_RECEBIDO":
                     last_reading_box[0] = item
-                    if item.get("completo"):
+                    if item.get("completo") or has_bia_impedances(item.get("impedancias_ohm") or []):
                         schedule_save(item)
                 elif item.get("type") == "STEP" and item.get("reset") and last_reading_box[0]:
-                    schedule_save(last_reading_box[0])
+                    last_item = last_reading_box[0]
+                    # Só persiste no descer se já houver BIA. Peso ao vivo não
+                    # pode gravar um relatório incompleto e bloquear o A7.
+                    if last_item.get("completo") or has_bia_impedances(
+                        last_item.get("impedancias_ohm") or []
+                    ):
+                        schedule_save(last_item)
                     last_reading_box[0] = None
             self._inner.put_nowait(item)
 
@@ -200,11 +214,15 @@ async def stream_scale(
                 }
                 for item in reading.segmentos
             ]
+        if use_bia and has_bia_impedances(reading.impedancias_ohm):
+            payload["completo"] = True
         if reading.etapa:
             payload["etapa"] = reading.etapa
         profile = profile_box[0]
         if profile is not None:
-            use_z = use_bia and reading.completo
+            use_z = use_bia and (
+                reading.completo or has_bia_impedances(reading.impedancias_ohm)
+            )
             payload["metricas"] = compute_report(
                 reading.peso_kg,
                 profile,
@@ -242,6 +260,9 @@ async def stream_scale(
             pid = _as_uuid(raw.get("person_id"))
             if pid is not None:
                 person_id_box[0] = pid
+            vid = _as_uuid(raw.get("visit_id"))
+            if vid is not None:
+                visit_id_box[0] = vid
             if updated is None:
                 await send_status("Perfil inválido — preencha altura, nascimento/idade e sexo.")
                 continue
