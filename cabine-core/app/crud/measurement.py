@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.measurement import ScaleMeasurement
 from app.schemas.measurement import MeasurementCreate
+from app.services.scale.icomon import has_bia_impedances
 
 
 def _id_key(value: object) -> str:
@@ -30,6 +31,7 @@ async def create(db: AsyncSession, data: MeasurementCreate) -> ScaleMeasurement:
         impedancias_ohm=data.impedancias_ohm,
         segmentos=data.segmentos,
         metricas=data.metricas,
+        visit_id=data.visit_id,
     )
     db.add(record)
     await db.flush()
@@ -59,7 +61,14 @@ async def list_by_person(db: AsyncSession, person_id: UUID) -> list[ScaleMeasure
     ]
 
 
-async def recently_saved(db: AsyncSession, person_id: UUID, peso_kg: float, seconds: int = 90) -> bool:
+async def recently_saved(
+    db: AsyncSession,
+    person_id: UUID,
+    peso_kg: float,
+    seconds: int = 90,
+    *,
+    incoming_bia: bool = False,
+) -> bool:
     records = await list_by_person(db, person_id)
     if not records:
         return False
@@ -69,4 +78,11 @@ async def recently_saved(db: AsyncSession, person_id: UUID, peso_kg: float, seco
         created = created.replace(tzinfo=timezone.utc)
     if datetime.now(timezone.utc) - created > timedelta(seconds=seconds):
         return False
-    return abs(float(latest.peso_kg) - peso_kg) < 0.15
+    if abs(float(latest.peso_kg) - peso_kg) >= 0.15:
+        return False
+    latest_zs = latest.impedancias_ohm if isinstance(latest.impedancias_ohm, list) else None
+    latest_bia = has_bia_impedances(latest_zs)
+    if latest_bia:
+        return True
+    # Peso-só recente: não bloqueia o A7 de bioimpedância que chega em seguida.
+    return not incoming_bia

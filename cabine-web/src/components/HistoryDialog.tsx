@@ -1,6 +1,6 @@
-import type { MeasurementRecord } from '../types/measurement';
-import type { ScalePerson } from '../types/person';
 import { BodyReport } from './BodyReport';
+import type { ScalePerson } from '../types/person';
+import { isWeightOnlyReport, type MeasurementRecord } from '../types/measurement';
 
 function formatWhen(value: string) {
     const date = new Date(value);
@@ -72,7 +72,7 @@ export function HistoryDialog({ person, records, loading, error, selected, onSel
                                     pesoKg={report.peso_kg}
                                     metrics={report.metricas}
                                     supportsBia={report.adapter === 'ble_icomon'}
-                                    weightOnly={report.adapter === 'ble_icomon' && !report.completo}
+                                    weightOnly={isWeightOnlyReport(report)}
                                     saved
                                     segmentos={report.segmentos ?? undefined}
                                     measuredAt={formatWhen(report.created_at)}

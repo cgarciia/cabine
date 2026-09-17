@@ -4,22 +4,23 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.deps import require_access
 from app.crud import measurement as measurement_crud
 from app.crud import person as person_crud
 from app.crud import scale as scale_crud
-from app.schemas.measurement import MeasurementCreate, MeasurementResponse
+from app.schemas.measurement import MeasurementCreate, MeasurementResponse, as_measurement_response
 
-router = APIRouter(prefix="/measurements", tags=["Measurements"])
+router = APIRouter(prefix="/measurements", tags=["Measurements"], dependencies=[Depends(require_access)])
 
 
 @router.get("", response_model=list[MeasurementResponse])
 async def list_measurements(person_id: UUID, db: AsyncSession = Depends(get_db)):
-    return await measurement_crud.list_by_person(db, person_id)
+    return [as_measurement_response(item) for item in await measurement_crud.list_by_person(db, person_id)]
 
 
 @router.get("/person/{person_id}", response_model=list[MeasurementResponse])
 async def list_measurements_for_person(person_id: UUID, db: AsyncSession = Depends(get_db)):
-    return await measurement_crud.list_by_person(db, person_id)
+    return [as_measurement_response(item) for item in await measurement_crud.list_by_person(db, person_id)]
 
 
 @router.post("", response_model=MeasurementResponse, status_code=status.HTTP_201_CREATED)
@@ -35,7 +36,8 @@ async def create_measurement(payload: MeasurementCreate, db: AsyncSession = Depe
         if not scale:
             raise HTTPException(status_code=404, detail="Balança não encontrada.")
 
-    supports_bia = bool(scale and scale.adapter == "ble_icomon")
+    adapter = (scale.adapter if scale else payload.adapter) or ""
+    supports_bia = adapter == "ble_icomon" or bool(payload.impedancias_ohm)
     stored = payload
     if not supports_bia:
         metricas = None
@@ -72,4 +74,4 @@ async def create_measurement(payload: MeasurementCreate, db: AsyncSession = Depe
         person.birth_date = stored.birth_date
     await db.commit()
     await db.refresh(record)
-    return record
+    return as_measurement_response(record)

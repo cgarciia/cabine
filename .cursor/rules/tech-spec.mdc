@@ -1,0 +1,166 @@
+---
+description: Padrão técnico do monorepo Cabine (stack, pastas, nomenclatura e regras obrigatórias)
+alwaysApply: true
+---
+
+# Tech spec — Cabine
+
+Monorepo: `cabine-core` (API) + `cabine-web` (SPA). Não inventar outro pacote, framework de UI ou store global.
+
+## 1. Tech stack
+
+### Backend (`cabine-core`)
+
+- Python **≥ 3.12**, gerenciador **uv** (`pyproject.toml` + lock). Não usar pip/poetry como fonte da verdade.
+- **FastAPI** + **Uvicorn**. App factory em `app/main.py` (`create_app()`), CORS via `settings`.
+- **SQLAlchemy 2.x async** + **asyncpg**. Engine/sessão em `app/core/database.py`. `get_db` injeta `AsyncSession`.
+- **Alembic** (migrations async em `alembic/`). Toda mudança de schema vira migration.
+- **Pydantic v2** schemas; **pydantic-settings** em `app/core/config.py` (`.env`, `case_sensitive=True`).
+- Auth: **bcrypt** + **python-jose** JWT (`HS256`). Kiosk: `POST /login/matricula` (sem senha). Token vale **24 h** (`ACCESS_TOKEN_EXPIRE_MINUTES=1440`). `require_access` / `get_current_person` em `app/core/deps.py`. HTTP da API (exceto `/login/matricula`, `/health`, `GET /`, `POST /people`) exige Bearer. WebSocket recebe `token` na query. `POST /login` e-mail fica só para operador/FHIR.
+- **fhir.resources** só em `app/services/fhir.py` + rotas FHIR.
+- Hardware: **Bleak**. Rádio compartilhado em `app/services/ble/`. Adapters de balança em `app/services/scale/adapters/`; oxímetro em `app/services/oximeter/`. Stream em **WebSocket** (`/ws/scale`, `/ws/oximeter`). Mapa do backend: `cabine-core/SPEC.md`.
+- Postgres **16** (`docker-compose.yml`). PK **UUID** + `created_at`/`updated_at` em `app/models/base.py`.
+
+### Frontend (`cabine-web`)
+
+- **React 19** + **TypeScript** (strict bundler: `verbatimModuleSyntax`, `noUnusedLocals`).
+- **Vite 8** (`@vitejs/plugin-react`). Dev: host `0.0.0.0`, porta **5173**, proxy HTTP/WS para `http://127.0.0.1:8000`.
+- Roteamento: **react-router-dom v7** (`BrowserRouter` em `App.tsx`).
+- HTTP: **axios** singleton `api` em `src/api.ts` (Bearer de `cabine.token`, timeout 10s). Sem fetch solto para a API.
+- Estado: **sem Redux/Zustand/TanStack Query**. `useState`/`useEffect` nas páginas; **KioskContext** para a visita no totem; `localStorage`/`sessionStorage` em `src/session/` (chaves `cabine.*`).
+- UI: **sem** MUI/Chakra/Tailwind. CSS global (`src/index.css`): `cabine-*` operador, `kiosk-*` totem. Sem CSS modules novos salvo necessidade clara.
+- Auth de produção: JWT de matrícula (`RequireAuth`). `src/role/` (`patient` | `clinician`) fica reservado; não envolve o fluxo do totem.
+
+### Integração
+
+- REST em inglês (`/people`, `/forms`, `/scales`, `/measurements`, `/health`, `/login`, `/fhir`, `/users`).
+- UI e `detail` de erro em **português**.
+- JSON da API em **snake_case**. Formulários React podem usar camelCase interno e mapear na borda (`toPayload`).
+
+## 2. Arquitetura e pastas
+
+### Backend — camadas (não pular)
+
+```
+rota (HTTP) → schema Pydantic → crud (DB) e/ou services (domínio/I/O)
+```
+
+```
+cabine-core/app/
+  main.py                 # FastAPI, CORS, lifespan (dispose engine)
+  api/router.py           # include_router de cada módulo
+  api/routes/*.py         # endpoints finos
+  core/                   # config, database, security, deps
+  models/                 # SQLAlchemy; exportar em models/__init__.py
+  schemas/                # Create / Update / Response
+  crud/                   # funções async; commit/refresh aqui
+  services/ble/           # rádio BLE compartilhado (lock, MAC, WinRT)
+  services/scale/         # adapters, parsers, stream, métricas
+  services/oximeter/      # scan, parsers, stream
+  services/fhir.py        # único import de fhir.resources
+cabine-core/alembic/versions/
+cabine-core/scripts/      # probes/dry-run; não são a API
+```
+
+- Rotas: `APIRouter`, `Depends(get_db)`, `response_model`, `HTTPException` com `detail` em PT.
+- Modelos herdam `Base`. Registrar em `models/__init__.py` para o Alembic ver metadata.
+- BLE: código de rádio em `services/ble/`. Nova balança = adapter em `services/scale/adapters/` + registro em `registry.py`. Parser em `parsers.py`. Rota não fala com Bleak.
+- CRUD não importa FastAPI. Rotas não montam queries SQLAlchemy.
+
+### Frontend
+
+```
+cabine-web/src/
+  App.tsx, main.tsx, api.ts, index.css
+  pages/kiosk/    # totem
+  pages/admin/    # operador
+  components/     # UI reutilizável (layout, forms, dialogs)
+  kiosk/          # KioskProvider + KioskLayout
+  types/          # contratos da API + types/mental.ts
+  role/           # papel reservado (RequireRole)
+  session/        # JWT, chaves, pessoa, payload de formulário
+  modules/        # health/questionnaires.ts + mental/
+  advice/         # textos de orientação
+  utils/          # cálculo puro (ex.: sessionBundles.ts)
+```
+
+- Página orquestra estado e chama `api` / helpers. Componente não conhece URL da API se o fetch já existe em `api.ts`.
+- Questionários: dados em `modules/*`; persistência via `saveFormSubmission` + `formPayload.ts`.
+- Rotas novas: registrar em `App.tsx` **e** no `proxy` de `vite.config.ts` se o path da API for novo.
+- Mapa do frontend: `cabine-web/SPEC.md`.
+
+## 3. Nomenclatura
+
+| Coisa | Padrão | Exemplo |
+|---|---|---|
+| Arquivo Python | snake_case | `form_submission.py` |
+| Classe modelo/schema | PascalCase | `ScalePerson`, `PersonCreate` |
+| Tabela | plural snake_case | `people`, `form_submissions` |
+| Função/variável Python | snake_case | `list_by_person`, `height_cm` |
+| Arquivo React | PascalCase se componente | `PeoplePage.tsx`, `PersonPicker.tsx` |
+| Módulo TS utilitário | camelCase | `formPayload.ts`, `api.ts` |
+| Componente / página | PascalCase + sufixo Page | `HealthPage`, `AppLayout` |
+| Hook | `use` + Pascal | `useRole` |
+| Tipo TS de API | interface, campos snake_case | `ScalePerson.height_cm` |
+| Estado de formulário UI | camelCase | `heightCm` → `height_cm` no POST |
+| Rota SPA | português, kebab | `/saude-mental`, `/admin/avaliacao` |
+| Rota API | inglês, plural REST | `GET /people/{id}/forms` |
+| CSS de produto | prefixo `cabine-` | `.cabine-shell`, `.cabine-nav` |
+| Chave storage | `cabine.*` | `cabine.role`, `cabine.current-person-id` |
+| Migration | Alembic: revisão + slug | `a1b2c3d4e5f6_form_submissions.py` |
+
+Schemas HTTP: `*Create`, `*Update`, `*Response`. `model_config = ConfigDict(from_attributes=True)` no Response.
+
+CRUD: `list_all`, `get_by_id`, `create`, `update_*`, `delete_*`.
+
+IDs: UUID string no front; `UUID` no FastAPI.
+
+## 4. Nunca fazer / obrigatório
+
+### Nunca
+
+- Adicionar Redux, Zustand, React Query, Tailwind, MUI ou outro CSS framework sem decisão explícita.
+- SQLAlchemy síncrono, `psycopg2`, ou `Session` sync no caminho da API.
+- Lógica BLE/FHIR/JWT dentro de `api/routes`.
+- Alterar tabela só no model sem migration Alembic.
+- Secrets no git (`.env`, senhas, `SECRET_KEY`). Compose local não é template de produção.
+- `fetch` direto à API; criar segundo Axios; hardcodar `localhost:8000` no front (usar proxy ou `VITE_API_URL`).
+- Componentes de classe; default export novo em páginas (preferir `export function FooPage`).
+- Identificadores de código em português (`criarPessoa`, `rotaSaude`). PT só em UI e `detail`.
+- Engolir erro: `catch` vazio ou `detail` genérico em inglês na API usada pela UI.
+- Novo path de API sem proxy Vite correspondente.
+- `any` no TS ou `dict` sem schema Pydantic na borda HTTP.
+- PK inteiro autoincrement; timestamps manuais no lugar de `Base`.
+
+### Obrigatório
+
+- Endpoints async; `select()` + `await db.execute`.
+- Validar entrada com Pydantic (`Field`, validators). Normalizar enums/sexo/tipo como em `schemas/person.py`.
+- 404 se recurso pai não existe antes de listar filhos.
+- Front: `apiErrorMessage(error, fallbackPt)` para Axios.
+- Totem: rotas após login com `RequireAuth`. `RequireRole` só se o fluxo clínico for montado.
+- Tipos de resposta em `src/types/*` alinhados ao schema.
+- WebSocket de balança: perfil da pessoa (altura, idade, sexo, tipo) via query/`person_id`; persistência no service, não na página.
+- Formulários clínicos: `module` só `'health' | 'mental'`; payload estruturado (`formPayload.ts`), não dump cru do state.
+- `verbatimModuleSyntax`: `import type` para tipos.
+- Depois de model novo: export em `models/__init__.py` + migration.
+
+```python
+# ❌ query na rota
+@router.get("/people")
+async def list_people(db: AsyncSession = Depends(get_db)):
+    return (await db.execute(select(ScalePerson))).scalars().all()
+
+# ✅
+@router.get("", response_model=list[PersonResponse])
+async def list_people(db: AsyncSession = Depends(get_db)):
+    return await person_crud.list_all(db)
+```
+
+```tsx
+// ❌
+const res = await fetch('http://127.0.0.1:8000/people');
+
+// ✅
+const { data } = await api.get<ScalePerson[]>('/people');
+```

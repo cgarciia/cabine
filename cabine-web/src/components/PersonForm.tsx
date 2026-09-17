@@ -1,5 +1,7 @@
 import { type CSSProperties, type FormEvent, type ReactNode } from 'react';
 
+import type { PersonPayload, ScalePerson } from '../types/person';
+
 export type PersonFormValues = {
     name: string;
     heightCm: string;
@@ -50,6 +52,33 @@ export function ageFromBirth(value: string): number | null {
     const m = now.getMonth() - born.getMonth();
     if (m < 0 || (m === 0 && now.getDate() < born.getDate())) years -= 1;
     return years > 0 ? years : null;
+}
+
+export function personFormToPayload(values: PersonFormValues): PersonPayload {
+    const height = Number(values.heightCm);
+    const age = Number(values.age);
+    const weight = Number(values.expectedWeight);
+    return {
+        name: values.name.trim(),
+        height_cm: height,
+        age: Number.isFinite(age) && age > 0 ? age : undefined,
+        birth_date: values.birthDate || null,
+        sex: values.sex,
+        people_type: values.peopleType,
+        expected_weight_kg: Number.isFinite(weight) && weight > 0 ? weight : null,
+    };
+}
+
+export function personToFormValues(person: ScalePerson): PersonFormValues {
+    return {
+        name: person.name,
+        heightCm: String(person.height_cm),
+        age: String(person.age),
+        birthDate: person.birth_date ?? '',
+        sex: person.sex,
+        peopleType: person.people_type,
+        expectedWeight: person.expected_weight_kg != null ? String(person.expected_weight_kg) : '',
+    };
 }
 
 type Props = {

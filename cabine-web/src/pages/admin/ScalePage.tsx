@@ -1,33 +1,22 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
-import { api, apiErrorMessage, fetchPersonMeasurements, wsBaseUrl } from '../api';
-import { AppLayout } from '../components/AppLayout';
-import { BodyReport } from '../components/BodyReport';
-import { HistoryDialog } from '../components/HistoryDialog';
-import { emptyPersonForm, PersonForm, type PersonFormValues } from '../components/PersonForm';
-import type { MeasurementPayload, MeasurementRecord, ScaleMetrics, Segmento } from '../types/measurement';
-import type { ScalePerson } from '../types/person';
-import type { Scale } from '../types/scale';
-
-interface ScalePayload {
-    type: string;
-    step?: string;
-    reset?: boolean;
-    channel?: string;
-    balanca_nome?: string;
-    peso_kg?: number;
-    timestamp?: string;
-    msg?: string;
-    estavel?: boolean;
-    completo?: boolean;
-    metricas?: ScaleMetrics;
-    impedancias_ohm?: number[];
-    segmentos?: Segmento[];
-    weight_kg?: number;
-    guest?: boolean;
-    reset_memory?: boolean;
-}
+import { api, apiErrorMessage, deviceSocket, fetchPersonMeasurements } from '../../api';
+import { AppLayout } from '../../components/AppLayout';
+import { BodyReport } from '../../components/BodyReport';
+import { HistoryDialog } from '../../components/HistoryDialog';
+import { emptyPersonForm, PersonForm, type PersonFormValues } from '../../components/PersonForm';
+import { loadCurrentPersonId, saveCurrentPersonId } from '../../session/currentPerson';
+import type { ScalePerson } from '../../types/person';
+import {
+    hasBiaImpedances,
+    type MeasurementPayload,
+    type MeasurementRecord,
+    type ScaleLiveMessage,
+    type ScaleMetrics,
+    type Segmento,
+} from '../../types/measurement';
+import type { Scale } from '../../types/scale';
 
 const BIA_GUIDE = [
     { id: 'step_on', title: 'Segure a barra e suba', detail: 'Mãos nos eletrodos antes de pisar. Pés descalços no centro.' },
@@ -69,7 +58,7 @@ function friendlyStatus(raw: string, ready: boolean) {
     return 'Balança pronta. Pode subir.';
 }
 
-export const ScalePage = () => {
+export function ScalePage() {
     const [scales, setScales] = useState<Scale[]>([]);
     const [people, setPeople] = useState<ScalePerson[]>([]);
     const [selectedId, setSelectedId] = useState('');
@@ -97,7 +86,7 @@ export const ScalePage = () => {
     const [scaleName, setScaleName] = useState('Balança');
     const [status, setStatus] = useState('Escolha quem vai se avaliar');
     const [guideStep, setGuideStep] = useState('step_on');
-    const [guideMsg, setGuideMsg] = useState(BIA_GUIDE[0].detail);
+    const [guideMsg, setGuideMsg] = useState<string>(BIA_GUIDE[0].detail);
     const [historyOpen, setHistoryOpen] = useState(false);
     const [historyRecords, setHistoryRecords] = useState<MeasurementRecord[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
@@ -177,8 +166,10 @@ export const ScalePage = () => {
             setSaveMsg('Não foi possível salvar: conferir altura e idade da pessoa.');
             return;
         }
-        const key = `${session.selectedPersonId}:${reading.peso_kg.toFixed(2)}:${reading.completo}`;
-        if (savedKeyRef.current === key || savingRef.current) return;
+        const hasBia = hasBiaImpedances(reading.impedancias_ohm);
+        const key = `${session.selectedPersonId}:${reading.peso_kg.toFixed(2)}:${hasBia || reading.completo}`;
+        if (savedKeyRef.current === key) return;
+        if (savingRef.current && !hasBia) return;
         savingRef.current = true;
         setSavingReport(true);
         setSaveMsg('');
@@ -195,7 +186,7 @@ export const ScalePage = () => {
             people_type: session.peopleType,
             expected_weight_kg: reading.peso_kg,
             estavel: reading.estavel,
-            completo: reading.completo,
+            completo: Boolean(reading.completo || hasBia),
             impedancias_ohm: session.supportsBia ? (reading.impedancias_ohm ?? null) : null,
             segmentos: session.supportsBia ? (reading.segmentos ?? null) : null,
             metricas: reading.metricas ?? null,
@@ -209,7 +200,6 @@ export const ScalePage = () => {
             const { data } = await api.get<ScalePerson[]>('/people');
             setPeople(data);
         } catch (err) {
-            console.error('Falha ao salvar medição', err);
             setSaveMsg(apiErrorMessage(err, 'Não foi possível salvar o relatório.'));
         } finally {
             savingRef.current = false;
@@ -243,7 +233,7 @@ export const ScalePage = () => {
     }, []);
 
     const applyPerson = useCallback((person: ScalePerson) => {
-        window.sessionStorage.setItem('cabine-person-id', person.id);
+        saveCurrentPersonId(person.id);
         setSelectedPersonId(person.id);
         setHeightCm(String(person.height_cm));
         setAge(String(person.age));
@@ -262,7 +252,7 @@ export const ScalePage = () => {
     }, [heightCm, age, sex, birthDate, peopleType, expectedWeight, selectedPersonName, sendProfile]);
 
     useEffect(() => {
-        const remembered = window.sessionStorage.getItem('cabine-person-id');
+        const remembered = loadCurrentPersonId();
         api.get<Scale[]>('/scales').then(({ data }) => {
             setScales(data);
             const preferred = data.find((item) => item.is_default && item.is_active)
@@ -307,7 +297,6 @@ export const ScalePage = () => {
         lastReadingRef.current = null;
         setStatus('Preparando a balança...');
 
-        const wsUrl = wsBaseUrl();
         const profile = profileRef.current;
         const params = new URLSearchParams({
             scale_id: selectedId,
@@ -320,7 +309,7 @@ export const ScalePage = () => {
         if (profile.expectedWeight) params.set('expected_weight_kg', profile.expectedWeight);
         if (profile.displayName) params.set('display_name', profile.displayName);
         if (selectedPersonId) params.set('person_id', selectedPersonId);
-        const ws = new WebSocket(`${wsUrl}/ws/scale?${params.toString()}`);
+        const ws = deviceSocket('/ws/scale', params);
         wsRef.current = ws;
 
         ws.onopen = () => {
@@ -331,22 +320,25 @@ export const ScalePage = () => {
         ws.onclose = () => setStatus('Desconectado do servidor');
 
         ws.onmessage = (event) => {
-            const data: ScalePayload = JSON.parse(event.data);
+            const data: ScaleLiveMessage = JSON.parse(event.data);
             const bia = scalesRef.current.find((item) => item.id === selectedId)?.adapter === 'ble_icomon';
             const activeGuide = bia ? BIA_GUIDE : WEIGHT_GUIDE;
 
-            if (finishedRef.current) return;
+            const biaResult = data.type === 'PESO_RECEBIDO'
+                && (Boolean(data.completo) || hasBiaImpedances(data.impedancias_ohm));
+            if (finishedRef.current && !biaResult) return;
 
             if (data.type === 'STATUS' && data.msg) {
                 setStatus(data.msg);
             } else if (data.type === 'STEP' && data.step) {
                 if (data.reset) {
                     const last = lastReadingRef.current;
-                    if (last && last.peso_kg >= 10) {
+                    const lastBia = Boolean(last && (last.completo || hasBiaImpedances(last.impedancias_ohm)));
+                    if (last && last.peso_kg >= 10 && lastBia) {
                         finishedRef.current = true;
                         setCurrentWeight(last.peso_kg);
                         setStable(last.estavel);
-                        setComplete(last.completo);
+                        setComplete(true);
                         setMetrics(last.metricas ?? null);
                         setSegments(last.segmentos ?? []);
                         setImpedanciasOhm(last.impedancias_ohm ?? []);
@@ -354,7 +346,10 @@ export const ScalePage = () => {
                         setGuideMsg(activeGuide[activeGuide.length - 1].detail);
                         setStatus('Avaliação concluída');
                         setView('report');
-                        void persistRef.current(last);
+                        void persistRef.current({
+                            ...last,
+                            completo: true,
+                        });
                         return;
                     }
                     setComplete(false);
@@ -370,7 +365,6 @@ export const ScalePage = () => {
                 } else {
                     setGuideStep((prev) => (canAdvanceStep(activeGuide, prev, data.step!) ? data.step! : prev));
                     if (data.msg) setGuideMsg(data.msg);
-                    if (data.step === 'done') setComplete(true);
                 }
             } else if (data.type === 'PESO_RECEBIDO' && data.peso_kg !== undefined) {
                 if (!liveStartedRef.current) {
@@ -386,7 +380,8 @@ export const ScalePage = () => {
                     segmentos: data.segmentos,
                     balanca_nome: data.balanca_nome,
                 };
-                if (data.completo) {
+                const biaComplete = Boolean(data.completo) || hasBiaImpedances(data.impedancias_ohm);
+                if (biaComplete) {
                     finishedRef.current = true;
                     setGuideStep('done');
                     setGuideMsg(activeGuide[activeGuide.length - 1].detail);
@@ -422,8 +417,13 @@ export const ScalePage = () => {
 
         return () => {
             const last = lastReadingRef.current;
-            if (last && last.peso_kg >= 10) {
-                void persistRef.current(last);
+            if (
+                finishedRef.current
+                && last
+                && last.peso_kg >= 10
+                && (last.completo || hasBiaImpedances(last.impedancias_ohm))
+            ) {
+                void persistRef.current({ ...last, completo: true });
             }
             ws.close();
         };
@@ -431,7 +431,10 @@ export const ScalePage = () => {
 
     const activeGuide = stepIndex(guide, guideStep);
     const currentGuide = guide[activeGuide] ?? guide[0];
-    const weightOnlyResult = supportsBia && view === 'report' && !complete;
+    const weightOnlyResult = supportsBia && view === 'report' && !complete
+        && !hasBiaImpedances(impedanciasOhm)
+        && metrics?.metodo !== 'wla25'
+        && metrics?.agua_pct == null;
     const readyLabel = friendlyStatus(status, view === 'ready');
 
     async function handleAddPerson(event: FormEvent) {
@@ -500,7 +503,7 @@ export const ScalePage = () => {
                         <h1 style={{ margin: '8px 0', fontSize: '1.8rem' }}>Nenhuma balança cadastrada</h1>
                         <p style={{ color: '#64748b' }}>
                             Cadastre o equipamento para iniciar as avaliações.{' '}
-                            <Link to="/balancas">Ir para balanças</Link>
+                            <Link to="/admin/balancas">Ir para balanças</Link>
                         </p>
                     </div>
                 ) : (
@@ -632,7 +635,7 @@ export const ScalePage = () => {
                                 >
                                     Adicionar pessoa
                                 </button>
-                                <Link to="/pessoas" style={{ display: 'block', marginTop: 10, textAlign: 'center', color: '#0f766e' }}>
+                                <Link to="/admin/pessoas" style={{ display: 'block', marginTop: 10, textAlign: 'center', color: '#0f766e' }}>
                                     Ver cadastro completo
                                 </Link>
                             </>
@@ -723,4 +726,4 @@ export const ScalePage = () => {
             ) : null}
         </AppLayout>
     );
-};
+}

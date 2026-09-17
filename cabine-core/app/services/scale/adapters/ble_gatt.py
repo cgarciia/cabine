@@ -5,13 +5,13 @@ import sys
 from bleak import BleakClient, BleakError, BleakScanner
 from fastapi import WebSocket
 
-from app.services.scale.adapters.base import DispatchFn, ScaleAdapter, StatusFn
-from app.services.scale.adapters.ble_common import (
+from app.services.ble import (
+    apply_winrt_descriptor_tolerance,
     ble_radio_lock,
     normalize_mac,
     watch_websocket_closed,
 )
-from app.services.scale.adapters.ble_winrt_patch import apply_winrt_descriptor_tolerance
+from app.services.scale.adapters.base import DispatchFn, ScaleAdapter, StatusFn
 from app.services.scale.parsers import ParserFn
 from app.services.scale.spec import ScaleSpec
 

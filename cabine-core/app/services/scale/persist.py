@@ -8,6 +8,7 @@ from app.core.database import AsyncSessionLocal
 from app.crud import measurement as measurement_crud
 from app.crud import person as person_crud
 from app.schemas.measurement import MeasurementCreate
+from app.services.scale.icomon import has_bia_impedances
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ async def save_from_scale_event(
     person_id: UUID,
     scale_id: UUID | None,
     payload: dict,
+    visit_id: UUID | None = None,
 ) -> None:
     peso = payload.get("peso_kg")
     try:
@@ -66,6 +68,7 @@ async def save_from_scale_event(
         impedancias_ohm=jsonable(payload.get("impedancias_ohm")),
         segmentos=jsonable(payload.get("segmentos")),
         metricas=jsonable(payload.get("metricas")),
+        visit_id=visit_id,
     )
 
     async with AsyncSessionLocal() as db:
@@ -73,7 +76,11 @@ async def save_from_scale_event(
         if not person:
             logger.warning("Não salvou medição: pessoa %s não existe", person_id)
             return
-        if await measurement_crud.recently_saved(db, person_id, peso_kg):
+        incoming_zs = data.impedancias_ohm if isinstance(data.impedancias_ohm, list) else None
+        incoming_bia = has_bia_impedances(incoming_zs)
+        if await measurement_crud.recently_saved(
+            db, person_id, peso_kg, incoming_bia=incoming_bia,
+        ):
             logger.info("Medição ignorada (já existe recente) person=%s peso=%.2f", person_id, peso_kg)
             return
         record = await measurement_crud.create(db, data)

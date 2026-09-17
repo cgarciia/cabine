@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.services.scale.metrics import metrics_from_stored
+
 
 class MeasurementCreate(BaseModel):
     person_id: UUID
@@ -22,6 +24,7 @@ class MeasurementCreate(BaseModel):
     impedancias_ohm: list[float] | None = None
     segmentos: list[dict] | None = None
     metricas: dict | None = None
+    visit_id: UUID | None = None
 
 
 class MeasurementResponse(BaseModel):
@@ -42,6 +45,24 @@ class MeasurementResponse(BaseModel):
     impedancias_ohm: Any = None
     segmentos: Any = None
     metricas: Any = None
+    visit_id: UUID | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+def as_measurement_response(record: Any) -> MeasurementResponse:
+    payload = MeasurementResponse.model_validate(record)
+    refreshed = metrics_from_stored(
+        peso_kg=record.peso_kg,
+        height_cm=record.height_cm,
+        age=record.age,
+        sex=record.sex,
+        people_type=record.people_type,
+        impedancias_ohm=record.impedancias_ohm,
+        segmentos=record.segmentos,
+        stored_metrics=record.metricas if isinstance(record.metricas, dict) else None,
+    )
+    if refreshed is None or refreshed is record.metricas:
+        return payload
+    return payload.model_copy(update={"metricas": refreshed})

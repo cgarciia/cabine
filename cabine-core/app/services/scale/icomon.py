@@ -26,6 +26,20 @@ FFB3_UUID = "0000ffb3-0000-1000-8000-00805f9b34fb"
 NUM_IMPEDANCES = 10
 MIN_VALID_Z = 40.0
 MAX_VALID_Z = 700.0
+# Membros no A7 ficam ~100–400 Ω. Tronco/líder costuma ser 3–25 Ω — não conta aqui.
+LIMB_Z_MIN = 80.0
+
+
+def limb_channel_count(values: list[float]) -> int:
+    return sum(1 for z in values if z >= LIMB_Z_MIN)
+
+
+def has_bia_impedances(values: list[float] | None) -> bool:
+    """A7 com corrente (não o frame só de pés, canais zerados)."""
+    zs = [float(z) for z in (values or [])]
+    if len(zs) < 8:
+        return False
+    return sum(1 for z in zs if z >= 5.0) >= 4
 
 SEGMENT_ORDER = (
     # Ordem no fio A7 desta Relaxmedic: 4 membros + líder (tronco) por banda.
@@ -84,33 +98,26 @@ def label_segments(impedancias: list[float]) -> list[SegmentImpedance]:
 
 
 def _z_quality(values: list[float]) -> tuple[bool, str]:
-    from app.services.scale.wla25 import impedances_valid, to_wla25_order
+    """Completo = a firmware entregou um A7 com corrente, não um frame zerado.
 
+    Não usa o WLA25 como trava: o tronco nesta hardware vem ~3–70 Ω e a
+    balança mesmo assim fecha a medição. Sem isso o sistema descarta a BIA.
+    """
     if len(values) < 8:
         return False, f"só {len(values)} valores"
     zeros = sum(1 for z in values if z < 5.0)
     if zeros >= 6:
         return False, f"quase zerado (só pés?): zeros={zeros} values={values}"
-
-    ordered = to_wla25_order(values)
-    if not impedances_valid(ordered):
-        if ordered[0] < 1.0 or ordered[5] < 1.0:
-            return False, f"canal do líder zerado (Z={ordered[0]}/{ordered[5]})"
-        bad = [f"z{i}={ordered[i]}" for i in (1, 2, 3, 4, 6, 7, 8, 9) if ordered[i] < 100]
-        return False, "eletrodo sem contato: " + (", ".join(bad) if bad else str(ordered))
-
-    # Os dois valores "líder" (índices 0 e 5) não são ohms de tronco na escala
-    # dos membros — capturas reais trazem 2,9 e 75,0 numa medição que a própria
-    # balança aceitou e exibiu. Só exigimos que não estejam zerados; quem manda
-    # na qualidade são os 8 membros, validados acima.
-    return True, f"ok wla25={ordered}"
+    if not has_bia_impedances(values):
+        return False, f"sem corrente (Z={values})"
+    return True, f"ok Z={values}"
 
 
 def quality_hint(values: list[float]) -> str:
     ok, reason = _z_quality(values)
     if ok:
         return "Sensores OK."
-    if "tronco" in reason or "barra" in reason or "líder" in reason:
+    if "tronco" in reason or "barra" in reason or "lider" in reason:
         return (
             "Canal do tronco fraco — segure a barra com as duas mãos (polegares nos eletrodos), "
             "braços ~40°, sem encostar a barra no corpo, e aguarde."
@@ -188,7 +195,7 @@ def decode_payload(payload: bytes) -> ScaleReading | None:
     if not payload:
         return None
     mtype = payload[0]
-    logger.info("icomon decode type=0x%02x len=%s hex=%s", mtype, len(payload), payload.hex())
+    logger.debug("icomon decode type=0x%02x len=%s hex=%s", mtype, len(payload), payload.hex())
 
     if mtype == 0xA2:
         return _parse_a2(payload)

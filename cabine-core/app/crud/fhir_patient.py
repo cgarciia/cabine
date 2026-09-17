@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.patient import FHIRPatient
+from app.models.fhir_patient import FHIRPatient
 
 
 async def get_by_fhir_id(db: AsyncSession, fhir_id: str) -> FHIRPatient | None:
