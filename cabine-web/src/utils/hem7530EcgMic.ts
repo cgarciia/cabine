@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { OMRON_ECG_WORKLET } from './omronEcgWorklet';
+import { HEM7530_ECG_WORKLET } from './hem7530EcgWorklet';
 
 const TRACE_MAX = 3600;
 const RECORD_MAX = 12000;
@@ -13,7 +13,7 @@ const AUDIO_CONSTRAINTS = {
     voiceIsolation: false,
 } as MediaTrackConstraints;
 
-/** Faixa do Complete: 19 kHz ± ~1 kHz. Corta voz, ar e toque, sem Q alto que ringa o QRS. */
+/** HEM-7530T ultrasonic band: 19 kHz ± ~1 kHz. Cuts voice, air and tap without ringing QRS. */
 function wireUltrasonic(ctx: AudioContext, source: AudioNode, dest: AudioNode): () => void {
     const nyquist = ctx.sampleRate / 2 - 300;
     const filters: BiquadFilterNode[] = [];
@@ -55,8 +55,8 @@ function micBlockedReason(): string | null {
     );
 }
 
-/** Pede o mic no toque do menu para o Chrome autorizar antes da tela de pressão. */
-export async function requestOmronMicPermission(): Promise<void> {
+/** Request the mic on the menu tap so Chrome authorizes before the BP screen. */
+export async function requestHem7530MicPermission(): Promise<void> {
     if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) return;
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -65,11 +65,11 @@ export async function requestOmronMicPermission(): Promise<void> {
         });
         stream.getTracks().forEach((track) => track.stop());
     } catch {
-        /* a tela de pressão mostra o erro */
+        /* the blood-pressure screen shows the error */
     }
 }
 
-export function useOmronEcgMic(enabled: boolean) {
+export function useHem7530EcgMic(enabled: boolean) {
     const [samples, setSamples] = useState<number[]>([]);
     const [toneLocked, setToneLocked] = useState(false);
     const [toneLevel, setToneLevel] = useState(0);
@@ -128,10 +128,10 @@ export function useOmronEcgMic(enabled: boolean) {
                 setError('Este tablet baixou o áudio demais para ouvir o ultrassom de 19 kHz. Use o Chrome atualizado.');
                 return;
             }
-            workletUrl = URL.createObjectURL(new Blob([OMRON_ECG_WORKLET], { type: 'text/javascript' }));
+            workletUrl = URL.createObjectURL(new Blob([HEM7530_ECG_WORKLET], { type: 'text/javascript' }));
             await ctx.audioWorklet.addModule(workletUrl);
             source = ctx.createMediaStreamSource(stream);
-            node = new AudioWorkletNode(ctx, 'omron-ecg');
+            node = new AudioWorkletNode(ctx, 'hem7530-ecg');
             node.port.onmessage = (event: MessageEvent<{ samples: number[]; locked: boolean; snr: number }>) => {
                 setToneLevel(event.data.snr);
                 setToneLocked(event.data.locked);

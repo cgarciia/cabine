@@ -21,18 +21,18 @@ async def get_by_registration(db: AsyncSession, registration: str) -> ScalePerso
     key = registration.strip()
     if not key:
         return None
-    result = await db.execute(select(ScalePerson).where(ScalePerson.matricula == key))
+    result = await db.execute(select(ScalePerson).where(ScalePerson.registration == key))
     return result.scalars().first()
 
 
 async def create(db: AsyncSession, data: PersonCreate) -> ScalePerson:
-    if data.matricula:
-        existing = await get_by_registration(db, data.matricula)
+    if data.registration:
+        existing = await get_by_registration(db, data.registration)
         if existing:
             raise ValueError("Já existe uma pessoa com esta matrícula.")
     person = ScalePerson(
         name=data.name,
-        matricula=data.matricula,
+        registration=data.registration,
         height_cm=data.height_cm,
         age=int(data.age or 0),
         birth_date=data.birth_date,
@@ -49,12 +49,12 @@ async def create(db: AsyncSession, data: PersonCreate) -> ScalePerson:
 async def update_person(db: AsyncSession, person: ScalePerson, data: PersonUpdate) -> ScalePerson:
     if data.name is not None:
         person.name = data.name
-    if data.matricula is not None:
-        if data.matricula:
-            existing = await get_by_registration(db, data.matricula)
+    if data.registration is not None:
+        if data.registration:
+            existing = await get_by_registration(db, data.registration)
             if existing and existing.id != person.id:
                 raise ValueError("Já existe uma pessoa com esta matrícula.")
-        person.matricula = data.matricula
+        person.registration = data.registration
     if data.height_cm is not None:
         person.height_cm = data.height_cm
     if data.sex is not None:

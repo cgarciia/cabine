@@ -21,7 +21,7 @@ def _sfloat(raw: int) -> float | None:
 
 
 def parse_bp_measurement(payload: bytes) -> dict[str, Any] | None:
-    """IEEE 11073 Blood Pressure Measurement (0x2A35), o caminho do OMRON connect."""
+    """IEEE 11073 Blood Pressure Measurement (0x2A35)."""
     if len(payload) < 7:
         return None
     flags = payload[0]

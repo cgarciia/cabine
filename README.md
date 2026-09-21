@@ -1,75 +1,45 @@
-```markdown
-# ?? Cabine - Monorepo
+# Cabine
 
-Este reposit¢rio cont‚m o c¢digo-fonte do projeto **Cabine**, estruturado em um monorepo que engloba o backend (`cabine-core`) e o frontend (`cabine-web`).
+Monorepo da cabine de avaliação: API e hardware em `cabine-core`, totem e painel em `cabine-web`.
 
-## ??? Pr‚-requisitos
+Mapas de pasta e regras: `cabine-core/SPEC.md` e `cabine-web/SPEC.md`.
 
-Antes de come‡ar, certifique-se de ter as seguintes ferramentas instaladas na sua m quina local:
+## Requisitos
 
-*   [Node.js](https://nodejs.org/) (recomendado versÆo LTS)
-*   [Python](https://www.python.org/) (versÆo 3.10 ou superior)
-*   [uv](https://docs.astral.sh/uv/) (Gerenciador de dependˆncias para o Python)
+- Python ? 3.12 e [uv](https://docs.astral.sh/uv/)
+- Node.js LTS
+- Postgres 16 (`cabine-core/docker-compose.yml`)
 
----
+## Backend
 
-## ?? Instala‡Æo e Execu‡Æo
-
-### 1. Backend (`cabine-core`)
-
-O core da aplica‡Æo ‚ respons vel pela l¢gica de neg¢cios e APIs. Para rodar o ambiente localmente:
-
-1. Acesse o diret¢rio do backend:
-   ```bash
-   cd cabine-core
-
-```
-
-2. Instale as dependˆncias a partir do arquivo de lock usando o `uv`:
 ```bash
+cd cabine-core
+cp .env.example .env   # SECRET_KEY e Postgres
 uv sync
-
+make db-up
+make migrate
+make run
 ```
 
+Health: `GET http://127.0.0.1:8000/health` ? `{"status":"ok"}`.
 
-3. Ative o ambiente virtual e inicie o servidor:
-```bash
-# O comando abaixo pode variar dependendo do framework usado (FastAPI, Flask, etc.)
-uv run python main.py
+Sondas de laboratório ficam em `cabine-core/scripts/` e **não** sobem no servidor.
 
-```
+## Frontend
 
-
-
-### 2. Frontend (`cabine-web`)
-
-A interface de usu rio foi desenvolvida em TypeScript. Para subir o ambiente visual:
-
-1. Em uma nova aba do terminal, acesse o diret¢rio web:
 ```bash
 cd cabine-web
-
-```
-
-
-2. Instale as dependˆncias do pacote (ajuste caso utilize `yarn` ou `pnpm`):
-```bash
 npm install
-
-```
-
-
-3. Inicie o servidor de desenvolvimento:
-```bash
 npm run dev
-
 ```
 
+O Vite escuta em `https://127.0.0.1:5173` (certificado autoassinado) e faz proxy HTTP/WS para a API em `:8000`.
 
+- Totem: `/` ? matrícula ? menu
+- Painel: `/admin/login` (e-mail/senha do operador)
 
----
+## Estrutura
 
-## ??? Estrutura do Projeto
-
-* `/cabine-core/` - Aplica‡Æo backend e integra‡äes.
-* `/cabine-web/` - Aplica‡Æo frontend e interface de usu rio.
+- `cabine-core/` — FastAPI, Postgres, BLE
+- `cabine-web/` — React + Vite
+- `docs/` — notas de protocolo de hardware

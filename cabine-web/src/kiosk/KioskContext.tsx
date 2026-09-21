@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import type { QuestionnaireScore } from '../modules/health/questionnaires';
 import { clearCurrentPersonId, saveCurrentPersonId } from '../session/currentPerson';
 import { LEGACY_STORAGE_KEYS, STORAGE_KEYS } from '../session/keys';
+import { clearVisitDrafts } from '../session/cabineSession';
 import { newVisitId } from '../session/visitId';
 import type { BloodPressureReading } from '../types/bloodPressure';
 import type { MeasurementRecord } from '../types/measurement';
@@ -135,6 +136,7 @@ export function KioskProvider({ children }: { children: ReactNode }) {
         sessionStorage.removeItem(STORAGE_KEYS.kioskSession);
         sessionStorage.removeItem(LEGACY_STORAGE_KEYS.kioskSession);
         clearCurrentPersonId();
+        clearVisitDrafts();
     }, []);
 
     const mentalDone = Boolean(

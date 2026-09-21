@@ -18,7 +18,7 @@ router = APIRouter(tags=["Auth"])
 
 
 class RegistrationLookup(BaseModel):
-    matricula: str = Field(min_length=1, max_length=40)
+    registration: str = Field(min_length=1, max_length=40)
 
 
 class RegistrationLookupResponse(BaseModel):
@@ -26,7 +26,7 @@ class RegistrationLookupResponse(BaseModel):
 
 
 class RegistrationLogin(BaseModel):
-    matricula: str = Field(min_length=1, max_length=40)
+    registration: str = Field(min_length=1, max_length=40)
     birth_date: date
 
 
@@ -40,7 +40,7 @@ def _issue_person_token(person_id: UUID, registration: str) -> Token:
         data={
             "sub": str(person_id),
             "typ": "person",
-            "matricula": registration,
+            "registration": registration,
         },
         expires_delta=expires,
     )
@@ -52,22 +52,22 @@ def _issue_person_token(person_id: UUID, registration: str) -> Token:
 
 @router.post("/login/lookup", response_model=RegistrationLookupResponse)
 async def lookup_registration(payload: RegistrationLookup, db: AsyncSession = Depends(get_db)):
-    key = payload.matricula.strip()
+    key = payload.registration.strip()
     if not key:
         raise HTTPException(status_code=400, detail="Informe a matrícula.")
     person = await person_crud.get_by_registration(db, key)
-    return RegistrationLookupResponse(exists=bool(person and person.matricula))
+    return RegistrationLookupResponse(exists=bool(person and person.registration))
 
 
-@router.post("/login/matricula", response_model=RegistrationSessionResponse)
+@router.post("/login/registration", response_model=RegistrationSessionResponse)
 async def login_by_registration(payload: RegistrationLogin, db: AsyncSession = Depends(get_db)):
-    key = payload.matricula.strip()
+    key = payload.registration.strip()
     if not key:
         raise HTTPException(status_code=400, detail="Informe a matrícula.")
     person = await person_crud.get_by_registration(db, key)
     if (
         not person
-        or not person.matricula
+        or not person.registration
         or person.birth_date is None
         or person.birth_date != payload.birth_date
     ):
@@ -76,7 +76,7 @@ async def login_by_registration(payload: RegistrationLogin, db: AsyncSession = D
             detail="Matrícula ou data de nascimento incorretas.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = _issue_person_token(person.id, person.matricula)
+    token = _issue_person_token(person.id, person.registration)
     return RegistrationSessionResponse(
         access_token=token.access_token,
         expires_in=token.expires_in,
@@ -89,7 +89,7 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    """Operator login (e-mail). The kiosk uses POST /login/matricula."""
+    """Operator login (e-mail). The kiosk uses POST /login/registration."""
     user = await user_crud.get_by_email(db, form_data.username)
     if (
         not user

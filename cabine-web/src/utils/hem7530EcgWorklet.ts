@@ -1,11 +1,10 @@
 /**
- * HEM-7530T / AliveCor no OMRON connect:
- *   FM 19 kHz, 200 Hz/mV, resposta 0,67–40 Hz, traço a 300 Hz.
+ * HEM-7530T ultrasonic ECG: FM 19 kHz, 200 Hz/mV, 0.67–40 Hz, 300 Hz trace.
  */
-export const OMRON_ECG_HZ = 300;
+export const HEM7530_ECG_HZ = 300;
 
-export const OMRON_ECG_WORKLET = `
-class OmronEcgProcessor extends AudioWorkletProcessor {
+export const HEM7530_ECG_WORKLET = `
+class Hem7530EcgProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.ready = false;
@@ -139,5 +138,5 @@ class OmronEcgProcessor extends AudioWorkletProcessor {
     return true;
   }
 }
-registerProcessor('omron-ecg', OmronEcgProcessor);
+registerProcessor('hem7530-ecg', Hem7530EcgProcessor);
 `;

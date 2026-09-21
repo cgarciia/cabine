@@ -4,6 +4,7 @@ import type { PersonPayload, ScalePerson } from '../types/person';
 
 export type PersonFormValues = {
     name: string;
+    registration: string;
     heightCm: string;
     age: string;
     birthDate: string;
@@ -14,6 +15,7 @@ export type PersonFormValues = {
 
 export const emptyPersonForm: PersonFormValues = {
     name: '',
+    registration: '',
     heightCm: '170',
     age: '',
     birthDate: '',
@@ -60,6 +62,7 @@ export function personFormToPayload(values: PersonFormValues): PersonPayload {
     const weight = Number(values.expectedWeight);
     return {
         name: values.name.trim(),
+        registration: values.registration.trim() || null,
         height_cm: height,
         age: Number.isFinite(age) && age > 0 ? age : undefined,
         birth_date: values.birthDate || null,
@@ -72,6 +75,7 @@ export function personFormToPayload(values: PersonFormValues): PersonPayload {
 export function personToFormValues(person: ScalePerson): PersonFormValues {
     return {
         name: person.name,
+        registration: person.registration ?? '',
         heightCm: String(person.height_cm),
         age: String(person.age),
         birthDate: person.birth_date ?? '',
@@ -103,6 +107,15 @@ export function PersonForm({ values, onChange, onSubmit, submitLabel, saving, ex
                     style={fieldStyle}
                 />
             </label>
+            <label style={labelStyle}>
+                Matrícula
+                <input
+                    value={values.registration}
+                    onChange={(event) => onChange({ ...values, registration: event.target.value })}
+                    placeholder="Opcional no painel; obrigatória no totem"
+                    style={fieldStyle}
+                />
+            </label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <label style={labelStyle}>
                     Altura (cm)
@@ -118,6 +131,7 @@ export function PersonForm({ values, onChange, onSubmit, submitLabel, saving, ex
                     <input
                         type="date"
                         value={values.birthDate}
+                        required
                         onChange={(event) => {
                             const birthDate = event.target.value;
                             const years = ageFromBirth(birthDate);

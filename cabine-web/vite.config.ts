@@ -10,7 +10,6 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     strictPort: true,
-    https: true,
     allowedHosts: true,
     proxy: {
       '/ws': { target: backend, ws: true, changeOrigin: true },

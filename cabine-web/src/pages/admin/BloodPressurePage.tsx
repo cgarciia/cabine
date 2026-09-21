@@ -5,10 +5,10 @@ import { AppLayout } from '../../components/AppLayout';
 import { HeartbeatMonitor } from '../../components/HeartbeatMonitor';
 import { PersonPicker } from '../../components/PersonPicker';
 import { loadCurrentPersonId, saveCurrentPersonId } from '../../session/currentPerson';
-import { loadOmronAddress, saveOmronAddress } from '../../session/omronDevice';
+import { loadBloodPressureAddress, saveBloodPressureAddress } from '../../session/bloodPressureDevice';
 import type { BloodPressureLive, BloodPressureReading } from '../../types/bloodPressure';
 import type { ScalePerson } from '../../types/person';
-import { useOmronEcgMic } from '../../utils/omronEcgMic';
+import { useHem7530EcgMic } from '../../utils/hem7530EcgMic';
 
 export function BloodPressurePage() {
     const [person, setPerson] = useState<ScalePerson | null>(null);
@@ -20,7 +20,7 @@ export function BloodPressurePage() {
     const [history, setHistory] = useState<BloodPressureReading[]>([]);
     const wsRef = useRef<WebSocket | null>(null);
     const personId = person?.id || loadCurrentPersonId();
-    const ecg = useOmronEcgMic(Boolean(personId));
+    const ecg = useHem7530EcgMic(Boolean(personId));
     const personIdRef = useRef(personId);
     const genRef = useRef(0);
     const reconnectTimer = useRef(0);
@@ -67,7 +67,7 @@ export function BloodPressurePage() {
         wsRef.current?.close();
         setListening(true);
         const params = new URLSearchParams({ person_id: pid });
-        const known = loadOmronAddress();
+        const known = loadBloodPressureAddress();
         if (known) params.set('address', known);
         const socket = deviceSocket('/ws/blood-pressure', params);
         wsRef.current = socket;
@@ -81,7 +81,7 @@ export function BloodPressurePage() {
                 return;
             }
             if (payload.type !== 'BLOOD_PRESSURE') return;
-            if (payload.device_address) saveOmronAddress(payload.device_address);
+            if (payload.device_address) saveBloodPressureAddress(payload.device_address);
             if (payload.sys_mmhg != null) setSys(payload.sys_mmhg);
             if (payload.dia_mmhg != null) setDia(payload.dia_mmhg);
             if (payload.pulse_bpm != null) setPulse(payload.pulse_bpm);
@@ -117,7 +117,7 @@ export function BloodPressurePage() {
                         }}
                     />
                     <p style={{ marginTop: 16, color: '#0f766e', fontWeight: 600 }}>{status}</p>
-                    <div className="cabine-oxi-vitals kiosk-bp-vitals">
+                    <div className="cabine-oxi-vitals cabine-bp-vitals">
                         <article>
                             <p className="cabine-kicker">Sistólica</p>
                             <strong>{sys != null ? sys : '—'}</strong>
@@ -136,8 +136,8 @@ export function BloodPressurePage() {
                     </div>
                     {ecg.error ? (
                         <>
-                            <p className="kiosk-bp-flags">{ecg.error}</p>
-                            <button type="button" className="kiosk-btn kiosk-btn-primary" onClick={() => void ecg.unlock()}>
+                            <p style={{ color: '#b45309', fontWeight: 700 }}>{ecg.error}</p>
+                            <button type="button" className="cabine-btn cabine-btn-primary" onClick={() => void ecg.unlock()}>
                                 Permitir microfone
                             </button>
                         </>
@@ -149,7 +149,7 @@ export function BloodPressurePage() {
                         toneLocked={ecg.toneLocked}
                     />
                     {history.length ? (
-                        <ul className="kiosk-bp-history">
+                        <ul className="cabine-bp-history">
                             {history.slice(0, 8).map((row) => (
                                 <li key={row.id}>
                                     {new Date(row.measured_at).toLocaleString('pt-BR')}

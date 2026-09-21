@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import authenticate_websocket, require_access
+from app.core.deps import authenticate_websocket, get_current_user, require_access
 from app.crud import scale as scale_crud
 from app.schemas.scale import (
     ScaleCatalogResponse,
@@ -17,6 +17,7 @@ from app.services.scale.stream import stream_scale
 
 router = APIRouter(tags=["Scales"])
 protected = APIRouter(dependencies=[Depends(require_access)])
+operator = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @protected.get("/scales/catalog", response_model=ScaleCatalogResponse)
@@ -29,7 +30,7 @@ async def list_scales(db: AsyncSession = Depends(get_db)):
     return await scale_crud.list_all(db)
 
 
-@protected.post("/scales", response_model=ScaleResponse, status_code=status.HTTP_201_CREATED)
+@operator.post("/scales", response_model=ScaleResponse, status_code=status.HTTP_201_CREATED)
 async def create_scale(payload: ScaleCreate, db: AsyncSession = Depends(get_db)):
     if await scale_crud.get_by_address(db, payload.address):
         raise HTTPException(status_code=400, detail="Já existe uma balança com este endereço.")
@@ -47,8 +48,12 @@ async def get_scale(scale_id: UUID, db: AsyncSession = Depends(get_db)):
     return scale
 
 
-@protected.patch("/scales/{scale_id}", response_model=ScaleResponse)
-async def update_scale(scale_id: UUID, payload: ScaleUpdate, db: AsyncSession = Depends(get_db)):
+@operator.patch("/scales/{scale_id}", response_model=ScaleResponse)
+async def update_scale(
+    scale_id: UUID,
+    payload: ScaleUpdate,
+    db: AsyncSession = Depends(get_db),
+):
     scale = await scale_crud.get_by_id(db, scale_id)
     if not scale:
         raise HTTPException(status_code=404, detail="Balança não encontrada.")
@@ -58,7 +63,7 @@ async def update_scale(scale_id: UUID, payload: ScaleUpdate, db: AsyncSession = 
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@protected.delete("/scales/{scale_id}", status_code=status.HTTP_204_NO_CONTENT)
+@operator.delete("/scales/{scale_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_scale(scale_id: UUID, db: AsyncSession = Depends(get_db)):
     scale = await scale_crud.get_by_id(db, scale_id)
     if not scale:
@@ -67,6 +72,7 @@ async def delete_scale(scale_id: UUID, db: AsyncSession = Depends(get_db)):
 
 
 router.include_router(protected)
+router.include_router(operator)
 
 
 @router.websocket("/ws/scale")
@@ -84,7 +90,8 @@ async def scale_endpoint(
     visit_id: UUID | None = None,
     token: str | None = None,
 ):
-    if not await authenticate_websocket(websocket, token):
+    principal = await authenticate_websocket(websocket, token)
+    if principal is None:
         return
     # Sessão de banco é aberta só para carregar a balança (dentro de stream_scale).
     # Não usar Depends(get_db) aqui: o WS fica aberto minutos/horas e esgotava o pool.
@@ -98,6 +105,7 @@ async def scale_endpoint(
         people_type=people_type,
         birth_date=birth_date,
         display_name=display_name,
-        person_id=person_id,
+        person_id=principal.bound_person_id(person_id),
         visit_id=visit_id,
+        person_locked=principal.person_locked,
     )

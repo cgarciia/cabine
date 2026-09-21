@@ -34,7 +34,7 @@ export function RegistrationPage() {
     const navigate = useNavigate();
     const [params] = useSearchParams();
     const editing = params.get('edit') === '1';
-    const prefillRegistration = (params.get('matricula') ?? '').trim();
+    const prefillRegistration = (params.get('registration') ?? params.get('matricula') ?? '').trim();
     const skipRegistration = Boolean(!editing && prefillRegistration);
     const { session, setPerson, beginVisit } = useKiosk();
     const [form, setForm] = useState<FormState>(() => (
@@ -55,7 +55,7 @@ export function RegistrationPage() {
         if (editing && session.person) {
             const person = session.person;
             setForm({
-                employeeId: person.matricula ?? '',
+                employeeId: person.registration ?? '',
                 name: person.name,
                 birthDate: person.birth_date ?? '',
                 sex: person.sex,
@@ -202,7 +202,7 @@ export function RegistrationPage() {
 
         const payload: PersonPayload = {
             name: form.name.trim(),
-            matricula: form.employeeId.trim(),
+            registration: form.employeeId.trim(),
             height_cm: height,
             birth_date: iso,
             age: years,
@@ -220,7 +220,7 @@ export function RegistrationPage() {
             } else {
                 const { data } = await api.post<ScalePerson>('/people', payload);
                 const sessionRes = await loginByRegistration(
-                    data.matricula ?? payload.matricula ?? '',
+                    data.registration ?? payload.registration ?? '',
                     payload.birth_date ?? '',
                 );
                 saveAccessSession(sessionRes.access_token, sessionRes.expires_in);

@@ -37,6 +37,7 @@ export function KioskOximeterPage() {
     const mountedRef = useRef(true);
     const savedRef = useRef(false);
     const waveRef = useRef<number[]>([]);
+    const stableRef = useRef(false);
     const latestRef = useRef<{
         spo2_pct: number | null;
         pulse_bpm: number | null;
@@ -46,6 +47,7 @@ export function KioskOximeterPage() {
     }>({ spo2_pct: null, pulse_bpm: null, pi_pct: null });
 
     personIdRef.current = person?.id ?? '';
+    stableRef.current = stable;
 
     useEffect(() => {
         mountedRef.current = true;
@@ -276,7 +278,12 @@ export function KioskOximeterPage() {
 
     function goBack() {
         const latest = latestRef.current;
-        if (!savedRef.current && latest.spo2_pct != null && latest.pulse_bpm != null) {
+        if (
+            !savedRef.current
+            && stableRef.current
+            && latest.spo2_pct != null
+            && latest.pulse_bpm != null
+        ) {
             savedRef.current = true;
             void persistReading({
                 spo2_pct: latest.spo2_pct,
@@ -345,20 +352,20 @@ export function KioskOximeterPage() {
                     <span style={{ width: `${stable ? 100 : meterPct}%` }} />
                 </div>
 
-                <div className="cabine-oxi-vitals">
+                <div className="kiosk-oxi-vitals">
                     <article>
-                        <p className="cabine-kicker">Oxigenação</p>
+                        <p className="kiosk-kicker">Oxigenação</p>
                         <strong>{spo2 != null ? `${spo2}%` : '—'}</strong>
                         <span>SpO₂</span>
                     </article>
                     <article>
-                        <p className="cabine-kicker">Pulso</p>
+                        <p className="kiosk-kicker">Pulso</p>
                         <strong>{pulse != null ? pulse : '—'}</strong>
                         <span>bpm</span>
                     </article>
                 </div>
 
-                <div className="cabine-oxi-wave">
+                <div className="kiosk-oxi-wave">
                     <OximeterPulseGraph
                         key={graphKey}
                         samples={wave}

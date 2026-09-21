@@ -12,18 +12,18 @@ class MeasurementCreate(BaseModel):
     scale_id: UUID | None = None
     scale_name: str = Field(min_length=1, max_length=120)
     adapter: str = Field(min_length=1, max_length=40)
-    peso_kg: float = Field(gt=0, le=400)
+    weight_kg: float = Field(gt=0, le=400)
     height_cm: float = Field(gt=0, le=250)
     age: int = Field(ge=1, le=120)
     birth_date: date | None = None
     sex: str
     people_type: str = "normal"
     expected_weight_kg: float | None = None
-    estavel: bool = True
-    completo: bool = False
-    impedancias_ohm: list[float] | None = None
-    segmentos: list[dict] | None = None
-    metricas: dict | None = None
+    stable: bool = True
+    complete: bool = False
+    impedances_ohm: list[float] | None = None
+    segments: list[dict] | None = None
+    metrics: dict | None = None
     visit_id: UUID | None = None
 
 
@@ -33,18 +33,18 @@ class MeasurementResponse(BaseModel):
     scale_id: UUID | None
     scale_name: str
     adapter: str
-    peso_kg: float
+    weight_kg: float
     height_cm: float
     age: int
     birth_date: date | None
     sex: str
     people_type: str
     expected_weight_kg: float | None
-    estavel: bool
-    completo: bool
-    impedancias_ohm: Any = None
-    segmentos: Any = None
-    metricas: Any = None
+    stable: bool
+    complete: bool
+    impedances_ohm: Any = None
+    segments: Any = None
+    metrics: Any = None
     visit_id: UUID | None = None
     created_at: datetime
 
@@ -54,15 +54,15 @@ class MeasurementResponse(BaseModel):
 def as_measurement_response(record: Any) -> MeasurementResponse:
     payload = MeasurementResponse.model_validate(record)
     refreshed = metrics_from_stored(
-        peso_kg=record.peso_kg,
+        peso_kg=record.weight_kg,
         height_cm=record.height_cm,
         age=record.age,
         sex=record.sex,
         people_type=record.people_type,
-        impedancias_ohm=record.impedancias_ohm,
-        segmentos=record.segmentos,
-        stored_metrics=record.metricas if isinstance(record.metricas, dict) else None,
+        impedancias_ohm=record.impedances_ohm,
+        segmentos=record.segments,
+        stored_metrics=record.metrics if isinstance(record.metrics, dict) else None,
     )
-    if refreshed is None or refreshed is record.metricas:
+    if refreshed is None or refreshed is record.metrics:
         return payload
-    return payload.model_copy(update={"metricas": refreshed})
+    return payload.model_copy(update={"metrics": refreshed})

@@ -5,8 +5,7 @@ export const STORAGE_KEYS = {
     tokenExpiresAt: 'cabine.token-expires-at',
     currentPersonId: 'cabine.current-person-id',
     oximeterAddress: 'cabine.oximeter-address',
-    omronAddress: 'cabine.omron-address',
-    role: 'cabine.role',
+    bpAddress: 'cabine.bp-address',
     kioskSession: 'cabine.kiosk-session',
 } as const;
 

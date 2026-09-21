@@ -17,7 +17,7 @@ from app.services.oximeter.ble import (
 )
 from app.services.oximeter.parsers import CreativeFrameBuffer
 from app.services.oximeter.persist import save_oximeter_reading
-from app.services.ble import ble_radio_lock
+from app.services.ble import ble_radio_lock, parse_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -32,22 +32,13 @@ def _same_reading(previous: tuple[int, int], current: tuple[int, int]) -> bool:
     return prev_spo2 == spo2 and abs(prev_pulse - pulse) <= PULSE_TOLERANCE_BPM
 
 
-def _as_uuid(value) -> UUID | None:
-    if value is None or value == "":
-        return None
-    if isinstance(value, UUID):
-        return value
-    try:
-        return UUID(str(value))
-    except (TypeError, ValueError):
-        return None
-
-
 async def stream_oximeter(
     websocket: WebSocket,
     person_id: UUID | None = None,
     address: str | None = None,
     visit_id: UUID | None = None,
+    *,
+    person_locked: bool = False,
 ) -> None:
     await websocket.accept()
     person_id_box: list[UUID | None] = [person_id]
@@ -72,10 +63,11 @@ async def stream_oximeter(
                 if not isinstance(raw, dict):
                     continue
                 if raw.get("type") == "PERSON":
-                    pid = _as_uuid(raw.get("person_id"))
-                    if pid is not None:
-                        person_id_box[0] = pid
-                    vid = _as_uuid(raw.get("visit_id"))
+                    if not person_locked:
+                        pid = parse_uuid(raw.get("person_id"))
+                        if pid is not None:
+                            person_id_box[0] = pid
+                    vid = parse_uuid(raw.get("visit_id"))
                     if vid is not None:
                         visit_id_box[0] = vid
         except Exception:

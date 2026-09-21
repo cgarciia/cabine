@@ -7,7 +7,8 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from app.core.database import AsyncSessionLocal
 from app.crud import scale as scale_crud
-from app.services.scale.icomon import has_bia_impedances
+from app.services.ble.ids import parse_uuid
+from app.services.scale.rm_rd2504a import has_bia_impedances
 from app.services.scale.metrics import PersonProfile, compute_report
 from app.services.scale.persist import save_from_scale_event
 from app.services.scale.reading import ScaleReading
@@ -32,17 +33,6 @@ async def _load_scale_spec(scale_id: UUID | None) -> tuple[ScaleSpec | None, str
             return None, f"A balança '{record.name}' está inativa."
 
         return scale_crud.to_spec(record), None
-
-
-def _as_uuid(value) -> UUID | None:
-    if value is None or value == "":
-        return None
-    if isinstance(value, UUID):
-        return value
-    try:
-        return UUID(str(value))
-    except (TypeError, ValueError):
-        return None
 
 
 def _profile_from_payload(
@@ -78,6 +68,8 @@ async def stream_scale(
     display_name: str | None = None,
     person_id: UUID | None = None,
     visit_id: UUID | None = None,
+    *,
+    person_locked: bool = False,
 ) -> None:
     await websocket.accept()
 
@@ -110,12 +102,12 @@ async def stream_scale(
             logger.warning("Medição não salva: nenhuma pessoa na sessão")
             return
         try:
-            peso = round(float(item.get("peso_kg") or 0), 2)
+            peso = round(float(item.get("weight_kg") or 0), 2)
         except (TypeError, ValueError):
             return
         if peso < 10:
             return
-        key = (str(pid), peso, bool(item.get("completo")))
+        key = (str(pid), peso, bool(item.get("complete")))
         if key in saved_keys:
             return
         saved_keys.add(key)
@@ -140,16 +132,14 @@ async def stream_scale(
 
         def put_nowait(self, item: dict) -> None:
             if isinstance(item, dict):
-                if item.get("type") == "PESO_RECEBIDO":
+                if item.get("type") == "WEIGHT":
                     last_reading_box[0] = item
-                    if item.get("completo") or has_bia_impedances(item.get("impedancias_ohm") or []):
+                    if item.get("complete") or has_bia_impedances(item.get("impedances_ohm") or []):
                         schedule_save(item)
                 elif item.get("type") == "STEP" and item.get("reset") and last_reading_box[0]:
                     last_item = last_reading_box[0]
-                    # Só persiste no descer se já houver BIA. Peso ao vivo não
-                    # pode gravar um relatório incompleto e bloquear o A7.
-                    if last_item.get("completo") or has_bia_impedances(
-                        last_item.get("impedancias_ohm") or []
+                    if last_item.get("complete") or has_bia_impedances(
+                        last_item.get("impedances_ohm") or []
                     ):
                         schedule_save(last_item)
                     last_reading_box[0] = None
@@ -175,67 +165,67 @@ async def stream_scale(
         if reading is None:
             return
         if isinstance(reading, (int, float)):
-            reading = ScaleReading(peso_kg=float(reading))
-        if reading.peso_kg <= 0:
+            reading = ScaleReading(weight_kg=float(reading))
+        if reading.weight_kg <= 0:
             return
 
         signature = (
-            round(reading.peso_kg, 2),
-            reading.estavel,
-            reading.completo,
-            tuple(reading.impedancias_ohm),
+            round(reading.weight_kg, 2),
+            reading.stable,
+            reading.complete,
+            tuple(reading.impedances_ohm),
         )
         if signature == last_signature:
             return
         last_signature = signature
 
         payload: dict = {
-            "type": "PESO_RECEBIDO",
+            "type": "WEIGHT",
             "scale_id": str(spec.id),
             "adapter": spec.adapter,
-            "balanca_nome": spec.name,
+            "scale_name": spec.name,
             "supports_bia": adapter.supports_bia,
-            "peso_kg": reading.peso_kg,
-            "estavel": reading.estavel,
-            "completo": reading.completo,
-            "fonte": reading.fonte,
+            "weight_kg": reading.weight_kg,
+            "stable": reading.stable,
+            "complete": reading.complete,
+            "source": reading.source,
             "timestamp": datetime.now().strftime("%H:%M:%S"),
         }
         use_bia = adapter.supports_bia
-        if use_bia and reading.impedancias_ohm:
-            payload["impedancias_ohm"] = reading.impedancias_ohm
-        if use_bia and reading.segmentos:
-            payload["segmentos"] = [
+        if use_bia and reading.impedances_ohm:
+            payload["impedances_ohm"] = reading.impedances_ohm
+        if use_bia and reading.segments:
+            payload["segments"] = [
                 {
-                    "nome": item.nome,
-                    "lado": item.lado,
+                    "name": item.name,
+                    "side": item.side,
                     "freq_khz": item.freq_khz,
                     "ohm": item.ohm,
                 }
-                for item in reading.segmentos
+                for item in reading.segments
             ]
-        if use_bia and has_bia_impedances(reading.impedancias_ohm):
-            payload["completo"] = True
-        if reading.etapa:
-            payload["etapa"] = reading.etapa
+        if use_bia and has_bia_impedances(reading.impedances_ohm):
+            payload["complete"] = True
+        if reading.step:
+            payload["step"] = reading.step
         profile = profile_box[0]
         if profile is not None:
             use_z = use_bia and (
-                reading.completo or has_bia_impedances(reading.impedancias_ohm)
+                reading.complete or has_bia_impedances(reading.impedances_ohm)
             )
-            payload["metricas"] = compute_report(
-                reading.peso_kg,
+            payload["metrics"] = compute_report(
+                reading.weight_kg,
                 profile,
-                impedancias_ohm=reading.impedancias_ohm if use_z else None,
-                segmentos=reading.segmentos if use_z else None,
+                impedancias_ohm=reading.impedances_ohm if use_z else None,
+                segmentos=reading.segments if use_z else None,
             )
-            payload["perfil"] = {
-                "altura_cm": profile.height_cm,
-                "idade": profile.age,
-                "sexo": profile.sex,
-                "peso_esperado_kg": profile.expected_weight_kg,
-                "tipo": profile.people_type,
-                "nascimento": profile.birth_date.isoformat() if profile.birth_date else None,
+            payload["profile"] = {
+                "height_cm": profile.height_cm,
+                "age": profile.age,
+                "sex": profile.sex,
+                "expected_weight_kg": profile.expected_weight_kg,
+                "people_type": profile.people_type,
+                "birth_date": profile.birth_date.isoformat() if profile.birth_date else None,
             }
         queue.put_nowait(payload)
 
@@ -257,10 +247,11 @@ async def stream_scale(
                 display_name=raw.get("display_name") or raw.get("name"),
             )
             profile_box[0] = updated
-            pid = _as_uuid(raw.get("person_id"))
-            if pid is not None:
-                person_id_box[0] = pid
-            vid = _as_uuid(raw.get("visit_id"))
+            if not person_locked:
+                pid = parse_uuid(raw.get("person_id"))
+                if pid is not None:
+                    person_id_box[0] = pid
+            vid = parse_uuid(raw.get("visit_id"))
             if vid is not None:
                 visit_id_box[0] = vid
             if updated is None:

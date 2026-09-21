@@ -8,29 +8,18 @@ from uuid import UUID
 from fastapi import WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
-from app.core.config import settings
-from app.services.ble import ble_radio_lock
-from app.services.omron.ble import connect_omron, wait_for_omron
-from app.services.omron.gatt_bp import BP_MEASUREMENT_UUID, LIVE_NOTIFY_UUID, parse_bp_measurement
-from app.services.omron.hem7530 import pick_latest_record
-from app.services.omron.persist import save_blood_pressure_reading
-from app.services.omron.protocol import OmronSession
+from app.services.ble import ble_radio_lock, parse_uuid
+from app.services.blood_pressure.ble import connect_hem7530, wait_for_hem7530
+from app.services.blood_pressure.gatt_bp import BP_MEASUREMENT_UUID, LIVE_NOTIFY_UUID, parse_bp_measurement
+from app.services.blood_pressure.hem7530 import pick_latest_record
+from app.services.blood_pressure.persist import save_blood_pressure_reading
+from app.services.blood_pressure.protocol import Hem7530Session
 
 logger = logging.getLogger(__name__)
 
-FRESH_WINDOW = timedelta(minutes=8)
+SESSION_SKEW = timedelta(seconds=45)
 IDLE_STATUS = "Pareado. Coloque o manguito, toque nos sensores e meça."
-
-
-def _as_uuid(value) -> UUID | None:
-    if value is None or value == "":
-        return None
-    if isinstance(value, UUID):
-        return value
-    try:
-        return UUID(str(value))
-    except (TypeError, ValueError):
-        return None
+DEVICE_LABEL = "HEM-7530T"
 
 
 def _aware(value: datetime) -> datetime:
@@ -39,13 +28,8 @@ def _aware(value: datetime) -> datetime:
     return value.replace(tzinfo=datetime.now().astimezone().tzinfo)
 
 
-def _is_fresh(measured_at: datetime) -> bool:
-    now = datetime.now().astimezone()
-    return abs(now - _aware(measured_at)) <= FRESH_WINDOW
-
-
 def _resolved_address(query_address: str | None) -> str | None:
-    raw = (query_address or settings.OMRON_ADDRESS or "").strip().upper()
+    raw = (query_address or "").strip().upper()
     return raw or None
 
 
@@ -54,12 +38,15 @@ async def stream_blood_pressure(
     person_id: UUID | None = None,
     address: str | None = None,
     visit_id: UUID | None = None,
+    *,
+    person_locked: bool = False,
 ) -> None:
     await websocket.accept()
     person_id_box: list[UUID | None] = [person_id]
     visit_id_box: list[UUID | None] = [visit_id]
     preferred = [_resolved_address(address)]
     delivered: set[tuple] = set()
+    session_started_at = datetime.now().astimezone() - SESSION_SKEW
 
     async def send_status(msg: str) -> None:
         if websocket.client_state != WebSocketState.CONNECTED:
@@ -76,10 +63,11 @@ async def stream_blood_pressure(
                 if not isinstance(raw, dict):
                     continue
                 if raw.get("type") == "PERSON":
-                    pid = _as_uuid(raw.get("person_id"))
-                    if pid is not None:
-                        person_id_box[0] = pid
-                    vid = _as_uuid(raw.get("visit_id"))
+                    if not person_locked:
+                        pid = parse_uuid(raw.get("person_id"))
+                        if pid is not None:
+                            person_id_box[0] = pid
+                    vid = parse_uuid(raw.get("visit_id"))
                     if vid is not None:
                         visit_id_box[0] = vid
         except Exception:
@@ -139,7 +127,7 @@ async def stream_blood_pressure(
                     visit_id=visit_id_box[0],
                 )
             except Exception:
-                logger.exception("Falha ao salvar pressão")
+                logger.exception("Failed to persist blood pressure")
         return True
 
     try:
@@ -147,27 +135,27 @@ async def stream_blood_pressure(
         async with ble_radio_lock:
             while not cancelled():
                 try:
-                    device = await wait_for_omron(
+                    device = await wait_for_hem7530(
                         preferred[0],
                         cancelled=cancelled,
                         on_waiting=send_status,
                     )
                 except Exception:
-                    logger.exception("Varredura BLE do Omron falhou")
+                    logger.exception("HEM-7530T BLE scan failed")
                     await asyncio.sleep(2.0)
                     continue
                 if device is None or cancelled():
                     break
 
-                device_name = device.name or "OMRON Complete"
+                device_name = device.name or DEVICE_LABEL
                 device_address = (device.address or "").upper() or preferred[0]
                 if device_address:
                     preferred[0] = device_address
                 await send_status("Monitor acordou. Aguardando o fim da medição…")
                 try:
-                    client = await connect_omron(device)
+                    client = await connect_hem7530(device)
                 except Exception:
-                    logger.warning("Complete ainda não aceitou a conexão; esperando a próxima vez que acordar.")
+                    logger.warning("HEM-7530T did not accept the connection; waiting for the next wake.")
                     await asyncio.sleep(2.0)
                     continue
 
@@ -182,14 +170,15 @@ async def stream_blood_pressure(
                         ),
                         cancelled=cancelled,
                         send_status=send_status,
+                        session_started_at=session_started_at,
                     )
                 except Exception:
-                    logger.exception("Sessão Omron falhou")
+                    logger.exception("HEM-7530T session failed")
                 finally:
                     try:
                         await client.disconnect()
                     except Exception:
-                        logger.debug("Falha ao desconectar Omron (ignorada).", exc_info=True)
+                        logger.debug("HEM-7530T disconnect failed (ignored).", exc_info=True)
 
                 if got_fresh:
                     await send_status("Leitura recebida.")
@@ -198,9 +187,9 @@ async def stream_blood_pressure(
                 await send_status(IDLE_STATUS)
                 await asyncio.sleep(1.5)
     except WebSocketDisconnect:
-        logger.info("Frontend desconectou da sessão de pressão.")
+        logger.info("Frontend disconnected from the blood-pressure session.")
     except Exception:
-        logger.exception("Falha no stream de pressão")
+        logger.exception("Blood-pressure stream failed")
         try:
             await send_status(IDLE_STATUS)
         except Exception:
@@ -213,7 +202,14 @@ async def stream_blood_pressure(
             pass
 
 
-async def _collect_from_session(client, *, emit_reading, cancelled, send_status) -> bool:
+async def _collect_from_session(
+    client,
+    *,
+    emit_reading,
+    cancelled,
+    send_status,
+    session_started_at: datetime,
+) -> bool:
     queue: asyncio.Queue[tuple[str, object]] = asyncio.Queue()
 
     def on_bp(_sender, data: bytearray) -> None:
@@ -230,11 +226,11 @@ async def _collect_from_session(client, *, emit_reading, cancelled, send_status)
         await client.start_notify(BP_MEASUREMENT_UUID, on_bp)
         subscribed = True
     except Exception:
-        logger.debug("Indicação 0x2A35 indisponível nesta conexão.", exc_info=True)
+        logger.debug("Indication 0x2A35 unavailable on this connection.", exc_info=True)
     try:
         await client.start_notify(LIVE_NOTIFY_UUID, on_live)
     except Exception:
-        logger.debug("Notify extra Omron indisponível.", exc_info=True)
+        logger.debug("Extra HEM-7530T notify unavailable.", exc_info=True)
 
     if subscribed:
         await send_status("Toque nos sensores e permaneça parado. Aguardando a medição…")
@@ -264,10 +260,11 @@ async def _collect_from_session(client, *, emit_reading, cancelled, send_status)
                 return True
 
     try:
-        session = OmronSession(client)
-        records = await session.read_hem7530_records()
+        session = Hem7530Session(client)
+        records = await session.read_records()
         latest = pick_latest_record(records)
-        if latest and _is_fresh(latest["measured_at"]):
+        measured_at = _aware(latest["measured_at"]) if latest else None
+        if latest and measured_at is not None and measured_at >= session_started_at:
             await emit_reading(
                 sys_mmhg=latest["sys_mmhg"],
                 dia_mmhg=latest["dia_mmhg"],
@@ -277,7 +274,7 @@ async def _collect_from_session(client, *, emit_reading, cancelled, send_status)
                 measured_at=latest["measured_at"],
             )
             return True
-        logger.info("Memória Omron sem medição recente; continua esperando o próximo ciclo.")
+        logger.info("HEM-7530T EEPROM has no measurement from this session; waiting for the next cycle.")
     except Exception:
-        logger.debug("Leitura EEPROM Omron não veio nesta conexão.", exc_info=True)
+        logger.debug("HEM-7530T EEPROM read did not succeed on this connection.", exc_info=True)
     return False

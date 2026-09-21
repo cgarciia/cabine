@@ -58,3 +58,13 @@ export function patchSession(patch: Partial<CabineSession>): CabineSession {
 export function resetSession(personId?: string) {
     localStorage.removeItem(cabineSessionKey(personId || loadCurrentPersonId()));
 }
+
+export function clearVisitDrafts() {
+    const prefix = 'cabine.session.';
+    const stale: string[] = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+        if (key && key.startsWith(prefix)) stale.push(key);
+    }
+    stale.forEach((key) => localStorage.removeItem(key));
+}

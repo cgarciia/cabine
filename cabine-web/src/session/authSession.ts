@@ -1,4 +1,5 @@
 import { LEGACY_STORAGE_KEYS, STORAGE_KEYS } from './keys';
+import { clearVisitDrafts } from './cabineSession';
 
 const SKEW_MS = 10_000;
 
@@ -45,7 +46,24 @@ export function saveAccessSession(token: string, expiresInSeconds: number): void
     localStorage.removeItem(LEGACY_STORAGE_KEYS.token);
 }
 
+export function getAccessTokenTyp(): 'person' | 'user' | null {
+    const token = getAccessToken();
+    if (!token || !isAccessSessionValid()) return null;
+    try {
+        const payload = token.split('.')[1];
+        if (!payload) return null;
+        const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+        const parsed = JSON.parse(atob(normalized)) as { typ?: unknown; sub?: unknown };
+        if (parsed.typ === 'person' || parsed.typ === 'user') return parsed.typ;
+        if (typeof parsed.sub === 'string' && parsed.sub.includes('@')) return 'user';
+        return 'person';
+    } catch {
+        return null;
+    }
+}
+
 export function clearAccessSession(): void {
+    clearVisitDrafts();
     localStorage.removeItem(STORAGE_KEYS.token);
     localStorage.removeItem(STORAGE_KEYS.tokenExpiresAt);
     localStorage.removeItem(LEGACY_STORAGE_KEYS.token);

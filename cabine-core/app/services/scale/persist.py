@@ -8,7 +8,7 @@ from app.core.database import AsyncSessionLocal
 from app.crud import measurement as measurement_crud
 from app.crud import person as person_crud
 from app.schemas.measurement import MeasurementCreate
-from app.services.scale.icomon import has_bia_impedances
+from app.services.scale.rm_rd2504a import has_bia_impedances
 
 logger = logging.getLogger(__name__)
 
@@ -35,55 +35,55 @@ async def save_from_scale_event(
     payload: dict,
     visit_id: UUID | None = None,
 ) -> None:
-    peso = payload.get("peso_kg")
+    raw_weight = payload.get("weight_kg")
     try:
-        peso_kg = float(peso)
+        weight_kg = float(raw_weight)
     except (TypeError, ValueError):
         return
-    if peso_kg < 10:
+    if weight_kg < 10:
         return
 
-    profile = payload.get("perfil") or {}
-    height = float(profile.get("altura_cm") or 0)
-    age = int(profile.get("idade") or 0)
-    sex = str(profile.get("sexo") or "")
+    profile = payload.get("profile") or {}
+    height = float(profile.get("height_cm") or 0)
+    age = int(profile.get("age") or 0)
+    sex = str(profile.get("sex") or "")
     if height <= 0 or age <= 0 or not sex:
-        logger.warning("Não salvou medição: perfil incompleto person=%s", person_id)
+        logger.warning("Skipped measurement save: incomplete profile person=%s", person_id)
         return
 
     data = MeasurementCreate(
         person_id=person_id,
         scale_id=scale_id,
-        scale_name=str(payload.get("balanca_nome") or "Balança")[:120],
-        adapter=str(payload.get("adapter") or "ble_icomon")[:40],
-        peso_kg=peso_kg,
+        scale_name=str(payload.get("scale_name") or "Scale")[:120],
+        adapter=str(payload.get("adapter") or "ble_rm_rd2504a")[:40],
+        weight_kg=weight_kg,
         height_cm=height,
         age=age,
-        birth_date=profile.get("nascimento") or None,
+        birth_date=profile.get("birth_date") or None,
         sex=sex,
-        people_type=str(profile.get("tipo") or "normal"),
-        expected_weight_kg=peso_kg,
-        estavel=bool(payload.get("estavel", True)),
-        completo=bool(payload.get("completo")),
-        impedancias_ohm=jsonable(payload.get("impedancias_ohm")),
-        segmentos=jsonable(payload.get("segmentos")),
-        metricas=jsonable(payload.get("metricas")),
+        people_type=str(profile.get("people_type") or "normal"),
+        expected_weight_kg=weight_kg,
+        stable=bool(payload.get("stable", True)),
+        complete=bool(payload.get("complete")),
+        impedances_ohm=jsonable(payload.get("impedances_ohm")),
+        segments=jsonable(payload.get("segments")),
+        metrics=jsonable(payload.get("metrics")),
         visit_id=visit_id,
     )
 
     async with AsyncSessionLocal() as db:
         person = await person_crud.get_by_id(db, person_id)
         if not person:
-            logger.warning("Não salvou medição: pessoa %s não existe", person_id)
+            logger.warning("Skipped measurement save: person %s does not exist", person_id)
             return
-        incoming_zs = data.impedancias_ohm if isinstance(data.impedancias_ohm, list) else None
+        incoming_zs = data.impedances_ohm if isinstance(data.impedances_ohm, list) else None
         incoming_bia = has_bia_impedances(incoming_zs)
         if await measurement_crud.recently_saved(
-            db, person_id, peso_kg, incoming_bia=incoming_bia,
+            db, person_id, weight_kg, incoming_bia=incoming_bia,
         ):
-            logger.info("Medição ignorada (já existe recente) person=%s peso=%.2f", person_id, peso_kg)
+            logger.info("Skipped duplicate measurement person=%s weight=%.2f", person_id, weight_kg)
             return
         record = await measurement_crud.create(db, data)
-        person.expected_weight_kg = data.peso_kg
+        person.expected_weight_kg = data.weight_kg
         await db.commit()
-        logger.info("Medição salva id=%s person=%s peso=%.2f", record.id, person_id, peso_kg)
+        logger.info("Saved measurement id=%s person=%s weight=%.2f", record.id, person_id, weight_kg)

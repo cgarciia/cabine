@@ -14,39 +14,45 @@ logger = logging.getLogger(__name__)
 
 apply_winrt_descriptor_tolerance()
 
+DEVICE_MODEL = "HEM-7530T"
+
+# Strings the peripheral firmware puts on the radio (local name / BLESmart).
+# They are match keys for scan, not product names in our domain.
 NAME_HINTS = (
-    "omron",
-    "complete",
     "hem-7530",
     "hem7530",
     "blesmart",
+    "complete",
+    "omron",
 )
-
-PAIRING_KEY = bytes.fromhex("deadbeaf12341234deadbeaf12341234")
-OMRON_COMPANY_ID = 0x020E
-OMRON_SERVICE_NEEDLES = (
+BLE_COMPANY_ID = 0x020E
+SERVICE_NEEDLES = (
     "ecbe3980-c9a2-11e1-b1bd-0002a5d5c51b",
     "ecbe3980",
 )
+PAIRING_KEY = bytes.fromhex("deadbeaf12341234deadbeaf12341234")
 
 
-def name_looks_like_omron(name: str | None) -> bool:
+def name_looks_like_hem7530(name: str | None) -> bool:
     if not name:
         return False
     lowered = name.lower().replace(" ", "")
     return any(hint.replace("-", "") in lowered.replace("-", "") for hint in NAME_HINTS)
 
 
-def advertisement_looks_like_omron(advertisement: AdvertisementData | None, name: str | None) -> bool:
-    if name_looks_like_omron(name):
+def advertisement_looks_like_hem7530(
+    advertisement: AdvertisementData | None,
+    name: str | None,
+) -> bool:
+    if name_looks_like_hem7530(name):
         return True
     if advertisement is None:
         return False
-    if OMRON_COMPANY_ID in (advertisement.manufacturer_data or {}):
+    if BLE_COMPANY_ID in (advertisement.manufacturer_data or {}):
         return True
     for uuid in advertisement.service_uuids or []:
         text = str(uuid).lower()
-        if any(needle in text for needle in OMRON_SERVICE_NEEDLES):
+        if any(needle in text for needle in SERVICE_NEEDLES):
             return True
     return False
 
@@ -58,12 +64,12 @@ def _rssi_of(advertisement: AdvertisementData | None) -> int | None:
     return int(rssi) if rssi is not None else None
 
 
-async def scan_omron(timeout: float = 12.0) -> list[tuple[BLEDevice, AdvertisementData | None]]:
+async def scan_hem7530(timeout: float = 12.0) -> list[tuple[BLEDevice, AdvertisementData | None]]:
     found: dict[str, tuple[BLEDevice, AdvertisementData | None]] = {}
 
     def _on_detect(device: BLEDevice, advertisement: AdvertisementData) -> None:
         name = device.name or advertisement.local_name
-        if not advertisement_looks_like_omron(advertisement, name):
+        if not advertisement_looks_like_hem7530(advertisement, name):
             return
         address = (device.address or "").upper()
         if not address:
@@ -84,7 +90,7 @@ async def scan_omron(timeout: float = 12.0) -> list[tuple[BLEDevice, Advertiseme
     return ranked
 
 
-async def wait_for_omron(
+async def wait_for_hem7530(
     preferred_address: str | None = None,
     *,
     cancelled,
@@ -99,7 +105,7 @@ async def wait_for_omron(
         name = device.name or advertisement.local_name
         address = (device.address or "").upper()
         mac_hit = bool(preferred and address == preferred)
-        name_hit = advertisement_looks_like_omron(advertisement, name)
+        name_hit = advertisement_looks_like_hem7530(advertisement, name)
         if preferred and not mac_hit:
             return
         if not mac_hit and not name_hit:
@@ -129,7 +135,7 @@ async def wait_for_omron(
         try:
             await scanner.stop()
         except Exception:
-            logger.debug("Falha ao parar o scanner Omron.", exc_info=True)
+            logger.debug("Failed to stop HEM-7530T scanner.", exc_info=True)
 
 
 def _service_count(client: BleakClient) -> int:
@@ -139,7 +145,7 @@ def _service_count(client: BleakClient) -> int:
         return 0
 
 
-async def connect_omron(device: BLEDevice | str) -> BleakClient:
+async def connect_hem7530(device: BLEDevice | str) -> BleakClient:
     attempts: list[dict] = [{}]
     if sys.platform == "win32":
         attempts = [
@@ -153,17 +159,17 @@ async def connect_omron(device: BLEDevice | str) -> BleakClient:
         try:
             await client.connect()
             if _service_count(client) == 0:
-                raise BleakError("Nenhum serviço GATT encontrado.")
+                raise BleakError("No GATT services found.")
             try:
                 await client.pair()
             except Exception:
-                logger.debug("Bond Windows já existia ou pair() não foi necessário.", exc_info=True)
+                logger.debug("Windows bond already existed or pair() was not needed.", exc_info=True)
             return client
         except Exception as exc:
             errors.append(str(exc))
-            logger.warning("Tentativa Omron GATT falhou (%s): %s", kwargs or "default", exc)
+            logger.warning("HEM-7530T GATT attempt failed (%s): %s", kwargs or "default", exc)
             try:
                 await client.disconnect()
             except Exception:
                 pass
-    raise BleakError("Não foi possível conectar ao Omron Complete. " + (errors[-1] if errors else ""))
+    raise BleakError("Could not connect to HEM-7530T. " + (errors[-1] if errors else ""))

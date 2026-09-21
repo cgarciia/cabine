@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 import time
 from dataclasses import replace
 
@@ -10,12 +9,12 @@ from starlette.websockets import WebSocketState
 
 from app.services.scale.adapters.base import DispatchFn, ScaleAdapter, StatusFn
 from app.services.ble import normalize_mac
-from app.services.scale.icomon import (
+from app.services.scale.rm_rd2504a import (
     FFB1_UUID,
     FFB2_UUID,
     FFB3_UUID,
     GUEST_USER_ID,
-    IcomonAssembler,
+    RmRd2504aAssembler,
     encode_c0_profile,
     encode_c1_users,
     encode_clear_users,
@@ -46,10 +45,8 @@ STEP_ORDER = (
 # Heartbeat só com plataforma vazia. Escrever BA no meio da pesagem aborta a BIA.
 BA_HEARTBEAT_S = 2.0
 
-# "minimal" = handshake do RelaxFit capturado (C0 perfil + C1 lista + C0).
-# A composição (WLA25) continua na Cabine. "aggressive" = BB-clear/BA-live.
-SESSION_MODE = os.getenv("CABINE_ICOMON_SESSION", "minimal").strip().lower()
-MINIMAL_SESSION = SESSION_MODE != "aggressive"
+# Native C0/C1 handshake captured on this firmware. Composition (WLA25) stays in Cabine.
+MINIMAL_SESSION = True
 
 # Curto de propósito: a janela entre a pessoa pisar e a balança decidir se faz
 # bioimpedância é de poucos segundos. Se o link não estiver de pé nessa hora,
@@ -85,19 +82,19 @@ async def wait_for_advertising(
             return device
         if round_n == 8:
             await send_status(
-                "Ainda sem sinal. Pise nela (ou toque com o pé) e feche o RelaxFit no celular."
+                "Ainda sem sinal. Pise nela (ou toque com o pé) e feche o app da balança no celular."
             )
         elif round_n % 12 == 0:
             await send_status("Aguardando a balança. Pise nela agora para acordar.")
     return None
 
 
-class BleIcomonGattAdapter(ScaleAdapter):
-    key = "ble_icomon"
-    label = "BLE GATT ICOMON / RelaxFit (FFB0)"
+class BleRmRd2504aAdapter(ScaleAdapter):
+    key = "ble_rm_rd2504a"
+    label = "BLE GATT RM-RD2504A (FFB0)"
     address_kind = "mac"
     address_label = "Endereço MAC"
-    parsers = ("icomon_ffb2",)
+    parsers = ("rm_rd2504a_ffb2",)
     supports_bia = True
 
     def normalize_address(self, address: str) -> str:
@@ -129,8 +126,8 @@ class BleIcomonGattAdapter(ScaleAdapter):
         reply_idx = 0
         last_ba_at = 0.0
         last_ba_weight: float | None = None
-        ffb2_asm = IcomonAssembler()
-        ffb3_asm = IcomonAssembler()
+        ffb2_asm = RmRd2504aAssembler()
+        ffb3_asm = RmRd2504aAssembler()
         write_lock = asyncio.Lock()
         client_holder: dict = {"client": None}
         pending_writes: asyncio.Queue = asyncio.Queue()
@@ -164,7 +161,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
             if prof is None:
                 return
             weight = profile_weight(prof, live_kg)
-            on_platform = last is not None and last.peso_kg >= 10
+            on_platform = last is not None and last.weight_kg >= 10
             if on_platform:
                 await send_status(
                     "Há alguém no prato — não reenvio o perfil agora. "
@@ -173,8 +170,8 @@ class BleIcomonGattAdapter(ScaleAdapter):
                 return
 
             if MINIMAL_SESSION:
-                # Captura RelaxFit (Karla): B0 + C0(nome) + C1(lista) + C0.
-                # BA/BB do openScale NÃO liberam BIA nesta firmware — só C0/C1.
+                # Captured handshake: B0 + C0(name) + C1(list) + C0.
+                # openScale BA/BB does not unlock BIA on this firmware — only C0/C1.
                 ba_weight = weight if weight is not None else 60.0
                 display_name = prof.display_name or "User"
                 c0 = encode_c0_profile(
@@ -216,7 +213,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
                 last_ba_at = time.monotonic()
                 last_ba_weight = ba_weight
                 await send_status(
-                    f"Perfil RelaxFit C0/C1: {display_name} · {ba_weight:.1f} kg · "
+                    f"Perfil C0/C1: {display_name} · {ba_weight:.1f} kg · "
                     f"{prof.height_cm:.0f} cm · {prof.age} anos. Pegue a barra e suba."
                 )
                 return
@@ -257,7 +254,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
             nonlocal current_step, last, stable_since, hold_bar_since
             nonlocal weight_profile_sent, saw_nonzero_z, saw_a7, saw_lock, bia_stalled_warned, done_weight
             nonlocal last_ba_weight
-            logger.info("icomon reset sessão: %s", reason)
+            logger.info("rm_rd2504a reset sessão: %s", reason)
             current_step = "step_on"
             last = None
             stable_since = None
@@ -286,7 +283,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
             except ValueError:
                 return
             if new_idx < cur_idx:
-                logger.info("icomon step ignorado (não volta): %s -> %s", current_step, step_id)
+                logger.info("rm_rd2504a step ignorado (não volta): %s -> %s", current_step, step_id)
                 return
             if new_idx == cur_idx:
                 queue.put_nowait({"type": "STEP", "step": step_id, "msg": msg})
@@ -294,7 +291,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
             current_step = step_id
             if step_id == "hold_bar" and hold_bar_since is None:
                 hold_bar_since = time.monotonic()
-            logger.info("icomon STEP -> %s | %s", step_id, msg)
+            logger.info("rm_rd2504a STEP -> %s | %s", step_id, msg)
             queue.put_nowait({"type": "STEP", "step": step_id, "msg": msg})
 
         def schedule_write(frames: list[bytes], label: str) -> None:
@@ -304,7 +301,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
             client = client_holder.get("client")
             results: list[dict] = []
             if client is None or not client.is_connected:
-                logger.warning("icomon FFB1 write %s abortado: sem conexão", label)
+                logger.warning("rm_rd2504a FFB1 write %s abortado: sem conexão", label)
                 return [{"ok": False, "error": "sem conexão GATT", "label": label}]
             async with write_lock:
                 for frame in frames:
@@ -317,7 +314,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
                         "label": label,
                     }
                     try:
-                        logger.debug("icomon FFB1 write %s %s hex=%s", label, envelope, frame.hex())
+                        logger.debug("rm_rd2504a FFB1 write %s %s hex=%s", label, envelope, frame.hex())
                         mode = "com-resposta"
                         try:
                             await client.write_gatt_char(FFB1_UUID, frame, response=True)
@@ -353,11 +350,11 @@ class BleIcomonGattAdapter(ScaleAdapter):
 
             # Desceu no meio ou depois do A7: reinicia. Não trava em "somente peso".
             if (
-                reading.fonte == "ffb2"
-                and reading.peso_kg < 8.0
+                reading.source == "ffb2"
+                and reading.weight_kg < 8.0
                 and current_step != "step_on"
                 and last is not None
-                and last.peso_kg >= 20
+                and last.weight_kg >= 20
             ):
                 reset_session("Pessoa desceu. Próxima pode subir (atualize altura/idade/sexo).")
                 return
@@ -365,38 +362,38 @@ class BleIcomonGattAdapter(ScaleAdapter):
             if current_step == "done":
                 if (
                     done_weight is not None
-                    and reading.peso_kg >= 20.0
-                    and abs(reading.peso_kg - done_weight) >= 5.0
-                    and reading.estavel
+                    and reading.weight_kg >= 20.0
+                    and abs(reading.weight_kg - done_weight) >= 5.0
+                    and reading.stable
                 ):
                     reset_session(
-                        f"Novo peso detectado ({reading.peso_kg:.1f} kg). "
+                        f"Novo peso detectado ({reading.weight_kg:.1f} kg). "
                         "Reiniciando — atualize o perfil se for outra pessoa."
                     )
                 else:
-                    if reading.fonte == "ffb3" and has_bia_impedances(reading.impedancias_ohm):
-                        reading = replace(reading, completo=True, etapa="done")
+                    if reading.source == "ffb3" and has_bia_impedances(reading.impedances_ohm):
+                        reading = replace(reading, complete=True, step="done")
                         last = reading
                         dispatch(reading)
                         logger.info(
-                            "icomon A7 BIA após done peso=%.3f Z=%s",
-                            reading.peso_kg,
-                            reading.impedancias_ohm,
+                            "rm_rd2504a A7 BIA após done peso=%.3f Z=%s",
+                            reading.weight_kg,
+                            reading.impedances_ohm,
                         )
                     return
 
-            if reading.fonte == "ffb3":
+            if reading.source == "ffb3":
                 saw_a7 = True
-                if has_bia_impedances(reading.impedancias_ohm):
+                if has_bia_impedances(reading.impedances_ohm):
                     saw_nonzero_z = True
-                    reading = replace(reading, completo=True, etapa="done")
+                    reading = replace(reading, complete=True, step="done")
                 else:
-                    logger.info("icomon A7 sem corrente Z=%s — aguardando A7 de membros", reading.impedancias_ohm)
+                    logger.info("rm_rd2504a A7 sem corrente Z=%s — aguardando A7 de membros", reading.impedances_ohm)
                     queue.put_nowait(
                         {
                             "type": "STATUS",
                             "msg": (
-                                f"A7 de {reading.peso_kg:.1f} kg ainda sem bioimpedância. "
+                                f"A7 de {reading.weight_kg:.1f} kg ainda sem bioimpedância. "
                                 "Mantenha as duas mãos na barra; a balança ainda pode enviar os canais."
                             ),
                         }
@@ -407,30 +404,30 @@ class BleIcomonGattAdapter(ScaleAdapter):
 
             if (
                 last is not None
-                and not reading.completo
-                and abs(reading.peso_kg - last.peso_kg) < 0.05
-                and reading.estavel == last.estavel
-                and reading.completo == last.completo
-                and reading.impedancias_ohm == last.impedancias_ohm
+                and not reading.complete
+                and abs(reading.weight_kg - last.weight_kg) < 0.05
+                and reading.stable == last.stable
+                and reading.complete == last.complete
+                and reading.impedances_ohm == last.impedances_ohm
             ):
-                if reading.estavel and stable_since is None:
+                if reading.stable and stable_since is None:
                     stable_since = time.monotonic()
                 return
 
             last = reading
             dispatch(reading)
             logger.info(
-                "icomon reading peso=%.3f estavel=%s completo=%s fonte=%s z=%s step=%s",
-                reading.peso_kg,
-                reading.estavel,
-                reading.completo,
-                reading.fonte,
-                reading.impedancias_ohm,
+                "rm_rd2504a reading weight=%.3f stable=%s complete=%s source=%s z=%s step=%s",
+                reading.weight_kg,
+                reading.stable,
+                reading.complete,
+                reading.source,
+                reading.impedances_ohm,
                 current_step,
             )
 
-            if reading.completo:
-                done_weight = reading.peso_kg
+            if reading.complete:
+                done_weight = reading.weight_kg
                 if current_step in {"step_on", "wait_stable"}:
                     step("hold_bar", "Dados da barra recebidos. Confirmando medição...")
                 if current_step in {"hold_bar", "extend_bar"}:
@@ -438,8 +435,8 @@ class BleIcomonGattAdapter(ScaleAdapter):
                 step("done", "Medição dos 8 eletrodos concluída. Veja o relatório ao lado.")
                 return
 
-            if reading.fonte == "ffb3" and reading.impedancias_ohm:
-                hint = quality_hint(reading.impedancias_ohm)
+            if reading.source == "ffb3" and reading.impedances_ohm:
+                hint = quality_hint(reading.impedances_ohm)
                 if current_step in {"step_on", "wait_stable"}:
                     step(
                         "hold_bar",
@@ -448,7 +445,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
                 step("measuring", hint)
                 return
 
-            if reading.peso_kg > 0 and not reading.estavel:
+            if reading.weight_kg > 0 and not reading.stable:
                 stable_since = None
                 if current_step in {"step_on", "wait_stable"}:
                     step(
@@ -457,16 +454,16 @@ class BleIcomonGattAdapter(ScaleAdapter):
                     )
                 return
 
-            if reading.estavel and stable_since is None:
+            if reading.stable and stable_since is None:
                 stable_since = time.monotonic()
 
         def on_ffb2(_sender, data: bytearray) -> None:
             raw = bytes(data)
             reading = ingest_frame(ffb2_asm, raw)
             logger.debug(
-                "icomon FFB2 hex=%s parsed=%s",
+                "rm_rd2504a FFB2 hex=%s parsed=%s",
                 raw.hex(),
-                None if reading is None else f"{reading.peso_kg}kg estavel={reading.estavel}",
+                None if reading is None else f"{reading.weight_kg}kg stable={reading.stable}",
             )
             nonlocal saw_lock
             status = raw[5] if len(raw) > 5 else None
@@ -482,11 +479,11 @@ class BleIcomonGattAdapter(ScaleAdapter):
 
             reading = ingest_frame(ffb3_asm, raw)
             logger.debug(
-                "icomon FFB3 hex=%s parsed=%s",
+                "rm_rd2504a FFB3 hex=%s parsed=%s",
                 raw.hex(),
                 None
                 if reading is None
-                else f"{reading.peso_kg}kg z={reading.impedancias_ohm} completo={reading.completo}",
+                else f"{reading.weight_kg}kg z={reading.impedances_ohm} complete={reading.complete}",
             )
             emit(reading)
 
@@ -496,7 +493,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
 
             async with BleakClient(target, timeout=CONNECT_TIMEOUT_S) as client:
                 client_holder["client"] = client
-                await send_status("Conexão ICOMON estabelecida.")
+                await send_status("Conexão com a RM-RD2504A estabelecida.")
                 try:
                     await client.start_notify(FFB2_UUID, on_ffb2)
                 except BleakError as exc:
@@ -541,7 +538,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
                     if sync_token_box[0] != last_sync_token:
                         last_sync_token = sync_token_box[0]
                         weight_profile_sent = False
-                        if last is not None and last.peso_kg >= 10:
+                        if last is not None and last.weight_kg >= 10:
                             await send_status(
                                 "Há alguém no prato — não reenvio perfil agora para não cortar a BIA."
                             )
@@ -556,7 +553,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
 
                     if (
                         last is not None
-                        and last.estavel
+                        and last.stable
                         and current_step in {"step_on", "wait_stable"}
                         and stable_since is not None
                         and now - stable_since >= 1.2
@@ -582,13 +579,13 @@ class BleIcomonGattAdapter(ScaleAdapter):
                     if (
                         not MINIMAL_SESSION
                         and last is not None
-                        and last.peso_kg >= 20
+                        and last.weight_kg >= 20
                         and current_step != "done"
                         and not saw_a7
                         and now - last_ba_at >= 0.8
                         and (
                             last_ba_weight is None
-                            or abs(last.peso_kg - last_ba_weight) >= 1.5
+                            or abs(last.weight_kg - last_ba_weight) >= 1.5
                         )
                     ):
                         prof_live = active_profile()
@@ -599,8 +596,8 @@ class BleIcomonGattAdapter(ScaleAdapter):
                                     height_cm=prof_live.height_cm,
                                     age=prof_live.age,
                                     sex=prof_live.sex,
-                                    weight_kg=last.peso_kg,
-                                    stabilized=last.estavel,
+                                    weight_kg=last.weight_kg,
+                                    stabilized=last.stable,
                                     user_id=GUEST_USER_ID,
                                     people_type=prof_live.people_type,
                                     native_only=True,
@@ -608,9 +605,9 @@ class BleIcomonGattAdapter(ScaleAdapter):
                                 "BA-live",
                             )
                             last_ba_at = now
-                            last_ba_weight = last.peso_kg
+                            last_ba_weight = last.weight_kg
                             await send_status(
-                                f"Sessão alinhada a {last.peso_kg:.1f} kg. Mantenha a barra."
+                                f"Sessão alinhada a {last.weight_kg:.1f} kg. Mantenha a barra."
                             )
 
                     if (
@@ -618,8 +615,8 @@ class BleIcomonGattAdapter(ScaleAdapter):
                         and not saw_a7
                         and not saw_nonzero_z
                         and last is not None
-                        and last.estavel
-                        and last.peso_kg >= 20
+                        and last.stable
+                        and last.weight_kg >= 20
                         and stable_since is not None
                         and now - stable_since >= 12.0
                         and current_step in {"step_on", "wait_stable", "hold_bar", "extend_bar"}
@@ -633,7 +630,7 @@ class BleIcomonGattAdapter(ScaleAdapter):
 
                     # Heartbeat só com prato vazio. Durante a pesagem o rádio fica livre para A7.
                     prof = active_profile()
-                    idle = last is None or last.peso_kg < 10
+                    idle = last is None or last.weight_kg < 10
                     hb_weight = profile_weight(prof, None) if prof is not None else None
                     if (
                         not MINIMAL_SESSION

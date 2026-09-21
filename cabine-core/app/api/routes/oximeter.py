@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import authenticate_websocket, require_access
+from app.core.deps import authenticate_websocket, ensure_person_scope, require_access
 from app.crud import oximeter_reading as oximeter_crud
 from app.crud import person as person_crud
+from app.models.person import ScalePerson
+from app.models.user import User
 from app.schemas.oximeter import OximeterReadingCreate, OximeterReadingResponse, OximeterScanResponse
 from app.services.oximeter.ble import scan_oximeters
 from app.services.oximeter.stream import stream_oximeter
@@ -24,7 +26,12 @@ async def scan_nearby_oximeters():
 
 
 @protected.get("/oximeters", response_model=list[OximeterReadingResponse])
-async def list_oximeter_readings(person_id: UUID, db: AsyncSession = Depends(get_db)):
+async def list_oximeter_readings(
+    person_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    actor: ScalePerson | User = Depends(require_access),
+):
+    ensure_person_scope(actor, person_id)
     person = await person_crud.get_by_id(db, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
@@ -35,7 +42,9 @@ async def list_oximeter_readings(person_id: UUID, db: AsyncSession = Depends(get
 async def create_oximeter_reading(
     payload: OximeterReadingCreate,
     db: AsyncSession = Depends(get_db),
+    actor: ScalePerson | User = Depends(require_access),
 ):
+    ensure_person_scope(actor, payload.person_id)
     person = await person_crud.get_by_id(db, payload.person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
@@ -62,6 +71,13 @@ async def oximeter_endpoint(
     visit_id: UUID | None = None,
     token: str | None = None,
 ):
-    if not await authenticate_websocket(websocket, token):
+    principal = await authenticate_websocket(websocket, token)
+    if principal is None:
         return
-    await stream_oximeter(websocket, person_id=person_id, address=address, visit_id=visit_id)
+    await stream_oximeter(
+        websocket,
+        person_id=principal.bound_person_id(person_id),
+        address=address,
+        visit_id=visit_id,
+        person_locked=principal.person_locked,
+    )

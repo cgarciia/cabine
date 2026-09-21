@@ -8,10 +8,10 @@ import { HeartbeatMonitor } from '../../components/HeartbeatMonitor';
 import { KioskBackButton } from '../../components/KioskIcon';
 import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
-import { loadOmronAddress, saveOmronAddress } from '../../session/omronDevice';
+import { loadBloodPressureAddress, saveBloodPressureAddress } from '../../session/bloodPressureDevice';
 import { newVisitId } from '../../session/visitId';
 import type { BloodPressureLive, BloodPressureReading } from '../../types/bloodPressure';
-import { useOmronEcgMic } from '../../utils/omronEcgMic';
+import { useHem7530EcgMic } from '../../utils/hem7530EcgMic';
 
 const STABLE_MS = 5000;
 const RECORD_MS = 30000;
@@ -75,7 +75,7 @@ export function KioskBloodPressurePage() {
     const [stableLeft, setStableLeft] = useState(5);
     const [recordLeft, setRecordLeft] = useState(30);
     const [frozenEcg, setFrozenEcg] = useState<number[] | null>(null);
-    const ecg = useOmronEcgMic(Boolean(person) && !done);
+    const ecg = useHem7530EcgMic(Boolean(person) && !done);
 
     const wsRef = useRef<WebSocket | null>(null);
     const personIdRef = useRef(person?.id ?? '');
@@ -123,7 +123,7 @@ export function KioskBloodPressurePage() {
             const local: BloodPressureReading = {
                 id: newVisitId(),
                 person_id: person.id,
-                device_name: reading.device_name ?? 'OMRON Complete',
+                device_name: reading.device_name ?? 'HEM-7530T',
                 device_address: reading.device_address ?? null,
                 sys_mmhg: reading.sys_mmhg,
                 dia_mmhg: reading.dia_mmhg,
@@ -211,11 +211,13 @@ export function KioskBloodPressurePage() {
     );
 
     const tryFinish = useCallback(() => {
-        if (!ecgDoneRef.current || savedRef.current) return;
+        if (savedRef.current) return;
         const latest = latestRef.current;
         if (latest.sys_mmhg == null || latest.dia_mmhg == null || latest.pulse_bpm == null || !latest.measured_at) {
-            setPhase('wait_bp');
-            setStatus('ECG de 30 segundos gravado. Aguarde o resultado no visor do Complete.');
+            if (ecgDoneRef.current) {
+                setPhase('wait_bp');
+                setStatus('ECG de 30 segundos gravado. Aguarde o resultado no visor do Complete.');
+            }
             return;
         }
         finish(latest);
@@ -249,7 +251,7 @@ export function KioskBloodPressurePage() {
 
             const params = new URLSearchParams({ person_id: pid });
             if (session.visitId) params.set('visit_id', session.visitId);
-            const known = loadOmronAddress();
+            const known = loadBloodPressureAddress();
             if (known) params.set('address', known);
             const socket = deviceSocket('/ws/blood-pressure', params);
             wsRef.current = socket;
@@ -263,12 +265,17 @@ export function KioskBloodPressurePage() {
             };
 
             socket.onmessage = (event) => {
-                const payload = JSON.parse(event.data) as BloodPressureLive;
+                let payload: BloodPressureLive;
+                try {
+                    payload = JSON.parse(event.data) as BloodPressureLive;
+                } catch {
+                    return;
+                }
                 if (payload.type === 'STATUS' && payload.msg) {
                     return;
                 }
                 if (payload.type !== 'BLOOD_PRESSURE') return;
-                if (payload.device_address) saveOmronAddress(payload.device_address);
+                if (payload.device_address) saveBloodPressureAddress(payload.device_address);
                 if (payload.sys_mmhg != null) setSys(payload.sys_mmhg);
                 if (payload.dia_mmhg != null) setDia(payload.dia_mmhg);
                 if (payload.pulse_bpm != null) setPulse(payload.pulse_bpm);
@@ -394,8 +401,12 @@ export function KioskBloodPressurePage() {
                 <AfterStepScreen
                     justFinished="bloodPressure"
                     title="Pressão registrada"
-                    description="Pressão, pulso e 30 segundos de ECG foram gravados."
-                    hint="O gráfico aparece no relatório da sessão."
+                    description={
+                        frozenEcg && frozenEcg.length
+                            ? 'Pressão, pulso e 30 segundos de ECG foram gravados.'
+                            : 'Pressão e pulso foram registrados.'
+                    }
+                    hint="Os números aparecem no relatório desta sessão."
                 />
             </KioskLayout>
         );
@@ -469,19 +480,19 @@ export function KioskBloodPressurePage() {
                     <span style={{ width: `${meterPct}%` }} />
                 </div>
 
-                <div className="cabine-oxi-vitals kiosk-bp-vitals">
+                <div className="kiosk-oxi-vitals kiosk-bp-vitals">
                     <article>
-                        <p className="cabine-kicker">Sistólica</p>
+                        <p className="kiosk-kicker">Sistólica</p>
                         <strong>{sys != null ? sys : '—'}</strong>
                         <span>mmHg</span>
                     </article>
                     <article>
-                        <p className="cabine-kicker">Diastólica</p>
+                        <p className="kiosk-kicker">Diastólica</p>
                         <strong>{dia != null ? dia : '—'}</strong>
                         <span>mmHg</span>
                     </article>
                     <article>
-                        <p className="cabine-kicker">Pulso</p>
+                        <p className="kiosk-kicker">Pulso</p>
                         <strong>{pulse != null ? pulse : '—'}</strong>
                         <span>bpm</span>
                     </article>

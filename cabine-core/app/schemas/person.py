@@ -9,9 +9,25 @@ def _age_from_birth(birth: date) -> int:
     return today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
 
 
+def normalize_sex(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in {"m", "male", "masculino", "h", "homem"}:
+        return "male"
+    if normalized in {"f", "female", "feminino", "mulher"}:
+        return "female"
+    raise ValueError("Sexo deve ser masculino ou feminino.")
+
+
+def normalize_people_type(value: str) -> str:
+    ptype = value.strip().lower()
+    if ptype in {"athlete", "sportman", "atleta", "fit"}:
+        return "athlete"
+    return "normal"
+
+
 class PersonBase(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    matricula: str | None = Field(default=None, max_length=40)
+    registration: str | None = Field(default=None, max_length=40)
     height_cm: float = Field(gt=0, le=250)
     age: int | None = Field(default=None, ge=1, le=120)
     birth_date: date | None = None
@@ -27,7 +43,7 @@ class PersonBase(BaseModel):
             raise ValueError("Nome é obrigatório.")
         return stripped
 
-    @field_validator("matricula")
+    @field_validator("registration")
     @classmethod
     def strip_registration(cls, value: str | None) -> str | None:
         if value is None:
@@ -37,21 +53,13 @@ class PersonBase(BaseModel):
 
     @field_validator("sex")
     @classmethod
-    def normalize_sex(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized in {"m", "male", "masculino", "h", "homem"}:
-            return "male"
-        if normalized in {"f", "female", "feminino", "mulher"}:
-            return "female"
-        raise ValueError("Sexo deve ser masculino ou feminino.")
+    def normalize_sex_field(cls, value: str) -> str:
+        return normalize_sex(value)
 
     @field_validator("people_type")
     @classmethod
-    def normalize_type(cls, value: str) -> str:
-        ptype = value.strip().lower()
-        if ptype in {"athlete", "sportman", "atleta", "fit"}:
-            return "athlete"
-        return "normal"
+    def normalize_type_field(cls, value: str) -> str:
+        return normalize_people_type(value)
 
     @model_validator(mode="after")
     def resolve_age(self):
@@ -63,12 +71,16 @@ class PersonBase(BaseModel):
 
 
 class PersonCreate(PersonBase):
-    pass
+    @model_validator(mode="after")
+    def require_birth_date(self):
+        if self.birth_date is None:
+            raise ValueError("Informe a data de nascimento.")
+        return self
 
 
 class PersonUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
-    matricula: str | None = Field(default=None, max_length=40)
+    registration: str | None = Field(default=None, max_length=40)
     height_cm: float | None = Field(default=None, gt=0, le=250)
     age: int | None = Field(default=None, ge=1, le=120)
     birth_date: date | None = None
@@ -86,7 +98,7 @@ class PersonUpdate(BaseModel):
             raise ValueError("Nome é obrigatório.")
         return stripped
 
-    @field_validator("matricula")
+    @field_validator("registration")
     @classmethod
     def strip_registration(cls, value: str | None) -> str | None:
         if value is None:
@@ -96,31 +108,23 @@ class PersonUpdate(BaseModel):
 
     @field_validator("sex")
     @classmethod
-    def normalize_sex(cls, value: str | None) -> str | None:
+    def normalize_sex_field(cls, value: str | None) -> str | None:
         if value is None:
             return value
-        normalized = value.strip().lower()
-        if normalized in {"m", "male", "masculino", "h", "homem"}:
-            return "male"
-        if normalized in {"f", "female", "feminino", "mulher"}:
-            return "female"
-        raise ValueError("Sexo deve ser masculino ou feminino.")
+        return normalize_sex(value)
 
     @field_validator("people_type")
     @classmethod
-    def normalize_type(cls, value: str | None) -> str | None:
+    def normalize_type_field(cls, value: str | None) -> str | None:
         if value is None:
             return value
-        ptype = value.strip().lower()
-        if ptype in {"athlete", "sportman", "atleta", "fit"}:
-            return "athlete"
-        return "normal"
+        return normalize_people_type(value)
 
 
 class PersonResponse(BaseModel):
     id: UUID
     name: str
-    matricula: str | None
+    registration: str | None
     height_cm: float
     age: int
     birth_date: date | None

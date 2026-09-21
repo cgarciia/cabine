@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-
 USER_START_ADDRESS = 0x2E8
 RECORDS_PER_USER = 90
 RECORD_BYTE_SIZE = 0x0E

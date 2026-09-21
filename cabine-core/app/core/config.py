@@ -28,7 +28,6 @@ class Settings(BaseSettings):
         r")(:\d+)?"
     )
     SQL_ECHO: bool = False
-    OMRON_ADDRESS: str = "00:5F:BF:08:0A:BF"
 
     @property
     def ASYNC_DATABASE_URI(self) -> str:

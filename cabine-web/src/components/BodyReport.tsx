@@ -40,11 +40,11 @@ function markerPct(value: number, low: number, high: number) {
 }
 
 function ohmAt(segments: BiaSegment[] | undefined, side: string, freq: number) {
-    const hit = segments?.find((item) => item.lado === side && item.freq_khz === freq);
+    const hit = segments?.find((item) => item.side === side && item.freq_khz === freq);
     return hit?.ohm;
 }
 
-/** Cortes de gordura da matriz de tipo corporal (estilo RelaxFit). */
+/** Fat cutoffs from the BMI × fat% body-type matrix. */
 function fatCuts(sex?: string) {
     return isFemale(sex) ? { lo: 18, hi: 28 } : { lo: 10, hi: 20 };
 }
@@ -59,7 +59,7 @@ type SegEstimate = {
     key: SegKey;
     label: string;
     kg: number;
-    /** Percentual em relação ao padrão da região (WLA25 / RelaxFit). */
+    /** Percent of the regional standard (WLA25). */
     vsStandardPct: number;
     status: Band;
 };
@@ -775,7 +775,7 @@ export function BodyReport({
                     <h3>Impedância</h3>
                     <p className="cabine-metric-hint">
                         Valores em ohms. Membros ~200–400 Ω. O tronco é o canal líder já
-                        convertido como no RelaxFit (~15–25 Ω), não o valor cru do fio.
+                        convertido (~15–25 Ω), não o valor cru do fio.
                     </p>
                     <table className="cabine-mini-table">
                         <thead>

@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import authenticate_websocket, require_access
+from app.core.deps import authenticate_websocket, ensure_person_scope, require_access
 from app.crud import blood_pressure_reading as bp_crud
 from app.crud import person as person_crud
+from app.models.person import ScalePerson
+from app.models.user import User
 from app.schemas.blood_pressure import (
     BloodPressureDevice,
     BloodPressureReadingCreate,
@@ -14,8 +16,8 @@ from app.schemas.blood_pressure import (
     BloodPressureScanResponse,
 )
 from app.services.ble import ble_radio_lock
-from app.services.omron.ble import scan_omron
-from app.services.omron.stream import stream_blood_pressure
+from app.services.blood_pressure.ble import scan_hem7530
+from app.services.blood_pressure.stream import stream_blood_pressure
 
 router = APIRouter(tags=["BloodPressure"])
 protected = APIRouter(dependencies=[Depends(require_access)])
@@ -24,10 +26,10 @@ protected = APIRouter(dependencies=[Depends(require_access)])
 @protected.get("/blood-pressures/scan", response_model=BloodPressureScanResponse)
 async def scan_nearby_monitors():
     async with ble_radio_lock:
-        found = await scan_omron(timeout=10.0)
+        found = await scan_hem7530(timeout=10.0)
     devices = [
         BloodPressureDevice(
-            name=device.name or "OMRON Complete",
+            name=device.name or "HEM-7530T",
             address=(device.address or "").upper(),
             rssi=getattr(advertisement, "rssi", None) if advertisement else None,
         )
@@ -38,7 +40,12 @@ async def scan_nearby_monitors():
 
 
 @protected.get("/blood-pressures", response_model=list[BloodPressureReadingResponse])
-async def list_blood_pressure_readings(person_id: UUID, db: AsyncSession = Depends(get_db)):
+async def list_blood_pressure_readings(
+    person_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    actor: ScalePerson | User = Depends(require_access),
+):
+    ensure_person_scope(actor, person_id)
     person = await person_crud.get_by_id(db, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
@@ -53,7 +60,9 @@ async def list_blood_pressure_readings(person_id: UUID, db: AsyncSession = Depen
 async def create_blood_pressure_reading(
     payload: BloodPressureReadingCreate,
     db: AsyncSession = Depends(get_db),
+    actor: ScalePerson | User = Depends(require_access),
 ):
+    ensure_person_scope(actor, payload.person_id)
     person = await person_crud.get_by_id(db, payload.person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
@@ -81,6 +90,13 @@ async def blood_pressure_endpoint(
     visit_id: UUID | None = None,
     token: str | None = None,
 ):
-    if not await authenticate_websocket(websocket, token):
+    principal = await authenticate_websocket(websocket, token)
+    if principal is None:
         return
-    await stream_blood_pressure(websocket, person_id=person_id, address=address, visit_id=visit_id)
+    await stream_blood_pressure(
+        websocket,
+        person_id=principal.bound_person_id(person_id),
+        address=address,
+        visit_id=visit_id,
+        person_locked=principal.person_locked,
+    )

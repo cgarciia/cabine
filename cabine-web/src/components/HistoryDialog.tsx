@@ -52,10 +52,10 @@ export function HistoryDialog({ person, records, loading, error, selected, onSel
                                     className={`cabine-history-item${report?.id === item.id ? ' selected' : ''}`}
                                     onClick={() => onSelect(item)}
                                 >
-                                    <div style={{ fontWeight: 800 }}>{item.peso_kg.toFixed(1)} kg</div>
+                                    <div style={{ fontWeight: 800 }}>{item.weight_kg.toFixed(1)} kg</div>
                                     <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: 4 }}>
                                         {formatWhen(item.created_at)}
-                                        {item.metricas?.gordura_pct != null ? ` · gordura ${item.metricas.gordura_pct}%` : ''}
+                                        {item.metrics?.gordura_pct != null ? ` · gordura ${item.metrics.gordura_pct}%` : ''}
                                     </div>
                                 </button>
                             ))}
@@ -69,12 +69,12 @@ export function HistoryDialog({ person, records, loading, error, selected, onSel
                                     age={String(report.age)}
                                     sex={report.sex}
                                     peopleType={report.people_type}
-                                    weightKg={report.peso_kg}
-                                    metrics={report.metricas}
-                                    supportsBia={report.adapter === 'ble_icomon'}
+                                    weightKg={report.weight_kg}
+                                    metrics={report.metrics}
+                                    supportsBia={report.adapter === 'ble_rm_rd2504a'}
                                     weightOnly={isWeightOnlyReport(report)}
                                     saved
-                                    segments={report.segmentos ?? undefined}
+                                    segments={report.segments ?? undefined}
                                     measuredAt={formatWhen(report.created_at)}
                                 />
                                 <button

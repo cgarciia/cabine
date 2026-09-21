@@ -40,8 +40,12 @@ api.interceptors.response.use(
         const url = axios.isAxiosError(error) ? String(error.config?.url || '') : '';
         if (status === 401 && !url.includes('/login')) {
             clearAccessSession();
-            if (window.location.pathname !== '/matricula' && window.location.pathname !== '/cadastro') {
-                window.location.assign('/matricula');
+            const onAdmin = window.location.pathname.startsWith('/admin');
+            const stay = onAdmin
+                ? window.location.pathname === '/admin/login'
+                : window.location.pathname === '/matricula' || window.location.pathname === '/cadastro';
+            if (!stay) {
+                window.location.assign(onAdmin ? '/admin/login' : '/matricula');
             }
         }
         return Promise.reject(error);
@@ -88,7 +92,7 @@ export type RegistrationSession = {
 
 export async function lookupRegistration(registration: string): Promise<{ exists: boolean }> {
     const { data } = await api.post<{ exists: boolean }>('/login/lookup', {
-        matricula: registration,
+        registration: registration,
     });
     return data;
 }
@@ -97,10 +101,21 @@ export async function loginByRegistration(
     registration: string,
     birthDate: string,
 ): Promise<RegistrationSession> {
-    const { data } = await api.post<RegistrationSession>('/login/matricula', {
-        matricula: registration,
+    const { data } = await api.post<RegistrationSession>('/login/registration', {
+        registration: registration,
         birth_date: birthDate,
     });
+    return data;
+}
+
+export async function loginOperator(email: string, password: string): Promise<{
+    access_token: string;
+    expires_in: number;
+}> {
+    const body = new URLSearchParams();
+    body.set('username', email);
+    body.set('password', password);
+    const { data } = await api.post<{ access_token: string; expires_in: number }>('/login', body);
     return data;
 }
 

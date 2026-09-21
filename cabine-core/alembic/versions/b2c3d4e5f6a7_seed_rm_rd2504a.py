@@ -1,17 +1,17 @@
-"""seed balanca relaxmedic icomon
+"""seed default RM-RD2504A scale
 
-Revision ID: d5e2f1a03c44
-Revises: c4b1e8a92f10
-Create Date: 2026-09-08 11:47:00.000000
+Revision ID: b2c3d4e5f6a7
+Revises: a1b2c3d4e5f6
+Create Date: 2026-09-21 14:20:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
-
-revision: str = "d5e2f1a03c44"
-down_revision: Union[str, Sequence[str], None] = "c4b1e8a92f10"
+revision: str = "b2c3d4e5f6a7"
+down_revision: Union[str, Sequence[str], None] = "a1b2c3d4e5f6"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -23,10 +23,10 @@ def upgrade() -> None:
         INSERT INTO scales (id, name, adapter, address, parser, is_active, is_default)
         VALUES (
             '6065f4ca-0577-4000-8000-6065f4ca0577',
-            'Relaxmedic RM-RD2504A',
-            'ble_icomon',
+            'RM-RD2504A',
+            'ble_rm_rd2504a',
             '60:65:F4:CA:05:77',
-            'icomon_ffb2',
+            'rm_rd2504a_ffb2',
             true,
             true
         )
@@ -42,10 +42,3 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DELETE FROM scales WHERE address = '60:65:F4:CA:05:77'")
-    op.execute(
-        """
-        UPDATE scales
-        SET is_default = true
-        WHERE address = '78:66:A5:57:8E:B7'
-        """
-    )

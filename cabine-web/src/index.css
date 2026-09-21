@@ -134,9 +134,12 @@ code {
 .cabine-nav {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
-.cabine-nav a {
+.cabine-nav a,
+.cabine-nav button {
   text-decoration: none;
   padding: 8px 14px;
   border-radius: 999px;
@@ -148,6 +151,8 @@ code {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .cabine-nav a.active {
@@ -186,6 +191,27 @@ code {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #0f766e;
+}
+
+.cabine-field {
+  display: block;
+  margin-bottom: 0.85rem;
+  text-align: left;
+  color: #475569;
+  font-size: 0.875rem;
+}
+
+.cabine-field input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  font-size: 1rem;
+  color: #0f172a;
+  background: #f8fafc;
+  box-sizing: border-box;
 }
 
 .cabine-weight {
@@ -2305,14 +2331,25 @@ code {
   margin-top: 2px;
 }
 
+.kiosk-kicker {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #0f766e;
+}
+
 .kiosk-oxi-vitals {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
+.kiosk-oxi-vitals article,
 .kiosk-oxi-vitals div {
   background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 0.75rem;
   display: flex;
@@ -2647,7 +2684,8 @@ code {
   .kiosk-print-root .cabine-oxi-wave,
   .kiosk-print-root .kiosk-oxi-wave-preview,
   .kiosk-print-root .kiosk-oxi-wave-preview svg,
-  .kiosk-print-root .cabine-oxi-wave svg {
+  .kiosk-print-root .cabine-oxi-wave svg,
+  .kiosk-print-root .kiosk-oxi-wave svg {
     height: 52px !important;
     margin: 0 !important;
   }
@@ -2811,6 +2849,10 @@ code {
   margin: 1.25rem 0 0.75rem;
 }
 
+.cabine-oxi-vitals.cabine-bp-vitals {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
 .cabine-oxi-vitals article {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -2839,7 +2881,8 @@ code {
   line-height: 1.45;
 }
 
-.cabine-oxi-wave {
+.cabine-oxi-wave,
+.kiosk-oxi-wave {
   margin: 8px 0 14px;
   border: 1px solid #cbd5e1;
   border-radius: 14px;
@@ -2850,7 +2893,9 @@ code {
 }
 
 .cabine-oxi-wave canvas,
-.cabine-oxi-wave svg {
+.cabine-oxi-wave svg,
+.kiosk-oxi-wave canvas,
+.kiosk-oxi-wave svg {
   display: block;
   width: 100%;
   height: 180px;
@@ -3065,14 +3110,16 @@ code {
   margin-top: 0.6rem;
 }
 
-.kiosk-bp-history {
+.kiosk-bp-history,
+.cabine-bp-history {
   margin: 1rem 0 0;
   padding: 0;
   list-style: none;
   color: #334155;
 }
 
-.kiosk-bp-history li {
+.kiosk-bp-history li,
+.cabine-bp-history li {
   padding: 0.45rem 0;
   border-bottom: 1px solid #e2e8f0;
 }

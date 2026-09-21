@@ -6,8 +6,8 @@ import logging
 from bleak import BleakClient
 from bleak.backends.characteristic import BleakGATTCharacteristic
 
-from app.services.omron.ble import PAIRING_KEY
-from app.services.omron.hem7530 import (
+from app.services.blood_pressure.ble import PAIRING_KEY
+from app.services.blood_pressure.hem7530 import (
     RECORD_BYTE_SIZE,
     RECORDS_PER_USER,
     TRANSMISSION_BLOCK_SIZE,
@@ -40,8 +40,8 @@ def xor_checksum(payload: bytes) -> int:
     return value
 
 
-class OmronSession:
-    """Sessão GATT do protocolo Omron legado (HEM-7530T / Complete)."""
+class Hem7530Session:
+    """GATT session for the HEM-7530T proprietary EEPROM protocol."""
 
     def __init__(self, client: BleakClient, *, pairing_key: bytes = PAIRING_KEY) -> None:
         self.client = client
@@ -91,7 +91,7 @@ class OmronSession:
         combined = combined[:packet_size]
         self._rx_buffers = [None] * 4
         if xor_checksum(combined):
-            logger.warning("CRC XOR inválido: %s", combined.hex())
+            logger.warning("Invalid XOR checksum: %s", combined.hex())
             return
         self._rx_packet_type = bytes(combined[1:3])
         self._rx_address = bytes(combined[3:5])
@@ -123,7 +123,7 @@ class OmronSession:
             try:
                 await self.client.stop_notify(uuid)
             except Exception:
-                logger.debug("stop_notify %s falhou", uuid, exc_info=True)
+                logger.debug("stop_notify %s failed", uuid, exc_info=True)
         self._rx_notify_on = False
 
     async def _wait_for_rx(self, command: bytes, *, timeout: float = 1.0) -> None:
@@ -142,20 +142,20 @@ class OmronSession:
                 return
             except TimeoutError:
                 retries += 1
-                logger.warning("Timeout no comando Omron, retry %s/5", retries)
+                logger.warning("HEM-7530T command timed out, retry %s/5", retries)
                 if retries >= 5:
-                    raise TimeoutError("O aparelho não respondeu ao comando Omron.") from None
+                    raise TimeoutError("The HEM-7530T did not answer the command.") from None
 
     async def start_transmission(self) -> None:
         await self.enable_rx()
         await self._wait_for_rx(bytes.fromhex("0800000000100018"))
         if self._rx_packet_type != bytes.fromhex("8000"):
-            raise ValueError(f"Resposta inesperada ao start: {self._rx_packet_type.hex()}")
+            raise ValueError(f"Unexpected start response: {self._rx_packet_type.hex()}")
 
     async def end_transmission(self) -> None:
         await self._wait_for_rx(bytes.fromhex("080f000000000007"))
         if self._rx_packet_type != bytes.fromhex("8f00"):
-            raise ValueError(f"Resposta inesperada ao end: {self._rx_packet_type.hex()}")
+            raise ValueError(f"Unexpected end response: {self._rx_packet_type.hex()}")
         await self.disable_rx()
 
     async def _read_block(self, address: int, size: int) -> bytes:
@@ -166,9 +166,9 @@ class OmronSession:
         command.append(xor_checksum(command))
         await self._wait_for_rx(bytes(command))
         if self._rx_packet_type != bytes.fromhex("8100"):
-            raise ValueError(f"Resposta inesperada à leitura: {self._rx_packet_type.hex()}")
+            raise ValueError(f"Unexpected read response: {self._rx_packet_type.hex()}")
         if self._rx_address != address.to_bytes(2, "big"):
-            raise ValueError("Endereço EEPROM da resposta não bate com o pedido.")
+            raise ValueError("EEPROM address in the reply does not match the request.")
         return self._rx_data
 
     async def read_eeprom(self, start: int, length: int, block_size: int = TRANSMISSION_BLOCK_SIZE) -> bytes:
@@ -193,26 +193,26 @@ class OmronSession:
                 await asyncio.wait_for(self._unlock_done.wait(), timeout=2.0)
             except TimeoutError:
                 last = b""
-                print(f"  tentativa {attempt + 1}/20: sem resposta (pairing do Windows ainda aberto?)")
+                logger.info("HEM-7530T pairing attempt %s/20: no reply", attempt + 1)
                 await asyncio.sleep(1.5)
                 continue
             last = self._unlock_data
             status = last[:2].hex()
-            print(f"  tentativa {attempt + 1}/20: unlock={status}")
+            logger.info("HEM-7530T pairing attempt %s/20: unlock=%s", attempt + 1, status)
             if last[:2] == bytes.fromhex("8200"):
                 break
             await asyncio.sleep(1.5)
         else:
             raise ValueError(
-                "Não entrou em modo de programação da chave. "
-                "O display precisa estar em -P- neste momento. "
-                f"Última resposta: {last.hex() or 'nenhuma'}."
+                "Could not enter pairing-key programming mode. "
+                "The display must show -P- at this moment. "
+                f"Last reply: {last.hex() or 'none'}."
             )
         self._unlock_done.clear()
         await self.client.write_gatt_char(UNLOCK_UUID, b"\x00" + self.pairing_key, response=True)
         await asyncio.wait_for(self._unlock_done.wait(), timeout=3.0)
         if self._unlock_data[:2] != bytes.fromhex("8000"):
-            raise ValueError(f"Falha ao gravar chave de pareamento: {self._unlock_data.hex()}")
+            raise ValueError(f"Failed to write pairing key: {self._unlock_data.hex()}")
         await self.client.stop_notify(UNLOCK_UUID)
         await self.client.stop_notify(RX_CHANNEL_UUIDS[0])
 
@@ -223,11 +223,11 @@ class OmronSession:
         await asyncio.wait_for(self._unlock_done.wait(), timeout=3.0)
         if self._unlock_data[:2] != bytes.fromhex("8100"):
             raise ValueError(
-                "Chave de pareamento recusada. Rode o probe com --pair no modo -P- do aparelho."
+                "The monitor rejected the pairing key. Check this computer's Bluetooth bond."
             )
         await self.client.stop_notify(UNLOCK_UUID)
 
-    async def read_hem7530_records(self) -> list[dict]:
+    async def read_records(self) -> list[dict]:
         await self.unlock()
         await self.start_transmission()
         try:
