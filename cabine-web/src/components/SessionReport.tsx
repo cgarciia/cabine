@@ -1,9 +1,11 @@
 import { BodyReport } from './BodyReport';
+import { HeartbeatMonitor } from './HeartbeatMonitor';
 import { OximeterPulsePreview } from './OximeterPulsePreview';
 import { GATE_OPTIONS, GATE_QUESTIONS } from '../modules/mental/instruments';
 import { patientResultCopy, pickPatientResult } from '../modules/mental/scoring';
 import type { MentalInstrumentLog, MentalResult } from '../types/mental';
 import { isWeightOnlyReport, type MeasurementRecord } from '../types/measurement';
+import type { BloodPressureReading } from '../types/bloodPressure';
 import type { OximeterReading } from '../types/oximeter';
 import type { ScalePerson } from '../types/person';
 
@@ -32,6 +34,7 @@ type Props = {
     mental?: SessionMentalView | null;
     measurement?: MeasurementRecord | null;
     oximeter?: OximeterReading | null;
+    bloodPressure?: BloodPressureReading | null;
 };
 
 export function oximeterFindings(reading: OximeterReading): { title: string; detail: string }[] {
@@ -114,7 +117,15 @@ export function gateItemsFromScores(scores: number[]): Array<{ text: string; ans
     });
 }
 
-export function SessionReport({ person, whenLabel, health, mental, measurement, oximeter }: Props) {
+export function SessionReport({
+    person,
+    whenLabel,
+    health,
+    mental,
+    measurement,
+    oximeter,
+    bloodPressure,
+}: Props) {
     const mentalShown = mental?.results?.length ? pickPatientResult(mental.results) : undefined;
     const hasHealth = Boolean(health && (health.items?.length || health.label || health.percent != null));
     const hasMental = Boolean(mental && (mental.accepted || mental.refused));
@@ -271,12 +282,12 @@ export function SessionReport({ person, whenLabel, health, mental, measurement, 
                         age={String(measurement.age)}
                         sex={measurement.sex}
                         peopleType={measurement.people_type}
-                        pesoKg={measurement.peso_kg}
+                        weightKg={measurement.peso_kg}
                         metrics={measurement.metricas}
                         supportsBia={measurement.adapter === 'ble_icomon' || Boolean(measurement.metricas)}
                         weightOnly={isWeightOnlyReport(measurement)}
                         saved
-                        segmentos={measurement.segmentos ?? []}
+                        segments={measurement.segmentos ?? []}
                         measuredAt={whenLabel}
                     />
                 </section>
@@ -313,6 +324,38 @@ export function SessionReport({ person, whenLabel, health, mental, measurement, 
                             </li>
                         ))}
                     </ul>
+                </section>
+            ) : null}
+
+            {bloodPressure ? (
+                <section className="kiosk-report-card kiosk-print-wide">
+                    <h2>Pressão arterial</h2>
+                    <div className="kiosk-oxi-vitals kiosk-bp-vitals">
+                        <div>
+                            <span className="kiosk-muted">Sistólica</span>
+                            <strong>{bloodPressure.sys_mmhg}</strong>
+                        </div>
+                        <div>
+                            <span className="kiosk-muted">Diastólica</span>
+                            <strong>{bloodPressure.dia_mmhg}</strong>
+                        </div>
+                        <div>
+                            <span className="kiosk-muted">Pulso</span>
+                            <strong>{bloodPressure.pulse_bpm} bpm</strong>
+                        </div>
+                    </div>
+                    <HeartbeatMonitor
+                        bpm={bloodPressure.pulse_bpm}
+                        active
+                        review
+                        trace={bloodPressure.ecg_mv}
+                        toneLocked={Boolean(bloodPressure.ecg_mv?.length)}
+                    />
+                    {bloodPressure.ecg_mv?.length ? (
+                        <p className="kiosk-muted">
+                            ECG de 30 segundos. Arraste para ver o traço inteiro. Desligue Estabilizado para ver o sinal cru.
+                        </p>
+                    ) : null}
                 </section>
             ) : null}
 

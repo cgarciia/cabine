@@ -1,14 +1,16 @@
+import basicSsl from '@vitejs/plugin-basic-ssl'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 const backend = 'http://127.0.0.1:8000'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), basicSsl()],
   server: {
     host: '0.0.0.0',
     port: 5173,
     strictPort: true,
+    https: true,
     allowedHosts: true,
     proxy: {
       '/ws': { target: backend, ws: true, changeOrigin: true },
@@ -17,6 +19,7 @@ export default defineConfig({
       '/measurements': { target: backend, changeOrigin: true },
       '/forms': { target: backend, changeOrigin: true },
       '/oximeters': { target: backend, changeOrigin: true },
+      '/blood-pressures': { target: backend, changeOrigin: true },
       '/users': { target: backend, changeOrigin: true },
       '/login': { target: backend, changeOrigin: true },
       '/health': { target: backend, changeOrigin: true },

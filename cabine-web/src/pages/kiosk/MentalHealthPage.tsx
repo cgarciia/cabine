@@ -4,6 +4,8 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { mentalAdvice } from '../../advice/patientAdvice';
 import { saveFormSubmission } from '../../api';
 import { AfterStepScreen } from '../../components/AfterStepScreen';
+import { KioskOptionContent, optionScaleClass } from '../../components/KioskOptionContent';
+import { KioskQuizHeading } from '../../components/KioskQuizHeading';
 import {
     GATE_OPTIONS,
     GATE_QUESTIONS,
@@ -27,7 +29,7 @@ type Step = 'invite' | 'gate' | 'instrument' | 'optional' | 'safety' | 'result' 
 
 export function KioskMentalHealthPage() {
     const navigate = useNavigate();
-    const { session, setSaudeMental } = useKiosk();
+    const { session, setMentalHealth } = useKiosk();
     const started = useMemo(() => new Date().toISOString(), []);
     const [step, setStep] = useState<Step>('invite');
     const [gateIndex, setGateIndex] = useState(0);
@@ -60,7 +62,7 @@ export function KioskMentalHealthPage() {
             instrument: partial.instrument ?? active,
             instrumentLog: partial.instrumentLog ?? instrumentLog,
         };
-        setSaudeMental(next);
+        setMentalHealth(next);
         return next;
     }
 
@@ -242,10 +244,10 @@ export function KioskMentalHealthPage() {
         return (
             <KioskLayout>
                 <AfterStepScreen
-                    justFinished="saudeMental"
+                    justFinished="mentalHealth"
                     title="Saúde mental concluída"
                     description={
-                        session.saudeMental?.refused
+                        session.mentalHealth?.refused
                             ? 'Você optou por não responder agora. Pode seguir para a próxima etapa quando quiser.'
                             : 'Obrigado por participar. Suas respostas ficam nesta sessão e o resultado é só para você.'
                     }
@@ -269,7 +271,14 @@ export function KioskMentalHealthPage() {
                     <div className="kiosk-quiz-eta">{stepTime(step, active)}</div>
                 </div>
 
-                <div className="kiosk-quiz-category">Saúde Mental</div>
+                <KioskQuizHeading
+                    category="Saúde Mental"
+                    onBack={
+                        step === 'gate' || step === 'instrument' || step === 'invite'
+                            ? goBack
+                            : undefined
+                    }
+                />
 
                 {step === 'invite' ? (
                     <>
@@ -279,9 +288,8 @@ export function KioskMentalHealthPage() {
                             pode sugerir algumas perguntas adicionais.
                         </p>
                         <p className="kiosk-subtitle" style={{ textAlign: 'left', maxWidth: 640 }}>
-                            Suas respostas são confidenciais e o resultado aparece somente para você. A
-                            empresa recebe apenas dados gerais, sem identificação. Este é um rastreio e não
-                            substitui avaliação profissional.
+                            Suas respostas são confidenciais e o resultado aparece somente para você. Este é
+                            um rastreio e não substitui avaliação profissional.
                         </p>
                         <div className="kiosk-menu-actions" style={{ marginTop: '1.25rem' }}>
                             <button
@@ -309,14 +317,20 @@ export function KioskMentalHealthPage() {
                             {GATE_OPTIONS.map((option) => {
                                 const activeOpt =
                                     flashId === String(option.score) || gate[gateIndex] === option.score;
+                                const scores = GATE_OPTIONS.map((item) => item.score);
                                 return (
                                     <button
                                         key={option.label}
                                         type="button"
-                                        className={`kiosk-option${activeOpt ? ' selected' : ''}`}
+                                        className={`kiosk-option${activeOpt ? ' selected' : ''}${optionScaleClass(option.score, scores, false)}`}
                                         onClick={() => applyGate(option.score)}
                                     >
-                                        {option.label}
+                                        <KioskOptionContent
+                                            label={option.label}
+                                            score={option.score}
+                                            scores={scores}
+                                            higherIsBetter={false}
+                                        />
                                     </button>
                                 );
                             })}
@@ -334,14 +348,21 @@ export function KioskMentalHealthPage() {
                             {items[itemIndex].options.map((option, optionIndex) => {
                                 const activeOpt =
                                     flashId === option.label || answers[itemIndex] === optionIndex;
+                                const scores = items[itemIndex].options.map((item) => item.score);
+                                const higherIsBetter = active === 'WHO-5';
                                 return (
                                     <button
                                         key={option.label}
                                         type="button"
-                                        className={`kiosk-option${activeOpt ? ' selected' : ''}`}
+                                        className={`kiosk-option${activeOpt ? ' selected' : ''}${optionScaleClass(option.score, scores, higherIsBetter)}`}
                                         onClick={() => applyItem(optionIndex)}
                                     >
-                                        {option.label}
+                                        <KioskOptionContent
+                                            label={option.label}
+                                            score={option.score}
+                                            scores={scores}
+                                            higherIsBetter={higherIsBetter}
+                                        />
                                     </button>
                                 );
                             })}
@@ -383,26 +404,19 @@ export function KioskMentalHealthPage() {
                 {step === 'safety' ? (
                     <>
                         <div className="kiosk-band is-alert">
-                            <strong>Queremos falar com você agora</strong>
+                            <strong>Você não precisa passar por isso sozinho</strong>
                             <p>
-                                Suas respostas indicam que este é um bom momento para conversar com alguém.
-                                Um profissional pode atender você agora mesmo.
+                                Suas respostas indicam que este é um bom momento para conversar com alguém
+                                de confiança — um amigo, um familiar ou um profissional de saúde.
                             </p>
                         </div>
                         <p className="kiosk-subtitle" style={{ textAlign: 'left' }}>
-                            Se preferir, ligue para o CVV no <strong>188</strong>, disponível 24 horas.
+                            Se quiser, ligue para o CVV no <strong>188</strong>, disponível 24 horas.
                         </p>
                         <div className="kiosk-menu-actions">
                             <button
                                 type="button"
                                 className="kiosk-btn kiosk-btn-primary"
-                                onClick={() => setStep('result')}
-                            >
-                                Falar com profissional agora
-                            </button>
-                            <button
-                                type="button"
-                                className="kiosk-btn kiosk-btn-ghost"
                                 onClick={() => setStep('result')}
                             >
                                 Ver meu resultado
@@ -444,11 +458,6 @@ export function KioskMentalHealthPage() {
                     </>
                 ) : null}
 
-                {step === 'gate' || step === 'instrument' || step === 'invite' ? (
-                    <button type="button" className="kiosk-back" onClick={goBack}>
-                        ← Voltar
-                    </button>
-                ) : null}
             </div>
         </KioskLayout>
     );

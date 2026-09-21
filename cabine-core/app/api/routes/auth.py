@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,21 +17,30 @@ from app.schemas.token import Token
 router = APIRouter(tags=["Auth"])
 
 
-class MatriculaLogin(BaseModel):
+class RegistrationLookup(BaseModel):
     matricula: str = Field(min_length=1, max_length=40)
 
 
-class MatriculaSessionResponse(Token):
+class RegistrationLookupResponse(BaseModel):
+    exists: bool
+
+
+class RegistrationLogin(BaseModel):
+    matricula: str = Field(min_length=1, max_length=40)
+    birth_date: date
+
+
+class RegistrationSessionResponse(Token):
     person: PersonResponse
 
 
-def _issue_person_token(person_id: UUID, matricula: str) -> Token:
+def _issue_person_token(person_id: UUID, registration: str) -> Token:
     expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={
             "sub": str(person_id),
             "typ": "person",
-            "matricula": matricula,
+            "matricula": registration,
         },
         expires_delta=expires,
     )
@@ -41,20 +50,34 @@ def _issue_person_token(person_id: UUID, matricula: str) -> Token:
     )
 
 
-@router.post("/login/matricula", response_model=MatriculaSessionResponse)
-async def login_matricula(payload: MatriculaLogin, db: AsyncSession = Depends(get_db)):
+@router.post("/login/lookup", response_model=RegistrationLookupResponse)
+async def lookup_registration(payload: RegistrationLookup, db: AsyncSession = Depends(get_db)):
     key = payload.matricula.strip()
     if not key:
         raise HTTPException(status_code=400, detail="Informe a matrícula.")
-    person = await person_crud.get_by_matricula(db, key)
-    if not person or not person.matricula:
+    person = await person_crud.get_by_registration(db, key)
+    return RegistrationLookupResponse(exists=bool(person and person.matricula))
+
+
+@router.post("/login/matricula", response_model=RegistrationSessionResponse)
+async def login_by_registration(payload: RegistrationLogin, db: AsyncSession = Depends(get_db)):
+    key = payload.matricula.strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="Informe a matrícula.")
+    person = await person_crud.get_by_registration(db, key)
+    if (
+        not person
+        or not person.matricula
+        or person.birth_date is None
+        or person.birth_date != payload.birth_date
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Matrícula não encontrada.",
+            detail="Matrícula ou data de nascimento incorretas.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     token = _issue_person_token(person.id, person.matricula)
-    return MatriculaSessionResponse(
+    return RegistrationSessionResponse(
         access_token=token.access_token,
         expires_in=token.expires_in,
         person=PersonResponse.model_validate(person),
@@ -66,7 +89,7 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    """Login de operador do sistema (e-mail). O kiosk usa POST /login/matricula."""
+    """Operator login (e-mail). The kiosk uses POST /login/matricula."""
     user = await user_crud.get_by_email(db, form_data.username)
     if (
         not user

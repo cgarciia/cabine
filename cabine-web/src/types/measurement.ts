@@ -1,4 +1,4 @@
-export interface Destaque {
+export interface MetricHighlight {
     codigo: string;
     gravidade?: string;
     titulo?: string;
@@ -7,7 +7,7 @@ export interface Destaque {
 
 export type SegKey = 'braco_dir' | 'braco_esq' | 'tronco' | 'perna_dir' | 'perna_esq';
 
-export interface WlaSegmento {
+export interface WlaSegment {
     key: SegKey;
     fat_kg: number;
     fat_vs_std_pct: number;
@@ -51,7 +51,7 @@ export interface ScaleMetrics {
     proteina_status?: string;
     smi?: number;
     tipo_corporal?: string;
-    destaques?: Destaque[];
+    destaques?: MetricHighlight[];
     musculo_esqueletico_status?: string;
     musculo_status?: string;
     massa_magra_status?: string;
@@ -65,10 +65,10 @@ export interface ScaleMetrics {
         proteina?: number[];
         magra?: number[];
     };
-    segmentos_wla?: WlaSegmento[];
+    segmentos_wla?: WlaSegment[];
 }
 
-export interface Segmento {
+export interface BiaSegment {
     nome: string;
     lado: string;
     freq_khz: number;
@@ -91,7 +91,7 @@ export interface MeasurementRecord {
     estavel: boolean;
     completo: boolean;
     impedancias_ohm: number[] | null;
-    segmentos: Segmento[] | null;
+    segmentos: BiaSegment[] | null;
     metricas: ScaleMetrics | null;
     visit_id?: string | null;
     created_at: string;
@@ -112,12 +112,12 @@ export interface MeasurementPayload {
     estavel: boolean;
     completo: boolean;
     impedancias_ohm?: number[] | null;
-    segmentos?: Segmento[] | null;
+    segmentos?: BiaSegment[] | null;
     metricas: ScaleMetrics | null;
     visit_id?: string | null;
 }
 
-/** Mensagem do WebSocket `/ws/scale` (não confundir com `ScalePayload` de CRUD). */
+/** WebSocket `/ws/scale` payload (not the CRUD `ScalePayload`). */
 export interface ScaleLiveMessage {
     type: string;
     step?: string;
@@ -130,7 +130,7 @@ export interface ScaleLiveMessage {
     completo?: boolean;
     metricas?: ScaleMetrics;
     impedancias_ohm?: number[];
-    segmentos?: Segmento[];
+    segmentos?: BiaSegment[];
 }
 
 export function hasBiaImpedances(values?: number[] | null): boolean {

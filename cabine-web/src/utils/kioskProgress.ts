@@ -1,36 +1,39 @@
-export type KioskStepId = 'saudeGeral' | 'saudeMental' | 'bia' | 'oximetro';
+export type KioskStepId = 'generalHealth' | 'mentalHealth' | 'bia' | 'oximeter' | 'bloodPressure';
 
-/** Campos da sessão do totem usados para saber o que já foi feito. */
+/** Kiosk session fields used to know which steps are already done. */
 export type VisitProgressInput = {
-    saudeGeral: unknown;
-    saudeMental: { completedAt?: string; refused?: boolean } | null;
+    generalHealth: unknown;
+    mentalHealth: { completedAt?: string; refused?: boolean } | null;
     lastMeasurement: unknown;
     lastOximeter: unknown;
+    lastBloodPressure: unknown;
 };
 
 export type NextKioskStep = {
     id: KioskStepId;
-    path: '/saude-geral' | '/saude-mental' | '/bioimpedancia' | '/oximetro';
+    path: '/saude-geral' | '/saude-mental' | '/bioimpedancia' | '/oximetro' | '/pressao';
     label: string;
 };
 
 const STEPS: NextKioskStep[] = [
-    { id: 'saudeGeral', path: '/saude-geral', label: 'Ir para saúde geral' },
-    { id: 'saudeMental', path: '/saude-mental', label: 'Ir para saúde mental' },
+    { id: 'generalHealth', path: '/saude-geral', label: 'Ir para saúde geral' },
+    { id: 'mentalHealth', path: '/saude-mental', label: 'Ir para saúde mental' },
     { id: 'bia', path: '/bioimpedancia', label: 'Ir para bioimpedância' },
-    { id: 'oximetro', path: '/oximetro', label: 'Ir para oximetria' },
+    { id: 'oximeter', path: '/oximetro', label: 'Ir para oximetria' },
+    { id: 'bloodPressure', path: '/pressao', label: 'Ir para pressão' },
 ];
 
 export function isMentalDone(session: VisitProgressInput): boolean {
-    return Boolean(session.saudeMental?.completedAt || session.saudeMental?.refused);
+    return Boolean(session.mentalHealth?.completedAt || session.mentalHealth?.refused);
 }
 
 function isStepDone(session: VisitProgressInput, id: KioskStepId, justFinished?: KioskStepId): boolean {
     if (justFinished === id) return true;
-    if (id === 'saudeGeral') return Boolean(session.saudeGeral);
-    if (id === 'saudeMental') return isMentalDone(session);
+    if (id === 'generalHealth') return Boolean(session.generalHealth);
+    if (id === 'mentalHealth') return isMentalDone(session);
     if (id === 'bia') return Boolean(session.lastMeasurement);
-    return Boolean(session.lastOximeter);
+    if (id === 'oximeter') return Boolean(session.lastOximeter);
+    return Boolean(session.lastBloodPressure);
 }
 
 export function isVisitComplete(session: VisitProgressInput, justFinished?: KioskStepId): boolean {

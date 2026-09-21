@@ -1,3 +1,4 @@
+import type { BloodPressureReading } from '../types/bloodPressure';
 import type { FormSubmission } from '../types/form';
 import { hasBiaImpedances, type MeasurementRecord } from '../types/measurement';
 import type { OximeterReading } from '../types/oximeter';
@@ -11,6 +12,7 @@ export type SavedVisit = {
     visitId: string | null;
     measurement: MeasurementRecord | null;
     oximeter: OximeterReading | null;
+    bloodPressure: BloodPressureReading | null;
     health: FormSubmission | null;
     mental: FormSubmission | null;
 };
@@ -19,9 +21,10 @@ type Piece = {
     t: number;
     at: string;
     visitId: string | null;
-    kind: 'measurement' | 'oximeter' | 'health' | 'mental';
+    kind: 'measurement' | 'oximeter' | 'bloodPressure' | 'health' | 'mental';
     measurement?: MeasurementRecord;
     oximeter?: OximeterReading;
+    bloodPressure?: BloodPressureReading;
     form?: FormSubmission;
 };
 
@@ -29,6 +32,7 @@ export function groupSavedVisits(
     measurements: MeasurementRecord[],
     forms: FormSubmission[],
     oximeter: OximeterReading[],
+    bloodPressure: BloodPressureReading[] = [],
 ): SavedVisit[] {
     const pieces: Piece[] = [];
 
@@ -48,6 +52,15 @@ export function groupSavedVisits(
             visitId: item.visit_id ?? null,
             kind: 'oximeter',
             oximeter: item,
+        });
+    }
+    for (const item of bloodPressure) {
+        pieces.push({
+            t: timeOf(item.measured_at || item.created_at),
+            at: item.measured_at || item.created_at,
+            visitId: item.visit_id ?? null,
+            kind: 'bloodPressure',
+            bloodPressure: item,
         });
     }
     for (const item of forms) {
@@ -98,17 +111,21 @@ export function visitSummary(visit: SavedVisit): string {
     if (visit.mental) parts.push('Saúde mental');
     if (visit.measurement) parts.push(`${visit.measurement.peso_kg.toFixed(1)} kg`);
     if (visit.oximeter) parts.push(`SpO₂ ${visit.oximeter.spo2_pct}%`);
+    if (visit.bloodPressure) {
+        parts.push(`${visit.bloodPressure.sys_mmhg}/${visit.bloodPressure.dia_mmhg} mmHg`);
+    }
     return parts.join(' · ') || 'Relatório';
 }
 
 function emptyVisit(piece: Piece): SavedVisit {
     return {
-        id: piece.visitId ?? piece.measurement?.id ?? piece.oximeter?.id ?? piece.form?.id ?? String(piece.t),
+        id: piece.visitId ?? piece.measurement?.id ?? piece.oximeter?.id ?? piece.bloodPressure?.id ?? piece.form?.id ?? String(piece.t),
         at: piece.at,
         seedT: piece.t,
         visitId: piece.visitId,
         measurement: null,
         oximeter: null,
+        bloodPressure: null,
         health: null,
         mental: null,
     };
@@ -123,6 +140,8 @@ function assignPiece(visit: SavedVisit, piece: Piece) {
         visit.measurement = preferMeasurement(visit.measurement, piece.measurement);
     } else if (piece.kind === 'oximeter' && piece.oximeter && !visit.oximeter) {
         visit.oximeter = piece.oximeter;
+    } else if (piece.kind === 'bloodPressure' && piece.bloodPressure && !visit.bloodPressure) {
+        visit.bloodPressure = piece.bloodPressure;
     } else if (piece.kind === 'health' && piece.form && !visit.health) {
         visit.health = piece.form;
     } else if (piece.kind === 'mental' && piece.form && !visit.mental) {

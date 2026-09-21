@@ -1,7 +1,8 @@
+import { ChevronLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
-import { apiErrorMessage, fetchPersonForms, fetchPersonMeasurements, fetchPersonOximeter } from '../../api';
+import { apiErrorMessage, fetchPersonBloodPressure, fetchPersonForms, fetchPersonMeasurements, fetchPersonOximeter } from '../../api';
 import {
     healthViewFromPayload,
     mentalViewFromPayload,
@@ -11,7 +12,7 @@ import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
 import { formatVisitWhen, groupSavedVisits, visitSummary, type SavedVisit } from '../../utils/sessionBundles';
 
-export function RegistrosPage() {
+export function RecordsPage() {
     const navigate = useNavigate();
     const { session } = useKiosk();
     const [visits, setVisits] = useState<SavedVisit[]>([]);
@@ -28,9 +29,10 @@ export function RegistrosPage() {
             fetchPersonMeasurements(personId),
             fetchPersonForms(personId),
             fetchPersonOximeter(personId),
+            fetchPersonBloodPressure(personId),
         ])
-            .then(([measurements, forms, oximeter]) => {
-                const next = groupSavedVisits(measurements, forms, oximeter);
+            .then(([measurements, forms, oximeter, bloodPressure]) => {
+                const next = groupSavedVisits(measurements, forms, oximeter, bloodPressure);
                 setVisits(next);
                 setSelected(next[0] ?? null);
             })
@@ -43,7 +45,7 @@ export function RegistrosPage() {
     const person = session.person;
 
     return (
-        <KioskLayout activeSidebar="registros">
+        <KioskLayout activeSidebar="records">
             <div className="kiosk-report no-print">
                 <h1 className="kiosk-title">Registros</h1>
                 <p className="kiosk-subtitle">Histórico de relatórios salvos. Escolha uma visita para imprimir.</p>
@@ -80,6 +82,7 @@ export function RegistrosPage() {
                     mental={selected.mental ? mentalViewFromPayload(selected.mental.payload) : null}
                     measurement={selected.measurement}
                     oximeter={selected.oximeter}
+                    bloodPressure={selected.bloodPressure}
                 />
             ) : null}
 
@@ -90,7 +93,8 @@ export function RegistrosPage() {
                     </button>
                 ) : null}
                 <button type="button" className="kiosk-btn kiosk-btn-ghost" onClick={() => navigate('/menu')}>
-                    ← Voltar ao menu
+                    <ChevronLeft size={20} strokeWidth={2.2} aria-hidden />
+                    Voltar ao menu
                 </button>
             </div>
         </KioskLayout>

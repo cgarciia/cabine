@@ -29,7 +29,7 @@ class PersonBase(BaseModel):
 
     @field_validator("matricula")
     @classmethod
-    def strip_matricula(cls, value: str | None) -> str | None:
+    def strip_registration(cls, value: str | None) -> str | None:
         if value is None:
             return None
         stripped = value.strip()
@@ -88,7 +88,7 @@ class PersonUpdate(BaseModel):
 
     @field_validator("matricula")
     @classmethod
-    def strip_matricula(cls, value: str | None) -> str | None:
+    def strip_registration(cls, value: str | None) -> str | None:
         if value is None:
             return None
         stripped = value.strip()

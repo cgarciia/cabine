@@ -1,3 +1,5 @@
+import { ChevronLeft, CircleCheckBig } from 'lucide-react';
+
 type Props = {
     title: string;
     description: string;
@@ -17,7 +19,9 @@ export function StepCompleteScreen({
 }: Props) {
     return (
         <div className="kiosk-center-card kiosk-step-complete">
-            <div className="kiosk-success-ring" aria-hidden />
+            <div className="kiosk-success-ring" aria-hidden>
+                <CircleCheckBig size={40} strokeWidth={1.75} />
+            </div>
             <h1 className="kiosk-title">{title}</h1>
             <p className="kiosk-subtitle">{description}</p>
             {hint ? <p className="kiosk-step-complete-hint">{hint}</p> : null}
@@ -31,6 +35,7 @@ export function StepCompleteScreen({
                     {nextLabel}
                 </button>
                 <button type="button" className="kiosk-btn kiosk-btn-ghost" onClick={onMenu}>
+                    <ChevronLeft size={20} strokeWidth={2.2} aria-hidden />
                     Voltar ao menu
                 </button>
             </div>

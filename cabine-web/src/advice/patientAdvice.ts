@@ -13,7 +13,7 @@ export function mentalAdvice(results: MentalResult[] | undefined, refused?: bool
     if (tone === 'alert') {
         return [
             'Pode ser um bom momento para conversar com alguém de confiança ou com um profissional de saúde.',
-            'Cuidar do sono, da rotina e das relações ajuda. O CVV 188 está disponível 24 horas, se você quiser falar agora.',
+            'Cuidar do sono, da rotina e das relações ajuda. Se quiser conversar, um amigo, um familiar, um profissional de saúde ou o CVV 188 (24 horas) podem ser um apoio.',
             'Nada aqui é diagnóstico. O detalhamento fica com o profissional.',
         ];
     }
@@ -30,7 +30,7 @@ export function mentalAdvice(results: MentalResult[] | undefined, refused?: bool
     ];
 }
 
-export function biaAdvice(metrics: ScaleMetrics | null | undefined, pesoKg: number | null): string[] {
+export function biaAdvice(metrics: ScaleMetrics | null | undefined, weightKg: number | null): string[] {
     const recs: string[] = [];
     if (metrics?.agua_status === 'baixo') {
         recs.push('Distribuir água ao longo do dia costuma ajudar na disposição.');
@@ -45,7 +45,7 @@ export function biaAdvice(metrics: ScaleMetrics | null | undefined, pesoKg: numb
         recs.push('Variar o movimento dos dois lados do corpo na rotina de exercícios pode ser interessante.');
     }
     if (!recs.length) {
-        recs.push(pesoKg != null
+        recs.push(weightKg != null
             ? 'A medição foi registrada. Manter rotina de movimento, alimentação e descanso já é um bom cuidado.'
             : 'Quando a medição terminar, um profissional poderá olhar os detalhes com você.');
     }
