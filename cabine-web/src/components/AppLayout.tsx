@@ -1,8 +1,17 @@
-import { Activity, HeartPulse, Scale, Stethoscope, Users } from 'lucide-react';
+import { Activity, HeartPulse, LogOut, Scale, Stethoscope, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+
+import { clearAccessSession } from '../session/authSession';
 
 export function AppLayout({ children, bare }: { children: ReactNode; bare?: boolean }) {
+    const navigate = useNavigate();
+
+    function signOut() {
+        clearAccessSession();
+        navigate('/admin/login', { replace: true });
+    }
+
     return (
         <div className="cabine-shell">
             <header className="cabine-topbar no-print">
@@ -35,6 +44,10 @@ export function AppLayout({ children, bare }: { children: ReactNode; bare?: bool
                             <Scale size={16} strokeWidth={2} aria-hidden />
                             Balanças
                         </NavLink>
+                        <button type="button" onClick={signOut}>
+                            <LogOut size={16} strokeWidth={2} aria-hidden />
+                            Sair
+                        </button>
                     </nav>
                 ) : null}
             </header>

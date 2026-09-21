@@ -8,9 +8,9 @@ O pacote é a SPA Vite em `cabine-web`. A API e o hardware BLE ficam em `cabine-
 
 O `cabine-web` é a interface da cabine no chão de fábrica (totem) e a tela de operador no mesmo app:
 
-- fluxo de kiosk: matrícula → menu → questionários, BIA, oximetria, relatório;
+- fluxo de kiosk: matrícula → menu → questionários, BIA, oximetria, pressão, relatório;
 - primeiro cadastro (`POST /people`) e edição do cadastro da sessão;
-- telas de operador em `/admin/*` (avaliação, oximetria, pessoas, balanças);
+- telas de operador em `/admin/*` (JWT de e-mail em `/admin/login`);
 - sessão de totem em memória + `sessionStorage`; JWT em `localStorage`;
 - HTTP/WebSocket para o core (nunca Bleak, nunca SQL).
 
@@ -31,7 +31,6 @@ cabine-web/
     components/              # layout, forms, gráficos, diálogos, relatório
     kiosk/                   # KioskProvider + KioskLayout (só totem)
     session/                 # JWT, pessoa atual, chaves, payload de form, sessão local
-    role/                    # CabineRole + RequireRole (reservado; não monta o fluxo atual)
     types/                   # contratos snake_case alinhados à API
     modules/
       health/                # questionário de triagem do kiosk
@@ -66,7 +65,6 @@ Página orquestra estado e chama `api` / helpers. Componente reutilizável não 
 
 **Mantidos de propósito**
 
-- `src/role/` — `CabineRole` e `RequireRole` para um fluxo clínico futuro. O totem usa JWT de matrícula (`RequireAuth`), não papel.
 - `session/cabineSession.ts` — espelho em `localStorage` do bloco mental (além do `KioskContext`).
 - Classes `kiosk-*` — shell do totem; operador continua em `cabine-*`. Não misturar os dois prefixos na mesma tela.
 - Telas `/admin/*` no mesmo SPA — o totem não aponta para elas no menu; o operador abre a URL.
@@ -85,24 +83,25 @@ Subir o front (com o core em `:8000`):
 cd cabine-web
 npm install
 npm run dev
-# http://127.0.0.1:5173
+# https://127.0.0.1:5173  (certificado autoassinado; necessário para o microfone)
 ```
 
 Proxy em `vite.config.ts`. Em produção, `VITE_API_URL` aponta para a API; senão a origem do Vite + proxy.
 
 ### `src/api.ts`
 
-Único Axios. Timeout 10 s. Bearer a partir de `getAccessToken()` (`cabine.token`). 401 (fora de `/login`) limpa sessão e manda para `/matricula`.
+Único Axios. Timeout 10 s. Bearer a partir de `getAccessToken()` (`cabine.token`). 401 (fora de `/login`) limpa sessão e manda para `/matricula` ou `/admin/login`.
 
 | Função | Uso |
 |---|---|
 | `api` | GET/POST/PATCH/DELETE |
 | `apiErrorMessage` | `detail` da API (PT) |
-| `loginByMatricula` | `POST /login/matricula` |
+| `loginByRegistration` | `POST /login/registration` (`registration` + `birth_date`) |
+| `loginOperator` | `POST /login` (e-mail/senha do operador) |
 | `saveFormSubmission` | `POST /forms` |
-| `fetchPersonMeasurements` / `fetchPersonForms` / `fetchPersonOximeter` | filhos da pessoa |
-| `saveOximeterReading` | `POST /oximeters` |
-| `wsBaseUrl` / `withAccessToken` / `deviceSocket` | `/ws/scale`, `/ws/oximeter` |
+| `fetchPersonMeasurements` / `fetchPersonForms` / `fetchPersonOximeter` / `fetchPersonBloodPressure` | filhos da pessoa |
+| `saveOximeterReading` / `saveBloodPressureReading` | POST de leitura |
+| `wsBaseUrl` / `withAccessToken` / `deviceSocket` | `/ws/scale`, `/ws/oximeter`, `/ws/blood-pressure` |
 
 Não criar segundo cliente HTTP. Não usar `fetch` para a API.
 
@@ -116,8 +115,9 @@ Não criar segundo cliente HTTP. Não usar `fetch` para a API.
 | `cabineSession.ts` | Rascunho local (mental) por pessoa |
 | `formPayload.ts` | Body estruturado de `health` / `mental` |
 | `oximeterDevice.ts` | MAC do oxímetro |
+| `bloodPressureDevice.ts` | MAC do HEM-7530T (vazio até o totem ou o operador gravar um) |
 
-`KioskContext` guarda o andamento **desta visita** (`sessionStorage`, chave `cabine.kiosk-session`): pessoa, scores, última pesagem, última oximetria.
+`KioskContext` guarda o andamento **desta visita** (`sessionStorage`, chave `cabine.kiosk-session`): pessoa, scores, última pesagem, última oximetria, última pressão.
 
 ### `src/kiosk`
 
@@ -128,31 +128,34 @@ Não criar segundo cliente HTTP. Não usar `fetch` para a API.
 | Arquivo | Rota |
 |---|---|
 | `WelcomePage` | `/` |
-| `MatriculaPage` | `/matricula` |
-| `CadastroPage` | `/cadastro` (`?edit=1` exige JWT + pessoa) |
+| `RegistrationLoginPage` | `/matricula` |
+| `RegistrationPage` | `/cadastro` (`?edit=1` exige JWT + pessoa) |
 | `MenuPage` | `/menu` |
 | `QuestionnairePage` | `/saude-geral` |
 | `MentalHealthPage` (`KioskMentalHealthPage`) | `/saude-mental` |
 | `KioskScalePage` | `/bioimpedancia` |
-| `OximetroPage` | `/oximetro` |
-| `RelatorioPage` | `/relatorio` |
-| `RegistrosPage` | `/registros` |
-| `ConclusaoPage` | `/conclusao` |
+| `KioskOximeterPage` | `/oximetro` |
+| `KioskBloodPressurePage` | `/pressao` |
+| `CompletionPage` | `/conclusao` |
+| `ReportPage` | `/relatorio` |
+| `RecordsPage` | `/registros` |
 
 ### `src/pages/admin`
 
 | Arquivo | Rota |
 |---|---|
+| `OperatorLoginPage` | `/admin/login` (público) |
 | `ScalePage` | `/admin/avaliacao` |
 | `OximeterPage` | `/admin/oximetria` |
+| `BloodPressurePage` | `/admin/pressao` |
 | `PeoplePage` | `/admin/pessoas` |
 | `ScalesPage` | `/admin/balancas` |
 
-`/pessoas` e `/balancas` redirecionam para `/admin/...`.
+`/pessoas` e `/balancas` redirecionam para `/admin/...`. `RequireOperator` envolve essas rotas e exige JWT `typ=user`.
 
 ### `src/types`
 
-Contrato da API, **snake_case**: `person.ts`, `measurement.ts`, `oximeter.ts`, `scale.ts`, `form.ts`, `mental.ts` (instrumentos; não é recurso REST).
+Contrato da API, **snake_case**: `person.ts`, `measurement.ts`, `oximeter.ts`, `bloodPressure.ts`, `scale.ts`, `form.ts`, `mental.ts` (instrumentos; não é recurso REST).
 
 UI camelCase só no formulário; na borda usar `personFormToPayload` / payload explícito.
 
@@ -160,19 +163,20 @@ UI camelCase só no formulário; na borda usar `personFormToPayload` / payload e
 
 Conteúdo clínico estático. Persistência só via `saveFormSubmission` + `formPayload.ts` (`module`: `'health' | 'mental'`).
 
-BIA e SpO2 **não** são questionário: WebSocket + POST de medição/leitura.
+BIA, SpO2 e pressão **não** são questionário: WebSocket + POST de medição/leitura.
 
 ## 5. Auth e sessão
 
-1. Totem: `POST /login/matricula` → `saveAccessSession` + `setPerson`.
-2. Cadastro novo: `POST /people` (público) e em seguida login por matrícula.
-3. HTTP autenticado: Bearer. WS: query `token=`.
-4. Sem JWT: `RequireAuth` → `/matricula`.
-5. Sair / encerrar: `clearSession()` (kiosk) **e** `clearAccessSession()` (JWT + chaves).
+1. Totem: `POST /login/registration` (matrícula + nascimento) → `saveAccessSession` + `setPerson`.
+2. Cadastro novo: `POST /people` (público, com matrícula e nascimento) e em seguida login por matrícula.
+3. Operador: `/admin/login` → `POST /login` (e-mail/senha). Sem esse JWT, `/admin/*` redireciona.
+4. HTTP autenticado: Bearer. WS: query `token=`.
+5. Sem JWT no totem: `RequireAuth` → `/matricula`.
+6. Sair / encerrar: `clearSession()` (kiosk) **e** `clearAccessSession()` (JWT, rascunhos `cabine.session.*` e chaves).
 
 Token: `cabine.token` + `cabine.token-expires-at`. Pessoa: `cabine.current-person-id`.
 
-`POST /login` (e-mail) não é fluxo do totem. Papel `patient` | `clinician` existe em `src/role/` e **não** envolve as rotas atuais.
+Papel `patient` | `clinician` ficou de fora do produto (não há `src/role/`).
 
 ## 6. Hardware na UI
 
@@ -180,7 +184,11 @@ A página **não** calcula BIA. Manda perfil (altura, idade, sexo, tipo, `person
 
 Oxímetro: `/ws/oximeter`; kiosk ainda pode `POST /oximeters`. MAC em `cabine.oximeter-address`.
 
-Um rádio no Windows: se balança e oxímetro falharem juntos, o lock está no **core**, não no front.
+Pressão: `/ws/blood-pressure`. A etapa termina com sistólica/diastólica/pulso estáveis. O ECG via microfone (tom ~19 kHz do HEM-7530T) é opcional. MAC em `cabine.bp-address` (sem default de laboratório).
+
+Dev local: Vite em **HTTPS** (`https://127.0.0.1:5173`) por causa do microfone; aceite o certificado autoassinado.
+
+Um rádio no Windows: se balança, oxímetro e pressão falharem juntos, o lock está no **core**, não no front.
 
 ## 7. Nomenclatura
 
@@ -219,7 +227,7 @@ IDs: string UUID.
 - `any`.
 - Default export novo em página (exceção histórica: nenhuma; `App` é named export).
 - Engolir erro de API sem `apiErrorMessage` (salvo persistência best-effort com sessão local, como mental no kiosk).
-- Calcular composição corporal no front quando o core já manda `metricas`.
+- Calcular composição corporal no front quando o core já manda `metrics`.
 
 ## 10. Comandos locais
 

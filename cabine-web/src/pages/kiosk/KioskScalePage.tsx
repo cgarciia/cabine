@@ -61,46 +61,46 @@ export function KioskScalePage() {
     const savingRef = useRef(false);
     const persistedRef = useRef(false);
     const lastReadingRef = useRef<{
-        peso_kg: number;
-        estavel: boolean;
-        completo: boolean;
-        metricas?: ScaleMetrics | null;
-        impedancias_ohm?: number[];
-        segmentos?: BiaSegment[];
-        balanca_nome?: string;
+        weight_kg: number;
+        stable: boolean;
+        complete: boolean;
+        metrics?: ScaleMetrics | null;
+        impedances_ohm?: number[];
+        segments?: BiaSegment[];
+        scale_name?: string;
     } | null>(null);
 
     const persistAndContinue = useCallback(async (reading: {
-        peso_kg: number;
-        estavel: boolean;
-        completo: boolean;
-        metricas?: ScaleMetrics | null;
-        impedancias_ohm?: number[];
-        segmentos?: BiaSegment[];
-        balanca_nome?: string;
+        weight_kg: number;
+        stable: boolean;
+        complete: boolean;
+        metrics?: ScaleMetrics | null;
+        impedances_ohm?: number[];
+        segments?: BiaSegment[];
+        scale_name?: string;
     }) => {
-        if (!person || reading.peso_kg <= 0) return;
+        if (!person || reading.weight_kg <= 0) return;
         if (persistedRef.current) return;
-        const hasBia = hasBiaImpedances(reading.impedancias_ohm);
+        const hasBia = hasBiaImpedances(reading.impedances_ohm);
         if (savingRef.current && !hasBia) return;
         savingRef.current = true;
         const payload: MeasurementPayload = {
             person_id: person.id,
             scale_id: scale?.id ?? null,
-            scale_name: reading.balanca_nome || scale?.name || 'Balança',
-            adapter: scale?.adapter || 'ble_icomon',
-            peso_kg: reading.peso_kg,
+            scale_name: reading.scale_name || scale?.name || 'Balança',
+            adapter: scale?.adapter || 'ble_rm_rd2504a',
+            weight_kg: reading.weight_kg,
             height_cm: person.height_cm,
             age: person.age,
             birth_date: person.birth_date,
             sex: person.sex,
             people_type: person.people_type || 'normal',
-            expected_weight_kg: reading.peso_kg,
-            estavel: reading.estavel,
-            completo: Boolean(reading.completo || hasBia),
-            impedancias_ohm: reading.impedancias_ohm ?? null,
-            segmentos: reading.segmentos ?? null,
-            metricas: reading.metricas ?? null,
+            expected_weight_kg: reading.weight_kg,
+            stable: reading.stable,
+            complete: Boolean(reading.complete || hasBia),
+            impedances_ohm: reading.impedances_ohm ?? null,
+            segments: reading.segments ?? null,
+            metrics: reading.metrics ?? null,
             visit_id: session.visitId,
         };
         try {
@@ -182,22 +182,22 @@ export function KioskScalePage() {
         wsRef.current = ws;
 
         const completeReading = (reading: {
-            peso_kg: number;
-            estavel: boolean;
-            completo: boolean;
-            metricas?: ScaleMetrics | null;
-            impedancias_ohm?: number[];
-            segmentos?: BiaSegment[];
-            balanca_nome?: string;
+            weight_kg: number;
+            stable: boolean;
+            complete: boolean;
+            metrics?: ScaleMetrics | null;
+            impedances_ohm?: number[];
+            segments?: BiaSegment[];
+            scale_name?: string;
         }) => {
             if (finishedRef.current) return;
             finishedRef.current = true;
-            setCurrentWeight(reading.peso_kg);
+            setCurrentWeight(reading.weight_kg);
             setGuideStep('done');
             setStatus('Avaliação concluída. Desça da balança.');
             setView('done');
             stopScaleStream();
-            void persistRef.current({ ...reading, completo: true });
+            void persistRef.current({ ...reading, complete: true });
         };
 
         ws.onopen = () => {
@@ -228,8 +228,8 @@ export function KioskScalePage() {
             } else if (data.type === 'STEP' && data.step) {
                 if (data.reset) {
                     const last = lastReadingRef.current;
-                    const lastBia = Boolean(last && (last.completo || hasBiaImpedances(last.impedancias_ohm)));
-                    if (last && last.peso_kg >= 10 && lastBia) {
+                    const lastBia = Boolean(last && (last.complete || hasBiaImpedances(last.impedances_ohm)));
+                    if (last && last.weight_kg >= 10 && lastBia) {
                         completeReading(last);
                         return;
                     }
@@ -240,22 +240,22 @@ export function KioskScalePage() {
                     setGuideStep(data.step);
                     if (data.msg) setStatus(data.msg);
                 }
-            } else if (data.type === 'PESO_RECEBIDO' && data.peso_kg !== undefined) {
+            } else if (data.type === 'WEIGHT' && data.weight_kg !== undefined) {
                 setView('live');
                 lastReadingRef.current = {
-                    peso_kg: data.peso_kg,
-                    estavel: Boolean(data.estavel),
-                    completo: Boolean(data.completo),
-                    metricas: data.metricas ?? null,
-                    impedancias_ohm: data.impedancias_ohm,
-                    segmentos: data.segmentos,
-                    balanca_nome: data.balanca_nome,
+                    weight_kg: data.weight_kg,
+                    stable: Boolean(data.stable),
+                    complete: Boolean(data.complete),
+                    metrics: data.metrics ?? null,
+                    impedances_ohm: data.impedances_ohm,
+                    segments: data.segments,
+                    scale_name: data.scale_name,
                 };
-                setCurrentWeight(data.peso_kg);
-                if (data.completo || hasBiaImpedances(data.impedancias_ohm)) {
+                setCurrentWeight(data.weight_kg);
+                if (data.complete || hasBiaImpedances(data.impedances_ohm)) {
                     completeReading(lastReadingRef.current);
                 } else {
-                    setStatus(data.estavel ? 'Peso estável' : 'Avaliando...');
+                    setStatus(data.stable ? 'Peso estável' : 'Avaliando...');
                 }
             }
         };

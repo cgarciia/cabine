@@ -28,7 +28,7 @@ export type SessionMentalView = {
 };
 
 type Props = {
-    person: Pick<ScalePerson, 'name' | 'matricula'>;
+    person: Pick<ScalePerson, 'name' | 'registration'>;
     whenLabel: string;
     health?: SessionHealthView | null;
     mental?: SessionMentalView | null;
@@ -135,7 +135,7 @@ export function SessionReport({
             <h1 className="kiosk-title">Relatório da sessão</h1>
             <p className="kiosk-subtitle">
                 {person.name}
-                {person.matricula ? ` · matrícula ${person.matricula}` : ''}
+                {person.registration ? ` · matrícula ${person.registration}` : ''}
                 {' · '}
                 {whenLabel}
             </p>
@@ -282,12 +282,12 @@ export function SessionReport({
                         age={String(measurement.age)}
                         sex={measurement.sex}
                         peopleType={measurement.people_type}
-                        weightKg={measurement.peso_kg}
-                        metrics={measurement.metricas}
-                        supportsBia={measurement.adapter === 'ble_icomon' || Boolean(measurement.metricas)}
+                        weightKg={measurement.weight_kg}
+                        metrics={measurement.metrics}
+                        supportsBia={measurement.adapter === 'ble_rm_rd2504a' || Boolean(measurement.metrics)}
                         weightOnly={isWeightOnlyReport(measurement)}
                         saved
-                        segments={measurement.segmentos ?? []}
+                        segments={measurement.segments ?? []}
                         measuredAt={whenLabel}
                     />
                 </section>

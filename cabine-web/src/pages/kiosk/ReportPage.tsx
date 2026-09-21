@@ -2,7 +2,7 @@ import { ChevronLeft } from 'lucide-react';
 import { useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
-import { fetchPersonMeasurements, fetchPersonOximeter } from '../../api';
+import { fetchPersonBloodPressure, fetchPersonMeasurements, fetchPersonOximeter } from '../../api';
 import { gateItemsFromScores, SessionReport } from '../../components/SessionReport';
 import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
@@ -10,11 +10,13 @@ import type { OximeterReading } from '../../types/oximeter';
 
 export function ReportPage() {
     const navigate = useNavigate();
-    const { session, setLastMeasurement, setLastOximeter, hasReportData } = useKiosk();
+    const { session, setLastMeasurement, setLastOximeter, setLastBloodPressure, hasReportData } = useKiosk();
     const personId = session.person?.id;
     const measurementId = session.lastMeasurement?.id;
     const oximeterId = session.lastOximeter?.id;
     const oximeterWave = session.lastOximeter?.waveform;
+    const bloodPressureId = session.lastBloodPressure?.id;
+    const bloodPressureEcg = session.lastBloodPressure?.ecg_mv;
 
     useEffect(() => {
         if (!personId || !measurementId) return;
@@ -48,6 +50,21 @@ export function ReportPage() {
             cancelled = true;
         };
     }, [personId, oximeterId, oximeterWave, setLastOximeter]);
+
+    useEffect(() => {
+        if (!personId || !bloodPressureId) return;
+        let cancelled = false;
+        fetchPersonBloodPressure(personId)
+            .then((rows) => {
+                if (cancelled || !rows[0]) return;
+                const match = rows.find((row) => row.id === bloodPressureId) ?? rows[0];
+                setLastBloodPressure({ ...match, ecg_mv: bloodPressureEcg ?? match.ecg_mv });
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, [personId, bloodPressureId, bloodPressureEcg, setLastBloodPressure]);
 
     if (!session.person) return <Navigate to="/matricula" replace />;
     if (!hasReportData) return <Navigate to="/menu" replace />;

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 
-import { OMRON_ECG_HZ } from '../utils/omronEcgWorklet';
+import { HEM7530_ECG_HZ } from '../utils/hem7530EcgWorklet';
 
-const SAMPLE_HZ = OMRON_ECG_HZ;
+const SAMPLE_HZ = HEM7530_ECG_HZ;
 const WINDOW_SEC = 8;
 const WINDOW_N = Math.round(SAMPLE_HZ * WINDOW_SEC);
 const LOOKBACK_N = Math.round(SAMPLE_HZ * 0.25);

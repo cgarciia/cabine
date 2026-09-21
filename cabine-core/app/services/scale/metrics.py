@@ -10,7 +10,7 @@ from app.services.scale.reading import SegmentImpedance
 
 @dataclass(frozen=True)
 class PersonProfile:
-    """Perfil enviado à balança (igual offline/RelaxFit: idade, sexo, altura, peso, tipo)."""
+    """Profile sent to the scale (age, sex, height, weight, type)."""
 
     height_cm: float
     age: int
@@ -18,7 +18,7 @@ class PersonProfile:
     expected_weight_kg: float | None = None  # peso gravado no P-1 antes de subir
     people_type: str = "normal"  # "normal" | "athlete"
     birth_date: date | None = None
-    display_name: str | None = None  # nome no comando C0 do RelaxFit
+    display_name: str | None = None  # name on the C0 command
 
     @property
     def is_athlete(self) -> bool:
@@ -111,7 +111,7 @@ def _visceral_status(level: int) -> str:
 
 
 def _body_type(imc: float, fat_pct: float, sex: str, people_type: str) -> str:
-    # Cortes alinhados à matriz RelaxFit (IMC × gordura %).
+    # Fat cutoffs from the BMI × fat% body-type matrix.
     fat_lo, fat_hi = (10.0, 20.0) if sex == "male" else (18.0, 28.0)
     high_fat = fat_pct > fat_hi
     low_fat = fat_pct < fat_lo
@@ -225,21 +225,21 @@ def compute_basic_metrics(peso_kg: float, profile: PersonProfile) -> dict:
         "metodo": "imc_deurenberg",
         "versao": 1,
         "tipo_corporal": _body_type(imc, gordura_pct, profile.sex, profile.people_type),
-        "aviso": "Estimativas por IMC/perfil. Diferem do relatório RelaxFit (algoritmo proprietário).",
+        "aviso": "Estimativas por IMC/perfil. Diferem do relatório do algoritmo proprietário da balança.",
     }
     payload["destaques"] = _highlights(payload)
     return payload
 
 
-def _segment_payload(segmentos: list[SegmentImpedance]) -> list[dict]:
+def _segment_payload(segments: list[SegmentImpedance]) -> list[dict]:
     return [
         {
-            "nome": item.nome,
-            "lado": item.lado,
+            "name": item.name,
+            "side": item.side,
             "freq_khz": item.freq_khz,
             "ohm": item.ohm,
         }
-        for item in segmentos
+        for item in segments
     ]
 
 
@@ -248,7 +248,7 @@ def _fat_pct_range(sex: str) -> tuple[float, float]:
 
 
 def _kg_faixas(std_weight_kg: float, sex: str) -> dict[str, list[float]]:
-    """Faixas RelaxFit: kg em relação ao padrão (IMC 22/21), não % do peso atual.
+    """kg bands vs standard (BMI 22/21), not % of current weight.
 
     Água/músculo/proteína ~85–105% da massa magra padrão; gordura 80–160% da
     gordura padrão. Por isso 39% de água num corpo obeso ainda pode ser 'saudável'.
@@ -275,7 +275,7 @@ def _kg_faixas(std_weight_kg: float, sex: str) -> dict[str, list[float]]:
 
 
 def _appendicular_smi(segments: tuple, height_cm: float) -> float | None:
-    """SMI RelaxFit: músculo de braços + pernas / altura² (não o esquelético total)."""
+    """SMI: arm + leg muscle / height² (not total skeletal)."""
     height_m = height_cm / 100.0
     if height_m <= 0:
         return None
@@ -307,8 +307,7 @@ def compute_report(
     if not zs:
         return result
 
-    # Ordem no fio: RA, LA, RL, LL, TR × 2 bandas. O RelaxFit mostra o tronco
-    # já escalado (líder × 0.826); o cru do 100 kHz costuma ser ~65 Ω.
+    # Wire order: RA, LA, RL, LL, TR × 2 bands. Trunk lead is scaled × 0.826 for display.
     z20 = list(zs[:5]) if len(zs) >= 5 else list(zs)
     z100 = list(zs[5:10]) if len(zs) >= 10 else []
     if len(zs) >= 10:
@@ -317,7 +316,7 @@ def compute_report(
         z20[4] = shown20
         z100[4] = shown100
         for item in result.get("segmentos") or []:
-            if not isinstance(item, dict) or item.get("lado") != "tronco":
+            if not isinstance(item, dict) or item.get("side") != "tronco":
                 continue
             if item.get("freq_khz") == 20:
                 item["ohm"] = shown20
@@ -338,7 +337,7 @@ def compute_report(
     )
     if wla is None:
         result["aviso"] = (
-            "Impedâncias recebidas, mas inválidas para o algoritmo WLA25 (RelaxFit). "
+            "Impedâncias recebidas, mas inválidas para o algoritmo WLA25. "
             "Segure a barra com contato firme — o tronco deve medir ~15–25 Ω."
         )
         return result
@@ -411,9 +410,9 @@ def compute_report(
             "metodo": "wla25",
             "versao": 5,
             "aviso": (
-                "Composição alinhada ao RelaxFit: gordura pelo FFM-padrão (tipo normal) "
-                "e água/músculo/segmentos WLA25. Atleta usa a regressão de impedância. "
-                "Altura, idade e sexo do cadastro precisam ser os mesmos do app da balança."
+                "Composition via WLA25 (standard FFM for normal type). "
+                "Athlete type uses the impedance regression. "
+                "Height, age and sex on file must match the session."
             ),
         }
     )
@@ -450,8 +449,8 @@ def metrics_from_stored(
         try:
             segs.append(
                 SegmentImpedance(
-                    nome=str(item.get("nome") or ""),
-                    lado=str(item.get("lado") or ""),
+                    name=str(item.get("name") or ""),
+                    side=str(item.get("side") or ""),
                     freq_khz=int(item.get("freq_khz") or 0),
                     ohm=float(item.get("ohm") or 0),
                 )

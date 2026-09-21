@@ -1,18 +1,14 @@
-"""Parser ICOMON / Relaxmedic RM-RD2504A (serviço FFB0).
+"""Parser for the RM-RD2504A scale (FFB0 service).
 
-Esta balança NÃO usa frames Fitdays de 20 bytes fragmentados.
-Cada notificação é: [seq u16 LE][len u16 LE][payload `len` bytes][checksum 1B]
+Notifications are [seq u16 LE][len u16 LE][payload `len` bytes][checksum 1B].
 
-- FFB2 / A2: peso ao vivo — status 0x01 medindo, 0x03 estável
-- FFB3 / A7: resultado BIA — peso + até 10 impedâncias u16 LE (/10 = Ω)
-  * Só pés  → Z quase tudo zero (ignorar como completo)
-  * Pés+barra → Z preenchidas
+- FFB2 / A2: live weight — status 0x01 measuring, 0x03 stable
+- FFB3 / A7: BIA result — weight + up to 10 impedances u16 LE (/10 = Ω)
 """
 
 from __future__ import annotations
 
 import logging
-import os
 import time
 
 from app.services.scale.reading import ScaleReading, SegmentImpedance
@@ -42,7 +38,7 @@ def has_bia_impedances(values: list[float] | None) -> bool:
     return sum(1 for z in zs if z >= 5.0) >= 4
 
 SEGMENT_ORDER = (
-    # Ordem no fio A7 desta Relaxmedic: 4 membros + líder (tronco) por banda.
+    # A7 wire order on this RM-RD2504A: 4 limbs + trunk lead per band.
     ("Braço direito", "braco_dir", 20),
     ("Braço esquerdo", "braco_esq", 20),
     ("Perna direita", "perna_dir", 20),
@@ -56,8 +52,8 @@ SEGMENT_ORDER = (
 )
 
 
-class IcomonAssembler:
-    """Compat no-op: esta balança já entrega a mensagem inteira por notificação."""
+class RmRd2504aAssembler:
+    """No-op: this scale already delivers a full message per notification."""
 
     def reset(self) -> None:
         return None
@@ -93,7 +89,7 @@ def label_segments(impedances: list[float]) -> list[SegmentImpedance]:
     labeled: list[SegmentImpedance] = []
     for i, ohm in enumerate(impedances[: len(SEGMENT_ORDER)]):
         name, side, freq = SEGMENT_ORDER[i]
-        labeled.append(SegmentImpedance(nome=name, lado=side, freq_khz=freq, ohm=ohm))
+        labeled.append(SegmentImpedance(name=name, side=side, freq_khz=freq, ohm=ohm))
     return labeled
 
 
@@ -138,11 +134,11 @@ def _parse_a2(body: bytes) -> ScaleReading | None:
     if peso is None:
         return None
     return ScaleReading(
-        peso_kg=peso,
-        estavel=status in {0x00, 0x02, 0x03} and peso >= 10,
-        completo=False,
-        fonte="ffb2",
-        etapa="wait_stable" if status == 0x01 else "hold_bar",
+        weight_kg=peso,
+        stable=status in {0x00, 0x02, 0x03} and peso >= 10,
+        complete=False,
+        source="ffb2",
+        step="wait_stable" if status == 0x01 else "hold_bar",
     )
 
 
@@ -167,27 +163,27 @@ def _parse_a7(body: bytes) -> ScaleReading | None:
         zs.append(round(raw / 10.0, 1))
 
     ok, reason = _z_quality(zs)
-    logger.info("icomon A7 peso=%s Z=%s quality=%s (%s)", peso, zs, ok, reason)
+    logger.info("rm_rd2504a A7 weight=%s Z=%s quality=%s (%s)", peso, zs, ok, reason)
 
     if not ok:
         return ScaleReading(
-            peso_kg=peso,
-            estavel=True,
-            completo=False,
-            impedancias_ohm=zs,
-            segmentos=label_segments(zs),
-            fonte="ffb3",
-            etapa="measuring",
+            weight_kg=peso,
+            stable=True,
+            complete=False,
+            impedances_ohm=zs,
+            segments=label_segments(zs),
+            source="ffb3",
+            step="measuring",
         )
 
     return ScaleReading(
-        peso_kg=peso,
-        estavel=True,
-        completo=True,
-        impedancias_ohm=zs[:NUM_IMPEDANCES],
-        segmentos=label_segments(zs[:NUM_IMPEDANCES]),
-        fonte="ffb3",
-        etapa="done",
+        weight_kg=peso,
+        stable=True,
+        complete=True,
+        impedances_ohm=zs[:NUM_IMPEDANCES],
+        segments=label_segments(zs[:NUM_IMPEDANCES]),
+        source="ffb3",
+        step="done",
     )
 
 
@@ -195,7 +191,7 @@ def decode_payload(payload: bytes) -> ScaleReading | None:
     if not payload:
         return None
     mtype = payload[0]
-    logger.debug("icomon decode type=0x%02x len=%s hex=%s", mtype, len(payload), payload.hex())
+    logger.debug("rm_rd2504a decode type=0x%02x len=%s hex=%s", mtype, len(payload), payload.hex())
 
     if mtype == 0xA2:
         return _parse_a2(payload)
@@ -206,12 +202,12 @@ def decode_payload(payload: bytes) -> ScaleReading | None:
         if len(payload) >= 32:
             return _parse_a7(payload)
     if mtype in {0xAA, 0xA0, 0xA1}:
-        logger.info("icomon ignorando tipo 0x%02x", mtype)
+        logger.info("rm_rd2504a ignoring type 0x%02x", mtype)
         return None
     return None
 
 
-def ingest_frame(assembler: IcomonAssembler, data: bytearray | bytes) -> ScaleReading | None:
+def ingest_frame(assembler: RmRd2504aAssembler, data: bytearray | bytes) -> ScaleReading | None:
     buf = bytes(data)
     body = _split_frame(buf)
     if body is None:
@@ -222,33 +218,27 @@ def ingest_frame(assembler: IcomonAssembler, data: bytearray | bytes) -> ScaleRe
     return decode_payload(body)
 
 
-def parse_icomon_ffb2(data: bytearray | bytes) -> ScaleReading | None:
-    reading = ingest_frame(IcomonAssembler(), data)
-    if reading is None or reading.fonte != "ffb2":
+def parse_rm_rd2504a_ffb2(data: bytearray | bytes) -> ScaleReading | None:
+    reading = ingest_frame(RmRd2504aAssembler(), data)
+    if reading is None or reading.source != "ffb2":
         return None
     return reading
 
 
-def parse_icomon_ffb3(data: bytearray | bytes) -> ScaleReading | None:
-    reading = ingest_frame(IcomonAssembler(), data)
-    if reading is None or reading.fonte != "ffb3":
+def parse_rm_rd2504a_ffb3(data: bytearray | bytes) -> ScaleReading | None:
+    reading = ingest_frame(RmRd2504aAssembler(), data)
+    if reading is None or reading.source != "ffb3":
         return None
     return reading
 
 
-def parser_icomon_ffb2(data: bytearray) -> float | None:
-    reading = parse_icomon_ffb2(data)
-    return None if reading is None else reading.peso_kg
+def parser_rm_rd2504a_ffb2(data: bytearray) -> float | None:
+    reading = parse_rm_rd2504a_ffb2(data)
+    return None if reading is None else reading.weight_kg
 
 
 def _frame_checksum_5bit(frame20: bytes) -> int:
     return sum(frame20[3:19]) & 0x1F
-
-
-# Qual envelope usar nas escritas FFB1. O formato correto para esta firmware
-# ainda não foi confirmado com captura do app; `scripts/icomon_profile_probe.py`
-# testa um de cada vez. Trocar via CABINE_ICOMON_FRAME=native|fitdays|openscale|all
-FRAME_MODE = os.getenv("CABINE_ICOMON_FRAME", "native").strip().lower()
 
 
 def build_frames(sequence: int, payload: bytes) -> list[bytes]:
@@ -256,8 +246,8 @@ def build_frames(sequence: int, payload: bytes) -> list[bytes]:
 
     [seq u16 LE][len u16 LE][payload][checksum = sum(payload) & 0x1F]
 
-    O formato Fitdays de 20 bytes (openScale) é outra família; aqui os RX
-    reais usam seq/len de 16 bits, e o checksum fecha sobre o payload.
+    A 20-byte openScale family is a different envelope; this firmware uses
+    16-bit seq/len and checksums the payload.
     """
     plen = len(payload)
     chk = sum(payload) & 0x1F
@@ -270,11 +260,7 @@ def build_frames(sequence: int, payload: bytes) -> list[bytes]:
 
 
 def build_frames_fitdays(sequence: int, payload: bytes) -> list[bytes]:
-    """Fitdays/openScale: frame fixo 20B [seq][len][frag][16B][chk].
-
-    `len` = tamanho total do payload (sacoma). O trailing além de 16 bytes
-    é truncado, como no RelaxmedicHandler.
-    """
+    """openScale 20-byte frame [seq][len][frag][16B][chk]."""
     frame = bytearray(20)
     frame[0] = sequence & 0xFF
     frame[1] = len(payload) & 0xFF
@@ -298,7 +284,7 @@ def build_frames_fitdays_openscale(sequence: int, payload: bytes) -> list[bytes]
 
 
 def _people_flags(people_type: str | None) -> int:
-    """0x0F = atleta (Fitdays sportman); 0x2F = normal."""
+    """0x0F = athlete; 0x2F = normal."""
     if people_type and people_type.lower() in {"athlete", "sportman", "atleta", "fit"}:
         return 0x0F
     return 0x2F
@@ -364,9 +350,9 @@ def _ba_payload_openscale(
 
 GUEST_USER_ID = 0  # P-0 / convidado — o BA de sessão; a RM-RD2504A ignora para casar usuário
 SLOT_USER_ID = 1  # P-1 — slot persistente que a firmware usa no reconhecimento ±2 kg
-# ID interno do RelaxFit nas capturas C0/C1 (0x1388). Não é o índice P-n.
+# Internal user id on captured C0/C1 frames (0x1388). Not the P-n slot index.
 FITDAYS_APP_USER_ID = 5000
-DEFAULT_USER_COLOR = bytes([0x41, 0x5A, 0xC3])  # RGB visto no C0 da Karla
+DEFAULT_USER_COLOR = bytes([0x41, 0x5A, 0xC3])  # RGB captured on C0
 
 
 def _age_sex_byte(age: int, sex: str) -> int:
@@ -405,7 +391,7 @@ def encode_c0_profile(
     app_user_id: int = FITDAYS_APP_USER_ID,
     color_rgb: bytes = DEFAULT_USER_COLOR,
 ) -> list[bytes]:
-    """0xC0 — perfil ativo do RelaxFit (captura Karla). Inclui nome.
+    """0xC0 — active profile (includes display name).
 
     Layout: c0 | time4 | tz2 | 0x00 | height | weight2 | agesex | app_uid4 |
             people_flags | 0x02 | rgb3 | 0x01 | 0x00 | namelen | name
@@ -437,7 +423,7 @@ def encode_c1_users(
     *,
     app_user_id: int = FITDAYS_APP_USER_ID,
 ) -> list[bytes]:
-    """0xC1 — lista de usuários do RelaxFit (P1…Pn com nome).
+    """0xC1 — stored user list (P1…Pn with name).
 
     Cada entrada: index | height | weight2 | agesex | app_uid4 | flags |
                   0x02 | rgb3 | 0x01 | role | namelen | name
@@ -487,21 +473,6 @@ def _bb_payload(
 
 
 def _wrap(sequence: int, payload: bytes) -> list[bytes]:
-    """Empacota conforme FRAME_MODE.
-
-    Enviar os três formatos de uma vez ("all") polui o canal: a balança recebe
-    dois frames inválidos para cada válido. Só use para diagnóstico.
-    """
-    if FRAME_MODE == "fitdays":
-        return build_frames_fitdays(sequence, payload)
-    if FRAME_MODE == "openscale":
-        return build_frames_fitdays_openscale(sequence, payload)
-    if FRAME_MODE == "all":
-        return (
-            build_frames(sequence, payload)
-            + build_frames_fitdays(sequence, payload)
-            + build_frames_fitdays_openscale(sequence, payload)
-        )
     return build_frames(sequence, payload)
 
 
@@ -514,9 +485,7 @@ def encode_other(sequence: int, sub_cmd: int = 0x09) -> list[bytes]:
 
 
 def _wrap_profile(sequence: int, payload: bytes) -> list[bytes]:
-    """BA/BB: nativo (o que esta RM-RD2504A emite) + envelope openScale (o que o RelaxFit escreve)."""
-    if FRAME_MODE in {"fitdays", "openscale", "all"}:
-        return _wrap(sequence, payload)
+    """BA/BB: native RM-RD2504A envelope plus the openScale envelope this firmware also accepts."""
     return build_frames(sequence, payload) + build_frames_fitdays_openscale(sequence, payload)
 
 
@@ -573,16 +542,6 @@ def encode_profile_sync(
                 people_type=people_type,
             ),
         )
-    if FRAME_MODE in {"fitdays", "openscale"}:
-        payload = _ba_payload_openscale(
-            height_cm=height_cm,
-            age=age,
-            sex=sex,
-            weight_kg=weight_kg,
-            user_id=user_id,
-            people_type=people_type,
-        )
-        return _wrap(sequence, payload)
     sacoma = _ba_payload_sacoma(
         height_cm=height_cm,
         age=age,
@@ -602,8 +561,6 @@ def encode_profile_sync(
         user_id=user_id,
         people_type=people_type,
     )
-    if FRAME_MODE == "all":
-        return _wrap(sequence, sacoma)
     return build_frames(sequence, sacoma) + build_frames_fitdays_openscale(sequence, openscale)
 
 

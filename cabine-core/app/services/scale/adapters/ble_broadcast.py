@@ -36,7 +36,7 @@ class BleBroadcastAdapter(ScaleAdapter):
             if ble_device.address.upper() == spec.address:
                 result = parse(adv.manufacturer_data)
                 if result is not None:
-                    dispatch(ScaleReading(peso_kg=float(result)))
+                    dispatch(ScaleReading(weight_kg=float(result)))
 
         async with ble_radio_lock:
             scanner = BleakScanner(detection_callback=scan_callback)

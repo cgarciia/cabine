@@ -28,14 +28,14 @@ async def save_blood_pressure_reading(
     async with AsyncSessionLocal() as db:
         person = await person_crud.get_by_id(db, person_id)
         if not person:
-            logger.warning("Não salvou pressão: pessoa %s não existe", person_id)
+            logger.warning("Skipped blood pressure save: person %s does not exist", person_id)
             return
         existing = await bp_crud.get_by_measurement(
             db, person_id, measured_at, sys_mmhg, dia_mmhg, pulse_bpm
         )
         if existing:
             logger.info(
-                "Pressão ignorada (já existe) person=%s sys=%s dia=%s at=%s",
+                "Skipped duplicate blood pressure person=%s sys=%s dia=%s at=%s",
                 person_id,
                 sys_mmhg,
                 dia_mmhg,
@@ -58,7 +58,7 @@ async def save_blood_pressure_reading(
             ),
         )
         logger.info(
-            "Pressão salva id=%s person=%s sys=%s dia=%s pr=%s",
+            "Saved blood pressure id=%s person=%s sys=%s dia=%s pr=%s",
             record.id,
             person_id,
             sys_mmhg,

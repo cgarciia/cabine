@@ -41,7 +41,7 @@ export function KioskLayout({
                         <span className="kiosk-user-avatar" aria-hidden />
                         <span>
                             {person.name}
-                            {person.matricula ? ` · ${person.matricula}` : ''}
+                            {person.registration ? ` · ${person.registration}` : ''}
                         </span>
                     </div>
                     <button type="button" className="kiosk-link-btn" onClick={() => setConfirmEnd(true)}>

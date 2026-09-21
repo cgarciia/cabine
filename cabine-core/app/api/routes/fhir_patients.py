@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.crud import fhir_patient as fhir_patient_crud
 from app.models.user import User
+from app.schemas.fhir_patient import FHIRPatientWrite
 from app.services.fhir import dump_fhir_resource, parse_fhir_patient
 
 router = APIRouter(prefix="/fhir/Patient", tags=["FHIR - Patient"])
@@ -13,12 +14,13 @@ router = APIRouter(prefix="/fhir/Patient", tags=["FHIR - Patient"])
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_fhir_patient(
-    patient_data: dict,
+    patient_data: FHIRPatientWrite,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
+    payload = patient_data.model_dump(exclude_none=True)
     try:
-        fhir_patient = parse_fhir_patient(patient_data)
+        fhir_patient = parse_fhir_patient(payload)
     except ValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

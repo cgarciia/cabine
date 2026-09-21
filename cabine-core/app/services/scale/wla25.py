@@ -1,10 +1,10 @@
-"""WLA25 — algoritmo Fitdays/ICOMON de composição corporal.
+"""WLA25 body-composition algorithm.
 
-Portado de `ICBodyFatAlgorithmWLA25::calc` em `libICBodyFatAlgorithms.so`
-(referência pública: sacoma-lib). Água, músculo, TMB, score e segmentos
-saem da lib. A gordura total do RelaxFit (tipo normal) não é a regressão
-WLA25: a magra fica no FFM-padrão e o excesso de peso vira gordura. Atleta
-continua na regressão de impedância.
+Ported from `ICBodyFatAlgorithmWLA25::calc` in `libICBodyFatAlgorithms.so`
+(public reference: sacoma-lib). Water, muscle, BMR, score and segments come
+from that library. Total fat for type=normal is not the WLA25 regression:
+lean mass is held at standard FFM and excess weight becomes fat. Athlete
+type still uses the impedance regression.
 
 Slots 0 e 5 são os líderes (~15–25 Ω) de cada banda; os outros oito são
 membros (~100–700 Ω). Ordem WLA25: líder + RA + LA + RL + LL, × 2 bandas.
@@ -27,12 +27,12 @@ PEOPLE_SPORTMAN = 1
 FFM_FACTOR = (0.77, 0.85)
 BFM_FACTOR = (0.23, 0.15)
 SCORE_CORR = (-0.958, 0.983)
-# IMC-alvo do RelaxFit (peso alvo na tela). getScore da lib continua em 22/21.
+# IMC-alvo do reference display (peso alvo na tela). getScore da lib continua em 22/21.
 # Homem 178 cm: 22.0 → 69,7 kg; o app mostra 70,9 kg = trunc1(22.4 × 1,78²).
 TARGET_BMI = (21.0, 22.4)
 
 # Líder (slots 0 e 5) nesta hardware frequentemente vem ~3/70 Ω — a firmware
-# aceita e fecha o A7. Membros precisam de ≥100 Ω. O RelaxFit *exibe* tronco
+# aceita e fecha o A7. Membros precisam de ≥100 Ω. O reference display *exibe* tronco
 # ~15–25 Ω; isso não é o mesmo número cru do fio.
 _IMP_MIN = (1.0, 100.0, 100.0, 100.0, 100.0, 1.0, 100.0, 100.0, 100.0, 100.0)
 # Quando 100 kHz > 20 kHz, scaled5 = scaled0 - 3. Precisa scaled0 ≥ 3.
@@ -111,7 +111,7 @@ def repair_wla_order(ordered: list[float]) -> list[float]:
 
 
 def leader_display_ohm(z20: float, z100: float) -> tuple[float, float]:
-    """Tronco como o RelaxFit exibe: líder × 0.826; 100 kHz não pode passar o 20 kHz."""
+    """Tronco como o reference display exibe: líder × 0.826; 100 kHz não pode passar o 20 kHz."""
     scaled0 = z20 * 0.826
     scaled5 = z100 * 0.826 if z100 <= z20 else scaled0 - 3.0
     return q1(scaled0), q1(scaled5)
@@ -141,7 +141,7 @@ def standard_bmi(age: int, sex: int) -> float:
 
 
 def target_bmi(sex: int) -> float:
-    """IMC do peso-alvo RelaxFit (22,4 homem / 21 mulher)."""
+    """IMC do peso-alvo reference display (22,4 homem / 21 mulher)."""
     return TARGET_BMI[sex == SEX_MALE]
 
 
@@ -385,7 +385,7 @@ def compute(
     if people == PEOPLE_SPORTMAN:
         fat_raw = z_fat
     else:
-        # RelaxFit tipo normal: magra ≈ FFM-padrão (22,4 × altura² × 0,85 no homem).
+        # reference display tipo normal: magra ≈ FFM-padrão (22,4 × altura² × 0,85 no homem).
         # A regressão WLA25 sozinha dá ~35% neste corpo; o app coloca ~46% porque
         # trata o excesso de peso como gordura. Impedância ainda entra nos segmentos.
         fat_raw = weight - float(std_ffm)
@@ -454,7 +454,7 @@ def debug_pipeline(
     age: int = 30,
     people: int = PEOPLE_NORMAL,
 ) -> dict:
-    """Snapshot do que entra e sai do WLA25 — para comparar com o RelaxFit."""
+    """Snapshot do que entra e sai do WLA25 — para comparar com o reference display."""
     raw = [float(z) for z in (imps or [])]
     ordered_only = to_wla25_order(raw) if len(raw) >= 10 else list(raw)
     repaired = repair_wla_order(ordered_only) if len(ordered_only) >= 10 else list(ordered_only)

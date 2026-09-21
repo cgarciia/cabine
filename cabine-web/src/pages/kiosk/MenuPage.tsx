@@ -16,7 +16,7 @@ import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
 import { clearAccessSession } from '../../session/authSession';
 import { isVisitComplete } from '../../utils/kioskProgress';
-import { requestOmronMicPermission } from '../../utils/omronEcgMic';
+import { requestHem7530MicPermission } from '../../utils/hem7530EcgMic';
 
 type MenuItem = {
     id: string;
@@ -115,7 +115,7 @@ export function MenuPage() {
                                 className={`kiosk-menu-tile${item.done ? ' is-done' : ''}`}
                                 onClick={() => {
                                     if (item.id === 'bloodPressure') {
-                                        void requestOmronMicPermission().finally(() => navigate(item.path));
+                                        void requestHem7530MicPermission().finally(() => navigate(item.path));
                                         return;
                                     }
                                     navigate(item.path);

@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { StepCompleteScreen } from './StepCompleteScreen';
 import { useKiosk } from '../kiosk/KioskContext';
 import { isVisitComplete, nextIncompleteStep, type KioskStepId } from '../utils/kioskProgress';
-import { requestOmronMicPermission } from '../utils/omronEcgMic';
+import { requestHem7530MicPermission } from '../utils/hem7530EcgMic';
 
 type Props = {
     justFinished: KioskStepId;
@@ -44,7 +44,7 @@ export function AfterStepScreen({ justFinished, title, description, hint }: Prop
             nextLabel={next.label}
             onNext={() => {
                 if (next.path === '/pressao') {
-                    void requestOmronMicPermission().finally(() => navigate(next.path, { replace: true }));
+                    void requestHem7530MicPermission().finally(() => navigate(next.path, { replace: true }));
                     return;
                 }
                 navigate(next.path, { replace: true });

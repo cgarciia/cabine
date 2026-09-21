@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+from typing import Literal
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, WebSocket, status
@@ -12,13 +14,43 @@ from app.crud import user as user_crud
 from app.models.person import ScalePerson
 from app.models.user import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login/matricula")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login/registration")
+oauth2_optional = OAuth2PasswordBearer(tokenUrl="login/registration", auto_error=False)
 
 _UNAUTHORIZED = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Sessão inválida ou expirada.",
+    headers={"WWW-Authenticate": "Bearer"},
+)
+_UNAUTHORIZED_KIOSK = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
     detail="Sessão inválida ou expirada. Entre com a matrícula novamente.",
     headers={"WWW-Authenticate": "Bearer"},
 )
+_UNAUTHORIZED_OPERATOR = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Sessão de operador inválida ou expirada.",
+    headers={"WWW-Authenticate": "Bearer"},
+)
+_FORBIDDEN_PERSON = HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail="Esta sessão não pode acessar dados de outra pessoa.",
+)
+
+
+@dataclass(frozen=True)
+class AccessPrincipal:
+    kind: Literal["person", "user"]
+    person_id: UUID | None = None
+
+    def bound_person_id(self, requested: UUID | None) -> UUID | None:
+        if self.kind == "person":
+            return self.person_id
+        return requested
+
+    @property
+    def person_locked(self) -> bool:
+        return self.kind == "person"
 
 
 def _decode_payload(token: str) -> dict | None:
@@ -69,7 +101,7 @@ async def get_current_person(
 ) -> ScalePerson:
     person = await resolve_person_from_token(token, db)
     if person is None:
-        raise _UNAUTHORIZED
+        raise _UNAUTHORIZED_KIOSK
     return person
 
 
@@ -79,7 +111,7 @@ async def get_current_user(
 ) -> User:
     user = await resolve_user_from_token(token, db)
     if user is None:
-        raise _UNAUTHORIZED
+        raise _UNAUTHORIZED_OPERATOR
     return user
 
 
@@ -97,16 +129,23 @@ async def require_access(
     raise _UNAUTHORIZED
 
 
-async def authenticate_websocket(websocket: WebSocket, token: str | None) -> bool:
+def ensure_person_scope(actor: ScalePerson | User, person_id: UUID) -> None:
+    if isinstance(actor, User):
+        return
+    if actor.id != person_id:
+        raise _FORBIDDEN_PERSON
+
+
+async def authenticate_websocket(websocket: WebSocket, token: str | None) -> AccessPrincipal | None:
     if not token:
         await websocket.close(code=4401)
-        return False
+        return None
     async with AsyncSessionLocal() as db:
         person = await resolve_person_from_token(token, db)
         if person is not None:
-            return True
+            return AccessPrincipal(kind="person", person_id=person.id)
         user = await resolve_user_from_token(token, db)
         if user is not None:
-            return True
+            return AccessPrincipal(kind="user")
     await websocket.close(code=4401)
-    return False
+    return None

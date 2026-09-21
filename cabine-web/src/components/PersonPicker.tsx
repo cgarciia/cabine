@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { api, apiErrorMessage } from '../api';
-import { emptyPersonForm, PersonForm, type PersonFormValues } from './PersonForm';
+import { emptyPersonForm, PersonForm, personFormToPayload, type PersonFormValues } from './PersonForm';
 import { saveCurrentPersonId } from '../session/currentPerson';
 import type { ScalePerson } from '../types/person';
 
@@ -32,18 +32,7 @@ export function PersonPicker({ selectedId, onSelect, allowCreate = true }: Props
     async function handleAdd(event: FormEvent) {
         event.preventDefault();
         try {
-            const height = Number(form.heightCm);
-            const years = Number(form.age);
-            const weight = Number(form.expectedWeight);
-            const { data } = await api.post<ScalePerson>('/people', {
-                name: form.name.trim(),
-                height_cm: height,
-                age: Number.isFinite(years) && years > 0 ? years : undefined,
-                birth_date: form.birthDate || null,
-                sex: form.sex,
-                people_type: form.peopleType,
-                expected_weight_kg: Number.isFinite(weight) && weight > 0 ? weight : null,
-            });
+            const { data } = await api.post<ScalePerson>('/people', personFormToPayload(form));
             setPeople((current) => [...current, data].sort((a, b) => a.name.localeCompare(b.name)));
             choose(data);
             setForm(emptyPersonForm);

@@ -109,7 +109,7 @@ export function visitSummary(visit: SavedVisit): string {
     const parts: string[] = [];
     if (visit.health) parts.push('Saúde geral');
     if (visit.mental) parts.push('Saúde mental');
-    if (visit.measurement) parts.push(`${visit.measurement.peso_kg.toFixed(1)} kg`);
+    if (visit.measurement) parts.push(`${visit.measurement.weight_kg.toFixed(1)} kg`);
     if (visit.oximeter) parts.push(`SpO₂ ${visit.oximeter.spo2_pct}%`);
     if (visit.bloodPressure) {
         parts.push(`${visit.bloodPressure.sys_mmhg}/${visit.bloodPressure.dia_mmhg} mmHg`);
@@ -152,8 +152,8 @@ function assignPiece(visit: SavedVisit, piece: Piece) {
 
 function preferMeasurement(current: MeasurementRecord | null, incoming: MeasurementRecord): MeasurementRecord {
     if (!current) return incoming;
-    const currentBia = current.completo || hasBiaImpedances(current.impedancias_ohm);
-    const incomingBia = incoming.completo || hasBiaImpedances(incoming.impedancias_ohm);
+    const currentBia = current.complete || hasBiaImpedances(current.impedances_ohm);
+    const incomingBia = incoming.complete || hasBiaImpedances(incoming.impedances_ohm);
     if (incomingBia && !currentBia) return incoming;
     return current;
 }

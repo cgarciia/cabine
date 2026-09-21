@@ -84,7 +84,7 @@ export function RegistrationLoginPage() {
 
     function goToRegistrationForm() {
         const value = employeeId.trim();
-        navigate(`/cadastro?matricula=${encodeURIComponent(value)}`);
+        navigate(`/cadastro?registration=${encodeURIComponent(value)}`);
     }
 
     async function signIn() {

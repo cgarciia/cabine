@@ -69,8 +69,8 @@ export interface ScaleMetrics {
 }
 
 export interface BiaSegment {
-    nome: string;
-    lado: string;
+    name: string;
+    side: string;
     freq_khz: number;
     ohm: number;
 }
@@ -81,18 +81,18 @@ export interface MeasurementRecord {
     scale_id: string | null;
     scale_name: string;
     adapter: string;
-    peso_kg: number;
+    weight_kg: number;
     height_cm: number;
     age: number;
     birth_date: string | null;
     sex: string;
     people_type: string;
     expected_weight_kg: number | null;
-    estavel: boolean;
-    completo: boolean;
-    impedancias_ohm: number[] | null;
-    segmentos: BiaSegment[] | null;
-    metricas: ScaleMetrics | null;
+    stable: boolean;
+    complete: boolean;
+    impedances_ohm: number[] | null;
+    segments: BiaSegment[] | null;
+    metrics: ScaleMetrics | null;
     visit_id?: string | null;
     created_at: string;
 }
@@ -102,18 +102,18 @@ export interface MeasurementPayload {
     scale_id?: string | null;
     scale_name: string;
     adapter: string;
-    peso_kg: number;
+    weight_kg: number;
     height_cm: number;
     age: number;
     birth_date?: string | null;
     sex: string;
     people_type: string;
     expected_weight_kg?: number | null;
-    estavel: boolean;
-    completo: boolean;
-    impedancias_ohm?: number[] | null;
-    segmentos?: BiaSegment[] | null;
-    metricas: ScaleMetrics | null;
+    stable: boolean;
+    complete: boolean;
+    impedances_ohm?: number[] | null;
+    segments?: BiaSegment[] | null;
+    metrics: ScaleMetrics | null;
     visit_id?: string | null;
 }
 
@@ -122,15 +122,15 @@ export interface ScaleLiveMessage {
     type: string;
     step?: string;
     reset?: boolean;
-    balanca_nome?: string;
-    peso_kg?: number;
+    scale_name?: string;
+    weight_kg?: number;
     timestamp?: string;
     msg?: string;
-    estavel?: boolean;
-    completo?: boolean;
-    metricas?: ScaleMetrics;
-    impedancias_ohm?: number[];
-    segmentos?: BiaSegment[];
+    stable?: boolean;
+    complete?: boolean;
+    metrics?: ScaleMetrics;
+    impedances_ohm?: number[];
+    segments?: BiaSegment[];
 }
 
 export function hasBiaImpedances(values?: number[] | null): boolean {
@@ -140,11 +140,11 @@ export function hasBiaImpedances(values?: number[] | null): boolean {
 
 export function isWeightOnlyReport(record: {
     adapter?: string | null;
-    completo?: boolean;
-    impedancias_ohm?: number[] | null;
-    metricas?: ScaleMetrics | null;
+    complete?: boolean;
+    impedances_ohm?: number[] | null;
+    metrics?: ScaleMetrics | null;
 }): boolean {
-    if (hasBiaImpedances(record.impedancias_ohm)) return false;
-    if (record.metricas?.metodo === 'wla25' || record.metricas?.agua_pct != null) return false;
-    return record.adapter === 'ble_icomon' || !record.completo;
+    if (hasBiaImpedances(record.impedances_ohm)) return false;
+    if (record.metrics?.metodo === 'wla25' || record.metrics?.agua_pct != null) return false;
+    return record.adapter === 'ble_rm_rd2504a' || !record.complete;
 }
