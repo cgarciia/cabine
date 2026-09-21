@@ -341,7 +341,8 @@ export function KioskMentalHealthPage() {
                 {questionStep && step === 'instrument' ? (
                     <>
                         <p className="kiosk-muted" style={{ marginBottom: 8 }}>
-                            Instrumento {active} · cerca de {instrumentMinutes(active)} min
+                            {active === 'WHO-5' ? 'Bem-estar' : active === 'HAD' ? 'Humor e ansiedade' : active === 'AUDIT' ? 'Uso de álcool' : active}
+                            {' · '}cerca de {instrumentMinutes(active)} min
                         </p>
                         <h1 className="kiosk-quiz-question">{items[itemIndex].text}</h1>
                         <div className="kiosk-option-list">

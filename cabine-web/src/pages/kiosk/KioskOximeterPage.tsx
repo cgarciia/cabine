@@ -17,7 +17,7 @@ export function KioskOximeterPage() {
     const { session, setLastOximeter } = useKiosk();
     const person = session.person;
 
-    const [status, setStatus] = useState('Procurando o oxímetro… coloque o dedo no sensor.');
+    const [status, setStatus] = useState('Coloque o dedo no oxímetro.');
     const [spo2, setSpo2] = useState<number | null>(null);
     const [pulse, setPulse] = useState<number | null>(null);
     const [fingerOn, setFingerOn] = useState(false);
@@ -182,7 +182,7 @@ export function KioskOximeterPage() {
             setListening(true);
             setStableHits(0);
             setElapsedSec(0);
-            setStatus('Ligando o oxímetro. Encaixe o dedo indicador no clipe — a espera faz parte.');
+            setStatus('Coloque o dedo indicador no oxímetro.');
 
             const params = new URLSearchParams({ person_id: pid });
             if (session.visitId) params.set('visit_id', session.visitId);
@@ -228,8 +228,8 @@ export function KioskOximeterPage() {
                 if (payload.finger_on && payload.spo2_pct && payload.pulse_bpm) {
                     setStatus(
                         payload.stable
-                            ? 'Leitura confirmada. Avançando…'
-                            : 'Confirmando o sinal. Fique parado — a cabine espera estabilidade, não um tempo fixo.',
+                            ? 'Leitura confirmada…'
+                            : 'Fique parado. Confirmando a leitura…',
                     );
                 }
 
@@ -254,7 +254,7 @@ export function KioskOximeterPage() {
                 wsRef.current = null;
                 setListening(false);
                 setFingerOn(false);
-                setStatus('Reconectando. Mantenha o dedo no clipe — está sob controle.');
+                setStatus('Reconectando. Mantenha o dedo no oxímetro.');
                 reconnectTimer.current = window.setTimeout(() => {
                     if (mountedRef.current && genRef.current === gen && !savedRef.current) start(true);
                 }, 2500);
@@ -303,8 +303,8 @@ export function KioskOximeterPage() {
             <KioskLayout>
                 <AfterStepScreen
                     justFinished="oximeter"
-                    title="Oximetria concluída"
-                    description="Sua oxigenação e pulso foram registrados."
+                    title="Oxigenação concluída"
+                    description="Oxigênio e pulso foram registrados."
                 />
             </KioskLayout>
         );
@@ -323,7 +323,7 @@ export function KioskOximeterPage() {
         <KioskLayout>
             <div className="kiosk-center-card kiosk-oximeter-card">
                 <p className="kiosk-step-label">4 · Passo</p>
-                <h1 className="kiosk-title">Oximetria</h1>
+                <h1 className="kiosk-title">Oxigenação</h1>
                 <p className="kiosk-oximeter-status" role="status" aria-live="polite">
                     {status}
                 </p>
@@ -332,19 +332,19 @@ export function KioskOximeterPage() {
 
                 <p className="kiosk-oxi-hint">
                     {stable
-                        ? 'Sinal confirmado. Aguarde um instante.'
+                        ? 'Pronto. Aguarde um instante.'
                         : fingerOn
-                            ? 'A leitura espera o oxigênio e o pulso se repetirem quatro vezes seguidas. Demorar um pouco é esperado.'
-                            : 'Pode levar uns segundos para o clipe ligar. Fique à vontade — o totem continua tentando.'}
+                            ? 'Mantenha o dedo parado até confirmar.'
+                            : 'Encaixe o dedo e aguarde.'}
                 </p>
 
                 <div className="kiosk-oxi-timer">
-                    <span>{elapsedSec}s nesta etapa</span>
+                    <span>{elapsedSec}s</span>
                     <span>
                         {stable
-                            ? 'Estável'
+                            ? 'Confirmado'
                             : fingerOn
-                                ? `Estabilidade ${stableHits}/${stableNeeded}`
+                                ? 'Confirmando…'
                                 : 'Aguardando o dedo'}
                     </span>
                 </div>
@@ -356,7 +356,7 @@ export function KioskOximeterPage() {
                     <article>
                         <p className="kiosk-kicker">Oxigenação</p>
                         <strong>{spo2 != null ? `${spo2}%` : '—'}</strong>
-                        <span>SpO₂</span>
+                        <span>no sangue</span>
                     </article>
                     <article>
                         <p className="kiosk-kicker">Pulso</p>

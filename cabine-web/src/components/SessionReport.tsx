@@ -9,6 +9,13 @@ import type { BloodPressureReading } from '../types/bloodPressure';
 import type { OximeterReading } from '../types/oximeter';
 import type { ScalePerson } from '../types/person';
 
+function instrumentLabel(code: string): string {
+    if (code === 'WHO-5') return 'Bem-estar';
+    if (code === 'HAD') return 'Humor e ansiedade';
+    if (code === 'AUDIT') return 'Uso de álcool';
+    return code;
+}
+
 export type SessionHealthView = {
     percent?: number;
     total?: number;
@@ -41,13 +48,13 @@ export function oximeterFindings(reading: OximeterReading): { title: string; det
     const findings: { title: string; detail: string }[] = [];
     if (reading.spo2_pct < 90) {
         findings.push({
-            title: 'Saturação baixa',
-            detail: `SpO₂ em ${reading.spo2_pct}%. Avise o profissional da cabine.`,
+            title: 'Oxigenação baixa',
+            detail: `Oxigenação em ${reading.spo2_pct}%. Avise o profissional da cabine.`,
         });
     } else if (reading.spo2_pct < 95) {
         findings.push({
-            title: 'Saturação um pouco abaixo do usual',
-            detail: `SpO₂ em ${reading.spo2_pct}%. Vale repetir parado e conversar se continuar assim.`,
+            title: 'Oxigenação um pouco abaixo do usual',
+            detail: `Oxigenação em ${reading.spo2_pct}%. Vale repetir parado e conversar se continuar assim.`,
         });
     }
     if (reading.pulse_bpm < 50 || reading.pulse_bpm > 120) {
@@ -159,7 +166,7 @@ export function SessionReport({
                             </div>
                         </div>
                     ) : null}
-                    <h3 className="kiosk-report-sub">Problema detectado</h3>
+                    <h3 className="kiosk-report-sub">Pontos de atenção</h3>
                     {(health.findings ?? []).length ? (
                         <ul className="kiosk-finding-list">
                             {(health.findings ?? []).map((item, index) => (
@@ -203,12 +210,12 @@ export function SessionReport({
                         <>
                             <div className="kiosk-score-label">{mentalShown.band}</div>
                             <p className="kiosk-muted">
-                                {mentalShown.instrument}
+                                {instrumentLabel(mentalShown.instrument)}
                                 {mentalShown.instrument === 'HAD'
                                     ? ` · ansiedade ${mentalShown.hadA ?? '—'} · humor ${mentalShown.hadD ?? '—'}`
                                     : ` · pontuação ${mentalShown.score}`}
                             </p>
-                            <h3 className="kiosk-report-sub">Problema detectado</h3>
+                            <h3 className="kiosk-report-sub">Pontos de atenção</h3>
                             <ul className="kiosk-finding-list">
                                 {mental.safetyTriggered ? (
                                     <li>
@@ -220,7 +227,7 @@ export function SessionReport({
                                     .filter((item) => item.tone !== 'ok')
                                     .map((item) => (
                                         <li key={item.instrument}>
-                                            <strong>{item.instrument}: {item.band}</strong>
+                                            <strong>{instrumentLabel(item.instrument)}: {item.band}</strong>
                                             <span>Pontuação {item.score}</span>
                                         </li>
                                     ))}
@@ -257,7 +264,7 @@ export function SessionReport({
 
                     {mental.instrumentLog?.map((entry) => (
                         <div key={entry.instrument} className="kiosk-print-instrument">
-                            <h3 className="kiosk-report-sub">Instrumento {entry.instrument}</h3>
+                            <h3 className="kiosk-report-sub">{instrumentLabel(entry.instrument)}</h3>
                             <ol className="kiosk-qa-list">
                                 {entry.items.map((item) => (
                                     <li key={item.id}>
@@ -295,11 +302,11 @@ export function SessionReport({
 
             {oximeter ? (
                 <section className="kiosk-report-card kiosk-print-wide kiosk-print-oxi">
-                    <h2>Oximetria</h2>
+                    <h2>Oxigenação</h2>
                     <div className="kiosk-print-oxi-row">
                         <div className="kiosk-oxi-vitals">
                             <div>
-                                <span className="kiosk-muted">SpO₂</span>
+                                <span className="kiosk-muted">Oxigenação</span>
                                 <strong>{oximeter.spo2_pct}%</strong>
                             </div>
                             <div>
@@ -308,7 +315,7 @@ export function SessionReport({
                             </div>
                             {oximeter.pi_pct != null ? (
                                 <div>
-                                    <span className="kiosk-muted">Índice de perfusão</span>
+                                    <span className="kiosk-muted">Perfusão</span>
                                     <strong>{oximeter.pi_pct}%</strong>
                                 </div>
                             ) : null}
@@ -353,7 +360,7 @@ export function SessionReport({
                     />
                     {bloodPressure.ecg_mv?.length ? (
                         <p className="kiosk-muted">
-                            ECG de 30 segundos. Arraste para ver o traço inteiro. Desligue Estabilizado para ver o sinal cru.
+                            Gráfico dos batimentos. Arraste para ver o registro completo.
                         </p>
                     ) : null}
                 </section>

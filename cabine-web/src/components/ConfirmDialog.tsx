@@ -14,7 +14,7 @@ export const END_SESSION_CONFIRM = {
     title: 'Deseja encerrar?',
     description: 'A sessão será finalizada e você voltará à tela inicial.',
     cancelLabel: 'Voltar',
-    confirmLabel: 'Continuar',
+    confirmLabel: 'Encerrar',
 } as const;
 
 export function ConfirmDialog({

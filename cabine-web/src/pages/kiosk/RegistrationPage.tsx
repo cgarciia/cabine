@@ -245,11 +245,11 @@ export function RegistrationPage() {
     }[step];
 
     const subtitle = {
-        registration: 'Digite a matrícula no teclado.',
-        name: 'Digite o nome completo no teclado.',
-        birthDate: 'Digite o dia, o mês e o ano de nascimento.',
-        sex: 'Toque na opção que corresponde a você.',
-        height: 'Digite a altura em centímetros.',
+        registration: 'Digite sua matrícula.',
+        name: 'Digite seu nome completo.',
+        birthDate: 'Digite dia, mês e ano de nascimento.',
+        sex: 'Escolha uma opção.',
+        height: 'Digite sua altura em centímetros.',
     }[step];
 
     const emptyValue = (

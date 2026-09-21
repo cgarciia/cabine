@@ -125,8 +125,8 @@ export function HeartbeatMonitor({ bpm, active, trace, toneLocked = false, revie
                 ref={canvasRef}
                 aria-label={
                     review
-                        ? 'ECG completo. Arraste para o lado para ver os 30 segundos.'
-                        : 'Gráfico do ECG'
+                        ? 'Eletrocardiograma - ECG completo. Arraste para ver o registro completo.'
+                        : 'Gráfico do eletrocardiograma - ECG.'
                 }
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
@@ -140,7 +140,7 @@ export function HeartbeatMonitor({ bpm, active, trace, toneLocked = false, revie
                     aria-pressed={stable}
                     onClick={() => setStable((value) => !value)}
                 >
-                    {stable ? 'Estabilizado' : 'Traço real'}
+                    {stable ? 'Suavizado' : 'Original'}
                 </button>
                 {canPan ? (
                     <div className="kiosk-ecg-scrub">
@@ -150,10 +150,10 @@ export function HeartbeatMonitor({ bpm, active, trace, toneLocked = false, revie
                             max={maxOffset}
                             step={1}
                             value={Math.min(offset, maxOffset)}
-                            aria-label="Posição do ECG"
+                            aria-label="Posição do eletrocardiograma"
                             onChange={(event) => moveView(Number(event.target.value))}
                         />
-                        <p>Arraste o gráfico para percorrer os {formatSec(totalSec)} s</p>
+                        <p>Arraste para percorrer os {formatSec(totalSec)} s</p>
                     </div>
                 ) : null}
             </div>
@@ -288,7 +288,7 @@ function paintEcg(
 
     ctx.fillStyle = '#86efac';
     ctx.font = '600 13px "Segoe UI", system-ui, sans-serif';
-    ctx.fillText(rate != null ? `Pulso ${rate} bpm` : 'ECG do sensor', 14, 22);
+    ctx.fillText(rate != null ? `Pulso ${rate} bpm` : 'Batimentos', 14, 22);
     ctx.fillStyle = 'rgba(134, 239, 172, 0.7)';
     ctx.font = '600 11px "Segoe UI", system-ui, sans-serif';
     if (review) {
@@ -297,7 +297,7 @@ function paintEcg(
     } else {
         ctx.fillText(`${WINDOW_SEC.toString().replace('.', ',')} s`, width - 42, 22);
     }
-    ctx.fillText(stable ? '1 mV · filtrado' : '1 mV · real', 14, height - 12);
+    ctx.fillText(stable ? 'Leitura suavizada' : 'Leitura ao vivo', 14, height - 12);
 
     let peak = 0;
     for (const value of wave) {
@@ -366,8 +366,8 @@ function paintWaiting(
     ctx.font = '600 13px "Segoe UI", system-ui, sans-serif';
     ctx.fillText(
         active
-            ? 'Aguardando o sinal dos sensores do Complete'
-            : 'ECG',
+            ? 'Aguardando o sinal dos sensores'
+            : 'Batimentos',
         14,
         22,
     );

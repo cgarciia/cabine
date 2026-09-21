@@ -164,8 +164,7 @@ class BleRmRd2504aAdapter(ScaleAdapter):
             on_platform = last is not None and last.weight_kg >= 10
             if on_platform:
                 await send_status(
-                    "Há alguém no prato — não reenvio o perfil agora. "
-                    "Desçam, selecionem a pessoa e subam de novo."
+                    "Desça da balança primeiro. Depois suba de novo para medir."
                 )
                 return
 
@@ -213,8 +212,7 @@ class BleRmRd2504aAdapter(ScaleAdapter):
                 last_ba_at = time.monotonic()
                 last_ba_weight = ba_weight
                 await send_status(
-                    f"Perfil C0/C1: {display_name} · {ba_weight:.1f} kg · "
-                    f"{prof.height_cm:.0f} cm · {prof.age} anos. Pegue a barra e suba."
+                    f"Dados confirmados. Segure a barra e suba na balança."
                 )
                 return
 
@@ -225,8 +223,7 @@ class BleRmRd2504aAdapter(ScaleAdapter):
                 await write_frames(clear_frames, f"BB-clear-{label}")
             if weight is None:
                 await send_status(
-                    "Lista offline limpa. Sem peso na sessão ainda — suba com a barra; "
-                    "vou alinhar o BA no quilo ao vivo (±2 kg)."
+                    "Suba segurando a barra. A medição começa sozinha."
                 )
                 last_ba_at = time.monotonic()
                 return
@@ -356,7 +353,7 @@ class BleRmRd2504aAdapter(ScaleAdapter):
                 and last is not None
                 and last.weight_kg >= 20
             ):
-                reset_session("Pessoa desceu. Próxima pode subir (atualize altura/idade/sexo).")
+                reset_session("Você desceu. Pode subir de novo quando quiser.")
                 return
 
             if current_step == "done":
@@ -367,8 +364,7 @@ class BleRmRd2504aAdapter(ScaleAdapter):
                     and reading.stable
                 ):
                     reset_session(
-                        f"Novo peso detectado ({reading.weight_kg:.1f} kg). "
-                        "Reiniciando — atualize o perfil se for outra pessoa."
+                        "Nova pesagem detectada. Aguarde a leitura."
                     )
                 else:
                     if reading.source == "ffb3" and has_bia_impedances(reading.impedances_ohm):
@@ -429,10 +425,10 @@ class BleRmRd2504aAdapter(ScaleAdapter):
             if reading.complete:
                 done_weight = reading.weight_kg
                 if current_step in {"step_on", "wait_stable"}:
-                    step("hold_bar", "Dados da barra recebidos. Confirmando medição...")
+                    step("hold_bar", "Confirmando a medição…")
                 if current_step in {"hold_bar", "extend_bar"}:
-                    step("measuring", "Lendo sensores das mãos e dos pés...")
-                step("done", "Medição dos 8 eletrodos concluída. Veja o relatório ao lado.")
+                    step("measuring", "Lendo o corpo. Fique parado.")
+                step("done", "Medição concluída. Desça da balança.")
                 return
 
             if reading.source == "ffb3" and reading.impedances_ohm:
@@ -440,9 +436,15 @@ class BleRmRd2504aAdapter(ScaleAdapter):
                 if current_step in {"step_on", "wait_stable"}:
                     step(
                         "hold_bar",
-                        "A balança começou a ler os sensores — segure a barra firme e não se mexa.",
+                        "Segure a barra firme e não se mexa.",
                     )
-                step("measuring", hint)
+                # quality_hint pode trazer ohms — preferir mensagem simples no totem
+                step(
+                    "measuring",
+                    "Lendo o corpo. Mantenha pés e mãos no lugar."
+                    if hint and ("Ω" in hint or "ohm" in hint.lower() or "Z=" in hint)
+                    else (hint or "Lendo o corpo. Fique parado."),
+                )
                 return
 
             if reading.weight_kg > 0 and not reading.stable:
@@ -493,17 +495,18 @@ class BleRmRd2504aAdapter(ScaleAdapter):
 
             async with BleakClient(target, timeout=CONNECT_TIMEOUT_S) as client:
                 client_holder["client"] = client
-                await send_status("Conexão com a RM-RD2504A estabelecida.")
+                await send_status("Balança conectada.")
                 try:
                     await client.start_notify(FFB2_UUID, on_ffb2)
                 except BleakError as exc:
-                    await send_status(f"Falha ao assinar FFB2: {exc}")
+                    logger.warning("Falha ao assinar FFB2: %s", exc)
+                    await send_status("Não foi possível conectar. Aguarde e tente de novo.")
                     return
                 try:
                     await client.start_notify(FFB3_UUID, on_ffb3)
                 except BleakError as exc:
                     logger.warning("FFB3 indicate indisponível: %s", exc)
-                    await send_status("FFB3 indisponível; só peso ao vivo.")
+                    await send_status("Balança pronta para pesar.")
 
                 # BD/B0 nativos + BA convidado (openScale). Sem gravar P-1.
                 try:
@@ -520,8 +523,7 @@ class BleRmRd2504aAdapter(ScaleAdapter):
 
                 step(
                     "step_on",
-                    "Suba descalço e PEGUE A BARRA NO MESMO MOVIMENTO, com as duas mãos. "
-                    "Se subir sem a barra, a balança decide medir só o peso.",
+                    "Suba descalço segurando a barra com as duas mãos.",
                 )
 
                 while client.is_connected and websocket.client_state == WebSocketState.CONNECTED:
@@ -540,7 +542,7 @@ class BleRmRd2504aAdapter(ScaleAdapter):
                         weight_profile_sent = False
                         if last is not None and last.weight_kg >= 10:
                             await send_status(
-                                "Há alguém no prato — não reenvio perfil agora para não cortar a BIA."
+                                "Desça da balança antes de continuar."
                             )
                         else:
                             if current_step == "done":
@@ -560,7 +562,7 @@ class BleRmRd2504aAdapter(ScaleAdapter):
                     ):
                         step(
                             "hold_bar",
-                            "Peso travado. Mantenha a barra firme, polegares nos eletrodos.",
+                            "Peso confirmado. Segure a barra firme e fique parado.",
                         )
 
                     if (
@@ -623,8 +625,7 @@ class BleRmRd2504aAdapter(ScaleAdapter):
                     ):
                         bia_stalled_warned = True
                         reason = (
-                            "Peso travado sem A7. Mantenha a barra; se já soltou, desça e suba "
-                            "já segurando."
+                            "Mantenha as mãos na barra. Se soltou, desça e suba novamente segurando a barra."
                         )
                         await send_status(reason)
 
@@ -695,7 +696,7 @@ class BleRmRd2504aAdapter(ScaleAdapter):
                     return
 
                 await send_status(
-                    "Rádio caiu. Mantenha-se na balança — procurando o anúncio de novo."
+                    "Conexão interrompida. Fique na balança — reconectando…"
                 )
                 queue.put_nowait({"type": "LINK", "connected": False, "msg": reason})
 

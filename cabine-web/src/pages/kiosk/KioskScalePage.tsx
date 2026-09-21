@@ -9,32 +9,33 @@ import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
 import { hasBiaImpedances, type MeasurementPayload, type MeasurementRecord, type ScaleLiveMessage, type ScaleMetrics, type BiaSegment } from '../../types/measurement';
 import type { Scale } from '../../types/scale';
+import { friendlyScaleStatus } from '../../utils/friendlyScaleStatus';
 
 const GUIDE = [
     {
         id: 'step_on',
         title: 'Suba na balança',
-        detail: 'Pés descalços nos eletrodos. Fique no centro da plataforma.',
+        detail: 'Pés descalços no centro. Segure a barra.',
     },
     {
         id: 'hold_bar',
         title: 'Segure a barra',
-        detail: 'Pegue a barra com as duas mãos e mantenha-se parado.',
+        detail: 'Duas mãos na barra. Fique parado.',
     },
     {
         id: 'extend_bar',
-        title: 'Braços a 40° do corpo',
-        detail: 'Estenda os braços à frente, sem encostar a barra no tronco.',
+        title: 'Braços à frente',
+        detail: 'Estenda os braços sem encostar a barra no corpo.',
     },
     {
         id: 'measuring',
-        title: 'Medindo composição',
-        detail: 'Respire normalmente. A leitura leva alguns segundos.',
+        title: 'Medindo',
+        detail: 'Respire normalmente. Só mais alguns segundos.',
     },
     {
         id: 'done',
-        title: 'Bioimpedância concluída',
-        detail: 'Medição salva. Desça da balança para seguir.',
+        title: 'Medição concluída',
+        detail: 'Pode descer da balança.',
     },
 ] as const;
 
@@ -194,7 +195,7 @@ export function KioskScalePage() {
             finishedRef.current = true;
             setCurrentWeight(reading.weight_kg);
             setGuideStep('done');
-            setStatus('Avaliação concluída. Desça da balança.');
+            setStatus('Medição concluída. Desça da balança.');
             setView('done');
             stopScaleStream();
             void persistRef.current({ ...reading, complete: true });
@@ -216,15 +217,16 @@ export function KioskScalePage() {
                 visit_id: session.visitId ?? undefined,
             }));
         };
-        ws.onerror = () => setStatus('Não foi possível falar com a balança.');
-        ws.onclose = () => setStatus((prev) => (finishedRef.current ? prev : 'Desconectado'));
+        ws.onerror = () => setStatus('Não foi possível conectar à balança.');
+        ws.onclose = () => setStatus((prev) => (finishedRef.current ? prev : 'Reconectando…'));
 
         ws.onmessage = (event) => {
             if (finishedRef.current) return;
             const data: ScaleLiveMessage = JSON.parse(event.data);
 
             if (data.type === 'STATUS' && data.msg) {
-                setStatus(data.msg);
+                const next = friendlyScaleStatus(data.msg);
+                if (next) setStatus(next);
             } else if (data.type === 'STEP' && data.step) {
                 if (data.reset) {
                     const last = lastReadingRef.current;
@@ -236,9 +238,16 @@ export function KioskScalePage() {
                     setCurrentWeight(null);
                     setGuideStep(data.step);
                     setView('ready');
+                    if (data.msg) {
+                        const next = friendlyScaleStatus(data.msg);
+                        if (next) setStatus(next);
+                    }
                 } else {
                     setGuideStep(data.step);
-                    if (data.msg) setStatus(data.msg);
+                    if (data.msg) {
+                        const next = friendlyScaleStatus(data.msg);
+                        if (next) setStatus(next);
+                    }
                 }
             } else if (data.type === 'WEIGHT' && data.weight_kg !== undefined) {
                 setView('live');
@@ -255,7 +264,7 @@ export function KioskScalePage() {
                 if (data.complete || hasBiaImpedances(data.impedances_ohm)) {
                     completeReading(lastReadingRef.current);
                 } else {
-                    setStatus(data.stable ? 'Peso estável' : 'Avaliando...');
+                    setStatus(data.stable ? 'Peso confirmado' : 'Medindo…');
                 }
             }
         };
@@ -280,9 +289,9 @@ export function KioskScalePage() {
                 {error ? <p className="kiosk-error">{error}</p> : null}
                 <AfterStepScreen
                     justFinished="bia"
-                    title="Bioimpedância concluída"
-                    description="Sua medição foi registrada."
-                    hint="Desça da balança agora. Se ficar no prato, ela continua enviando peso e a leitura pode recomeçar."
+                    title="Medição concluída"
+                    description="Seu peso e bioimpedância foram registrados."
+                    hint="Desça da balança para continuar."
                 />
             </KioskLayout>
         );

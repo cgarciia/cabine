@@ -113,8 +113,8 @@ export function RegistrationLoginPage() {
                 <div className="kiosk-login">
                     <h1 className="kiosk-title">Primeiro acesso</h1>
                     <p className="kiosk-subtitle">
-                        Não encontramos a matrícula <strong>{employeeId.trim()}</strong> no sistema.
-                        Complete o cadastro para continuar.
+                        Não encontramos a matrícula <strong>{employeeId.trim()}</strong>.
+                        Faça o cadastro para continuar.
                     </p>
                     <button
                         type="button"
@@ -138,8 +138,8 @@ export function RegistrationLoginPage() {
                 <h1 className="kiosk-title">{onRegistration ? 'Matrícula' : 'Data de nascimento'}</h1>
                 <p className="kiosk-subtitle">
                     {onRegistration
-                        ? 'Digite sua matrícula no teclado.'
-                        : 'Digite o dia, o mês e o ano de nascimento.'}
+                        ? 'Digite sua matrícula.'
+                        : 'Digite dia, mês e ano de nascimento.'}
                 </p>
                 <div
                     className={`kiosk-login-value${emptyValue ? ' is-empty' : ''}`}

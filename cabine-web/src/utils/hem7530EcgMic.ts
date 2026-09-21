@@ -125,7 +125,7 @@ export function useHem7530EcgMic(enabled: boolean) {
             if (ctx.sampleRate < 40000) {
                 stream.getTracks().forEach((track) => track.stop());
                 void ctx.close();
-                setError('Este tablet baixou o áudio demais para ouvir o ultrassom de 19 kHz. Use o Chrome atualizado.');
+                setError('Este tablet não consegue captar o sinal do aparelho. Use o Chrome atualizado.');
                 return;
             }
             workletUrl = URL.createObjectURL(new Blob([HEM7530_ECG_WORKLET], { type: 'text/javascript' }));

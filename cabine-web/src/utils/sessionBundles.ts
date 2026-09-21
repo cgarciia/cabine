@@ -110,7 +110,7 @@ export function visitSummary(visit: SavedVisit): string {
     if (visit.health) parts.push('Saúde geral');
     if (visit.mental) parts.push('Saúde mental');
     if (visit.measurement) parts.push(`${visit.measurement.weight_kg.toFixed(1)} kg`);
-    if (visit.oximeter) parts.push(`SpO₂ ${visit.oximeter.spo2_pct}%`);
+    if (visit.oximeter) parts.push(`Oxigenação ${visit.oximeter.spo2_pct}%`);
     if (visit.bloodPressure) {
         parts.push(`${visit.bloodPressure.sys_mmhg}/${visit.bloodPressure.dia_mmhg} mmHg`);
     }

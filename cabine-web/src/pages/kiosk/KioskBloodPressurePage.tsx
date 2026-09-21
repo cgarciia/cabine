@@ -25,21 +25,21 @@ const GUIDE: Array<{ id: BpGuideStep; title: string; detail: string }> = [
     {
         id: 'sensors',
         title: 'Dedos nos sensores',
-        detail: 'Encoste os indicadores nos sensores metálicos e fique parado.',
+        detail: 'Encoste os indicadores nos sensores e fique parado.',
     },
     {
         id: 'start',
         title: 'Aperte START/STOP',
-        detail: 'Só no Complete. Esta tela já está ouvindo — não precisa iniciar aqui.',
+        detail: 'Aperte o botão no aparelho de pressão. Não precisa iniciar nesta tela.',
     },
     {
         id: 'stabilize',
         title: 'Sinal encontrado',
-        detail: 'Espere o ritmo estabilizar. Mantenha os dedos e o tablet encostados.',
+        detail: 'Espere estabilizar. Mantenha os dedos e o tablet encostados.',
     },
     {
         id: 'record',
-        title: 'Medindo 30 segundos',
+        title: 'Medindo',
         detail: 'Respire normalmente. Não fale e não mexa os braços.',
     },
     {
@@ -50,7 +50,7 @@ const GUIDE: Array<{ id: BpGuideStep; title: string; detail: string }> = [
     {
         id: 'wait_bp',
         title: 'Aguarde o visor',
-        detail: 'O ECG já foi gravado. Quando a pressão aparecer no Complete, entra no relatório.',
+        detail: 'Quando a pressão aparecer no aparelho, ela entra no relatório.',
     },
 ];
 
@@ -62,7 +62,7 @@ export function KioskBloodPressurePage() {
     const person = session.person;
 
     const [status, setStatus] = useState(
-        'Siga os passos e aperte START/STOP no Complete. Esta tela já está ouvindo.',
+        'Siga os passos e aperte START/STOP no aparelho.',
     );
     const [sys, setSys] = useState<number | null>(null);
     const [dia, setDia] = useState<number | null>(null);
@@ -216,7 +216,7 @@ export function KioskBloodPressurePage() {
         if (latest.sys_mmhg == null || latest.dia_mmhg == null || latest.pulse_bpm == null || !latest.measured_at) {
             if (ecgDoneRef.current) {
                 setPhase('wait_bp');
-                setStatus('ECG de 30 segundos gravado. Aguarde o resultado no visor do Complete.');
+                setStatus('Registro concluído. Aguarde a pressão no visor do aparelho.');
             }
             return;
         }
@@ -247,7 +247,7 @@ export function KioskBloodPressurePage() {
             prev?.close();
 
             setListening(true);
-            setStatus('Coloque o manguito e os dedos. Depois aperte START/STOP no Complete.');
+            setStatus('Coloque o manguito e os dedos. Depois aperte START/STOP no aparelho.');
 
             const params = new URLSearchParams({ person_id: pid });
             if (session.visitId) params.set('visit_id', session.visitId);
@@ -337,11 +337,11 @@ export function KioskBloodPressurePage() {
                 stableStarted = null;
                 if (recording) {
                     setPhase('pause');
-                    setStatus('Sinal fraco. Mantenha os dedos nos sensores e o tablet encostado no Complete.');
+                    setStatus('Sinal fraco. Mantenha os dedos nos sensores e o tablet encostado no aparelho.');
                 } else {
                     setPhase('prep');
                     setStableLeft(5);
-                    setStatus('Coloque o manguito e os dedos. Depois aperte START/STOP no Complete.');
+                    setStatus('Coloque o manguito e os dedos. Depois aperte START/STOP no aparelho.');
                 }
                 return;
             }
@@ -354,14 +354,14 @@ export function KioskBloodPressurePage() {
                 const left = Math.max(0, Math.ceil((STABLE_MS - waited) / 1000));
                 setPhase('stabilize');
                 setStableLeft(left);
-                setStatus(`Sinal encontrado. Espere estabilizar: ${left} s.`);
+                setStatus(`Sinal encontrado. Aguarde ${left} s.`);
                 if (waited >= STABLE_MS) {
                     recording = true;
                     recordElapsed = 0;
                     beginRecordRef.current();
                     setPhase('record');
                     setRecordLeft(30);
-                    setStatus('Sinal estável. Gravando 30 segundos. Fique parado.');
+                    setStatus('Medindo. Fique parado.');
                 }
                 return;
             }
@@ -403,10 +403,10 @@ export function KioskBloodPressurePage() {
                     title="Pressão registrada"
                     description={
                         frozenEcg && frozenEcg.length
-                            ? 'Pressão, pulso e 30 segundos de ECG foram gravados.'
+                            ? 'Pressão, pulso e batimentos foram registrados.'
                             : 'Pressão e pulso foram registrados.'
                     }
-                    hint="Os números aparecem no relatório desta sessão."
+                    hint="Os números aparecem no relatório."
                 />
             </KioskLayout>
         );
@@ -441,7 +441,7 @@ export function KioskBloodPressurePage() {
                     <>
                         <p className="kiosk-bp-flags">{ecg.error}</p>
                         <button type="button" className="kiosk-btn kiosk-btn-primary" onClick={() => void ecg.unlock()}>
-                            Permitir microfone
+                            Permitir áudio
                         </button>
                     </>
                 ) : null}
@@ -458,16 +458,16 @@ export function KioskBloodPressurePage() {
                     </span>
                     <span>
                         {phase === 'record'
-                            ? 'Gravando 30 s'
+                            ? 'Medindo…'
                             : phase === 'pause'
                                 ? 'Pausado'
                                 : phase === 'stabilize'
-                                    ? 'Sinal estável em 5 s'
+                                    ? 'Quase lá…'
                                     : phase === 'wait_bp'
                                         ? 'Aguardando a pressão'
                                         : ecg.armed
-                                            ? 'Microfone ligado'
-                                            : 'Preparando o microfone'}
+                                            ? 'Pronto para medir'
+                                            : 'Preparando…'}
                     </span>
                 </div>
                 <div

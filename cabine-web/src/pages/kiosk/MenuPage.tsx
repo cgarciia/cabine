@@ -40,7 +40,7 @@ export function MenuPage() {
         {
             id: 'general',
             title: 'Saúde Geral',
-            subtitle: 'Triagem rápida sobre hábitos, sintomas e como você avalia sua saúde hoje.',
+            subtitle: 'Perguntas rápidas sobre como você está hoje.',
             path: '/saude-geral',
             done: Boolean(session.generalHealth),
             icon: ClipboardList,
@@ -48,7 +48,7 @@ export function MenuPage() {
         {
             id: 'mental',
             title: 'Saúde Mental',
-            subtitle: 'Convite opcional com perguntas curtas sobre bem-estar emocional e humor.',
+            subtitle: 'Perguntas opcionais sobre bem-estar e humor.',
             path: '/saude-mental',
             done: Boolean(session.mentalHealth?.completedAt || session.mentalHealth?.refused),
             icon: Brain,
@@ -56,15 +56,15 @@ export function MenuPage() {
         {
             id: 'bia',
             title: 'Bioimpedância',
-            subtitle: 'Suba na balança para medir peso e composição corporal com orientação na tela.',
+            subtitle: 'Suba na balança. A tela orienta cada passo.',
             path: '/bioimpedancia',
             done: Boolean(session.lastMeasurement),
             icon: Scale,
         },
         {
             id: 'oximeter',
-            title: 'Oximetria',
-            subtitle: 'Coloque o dedo no oxímetro para ler oxigenação (SpO₂) e pulso automaticamente.',
+            title: 'Oxigenação',
+            subtitle: 'Coloque o dedo no oxímetro para medir oxigênio e pulso.',
             path: '/oximetro',
             done: Boolean(session.lastOximeter),
             icon: Activity,
@@ -72,7 +72,7 @@ export function MenuPage() {
         {
             id: 'bloodPressure',
             title: 'Pressão e pulso',
-            subtitle: 'Manguito, dedos nos sensores e START/STOP no Complete. Sem iniciar nesta tela.',
+            subtitle: 'Coloque o manguito e aperte START/STOP no aparelho.',
             path: '/pressao',
             done: Boolean(session.lastBloodPressure),
             icon: HeartPulse,
@@ -101,7 +101,7 @@ export function MenuPage() {
                 <div className="kiosk-menu-heading">
                     <h1 className="kiosk-title">O que você quer fazer agora?</h1>
                     <p className="kiosk-subtitle">
-                        Escolha uma etapa. Você pode concluir tudo agora ou voltar depois nesta sessão.
+                        Escolha uma etapa para começar.
                     </p>
                 </div>
 

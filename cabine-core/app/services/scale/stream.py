@@ -255,34 +255,19 @@ async def stream_scale(
             if vid is not None:
                 visit_id_box[0] = vid
             if updated is None:
-                await send_status("Perfil inválido — preencha altura, nascimento/idade e sexo.")
+                await send_status("Não foi possível confirmar seus dados. Volte ao cadastro.")
                 continue
             if raw.get("apply"):
                 profile_sync_box[0] = int(profile_sync_box[0]) + 1
-            weight = updated.expected_weight_kg
-            if weight is None:
-                await send_status(
-                    f"Perfil na Cabine: {updated.height_cm:.0f} cm, {updated.age} anos, "
-                    f"{updated.sex}, tipo={updated.people_type}."
-                )
-            else:
-                await send_status(
-                    f"Perfil na Cabine: {updated.height_cm:.0f} cm, {updated.age} anos, "
-                    f"{updated.sex}, tipo={updated.people_type}, peso esperado={weight:.1f} kg."
-                )
+            await send_status("Tudo certo. Pode subir na balança.")
 
     try:
-        await send_status(f"Iniciando {adapter.label}...")
+        await send_status("Preparando a balança…")
         profile = profile_box[0]
         if profile is None:
-            await send_status(
-                "Sem perfil: informe altura, nascimento/idade, sexo e peso esperado."
-            )
+            await send_status("Complete o cadastro antes de se pesar.")
         else:
-            await send_status(
-                f"Perfil ativo: {profile.height_cm:.0f} cm, {profile.age} anos, {profile.sex}, "
-                f"tipo={profile.people_type}."
-            )
+            await send_status("Balança pronta. Pode subir.")
         client_task = asyncio.create_task(listen_client())
         try:
             await adapter.run(

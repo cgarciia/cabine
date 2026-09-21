@@ -48,7 +48,7 @@ export function RecordsPage() {
         <KioskLayout activeSidebar="records">
             <div className="kiosk-report no-print">
                 <h1 className="kiosk-title">Registros</h1>
-                <p className="kiosk-subtitle">Histórico de relatórios salvos. Escolha uma visita para imprimir.</p>
+                <p className="kiosk-subtitle">Escolha uma visita para ver ou imprimir.</p>
 
                 {loading ? <p className="kiosk-muted">Carregando...</p> : null}
                 {error ? <p className="kiosk-error">{error}</p> : null}

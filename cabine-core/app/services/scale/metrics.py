@@ -225,7 +225,7 @@ def compute_basic_metrics(peso_kg: float, profile: PersonProfile) -> dict:
         "metodo": "imc_deurenberg",
         "versao": 1,
         "tipo_corporal": _body_type(imc, gordura_pct, profile.sex, profile.people_type),
-        "aviso": "Estimativas por IMC/perfil. Diferem do relatório do algoritmo proprietário da balança.",
+        "aviso": "Valores estimados com base no seu perfil.",
     }
     payload["destaques"] = _highlights(payload)
     return payload
@@ -337,8 +337,8 @@ def compute_report(
     )
     if wla is None:
         result["aviso"] = (
-            "Impedâncias recebidas, mas inválidas para o algoritmo WLA25. "
-            "Segure a barra com contato firme — o tronco deve medir ~15–25 Ω."
+            "Não foi possível calcular a composição completa. "
+            "Segure a barra com firmeza e tente de novo."
         )
         return result
 
@@ -409,11 +409,7 @@ def compute_report(
             "tipo_corporal": _body_type(wla.bmi, wla.fat_pct, profile.sex, profile.people_type),
             "metodo": "wla25",
             "versao": 5,
-            "aviso": (
-                "Composition via WLA25 (standard FFM for normal type). "
-                "Athlete type uses the impedance regression. "
-                "Height, age and sex on file must match the session."
-            ),
+            "aviso": "Composição corporal calculada a partir desta medição.",
         }
     )
     result["destaques"] = _highlights(result)

@@ -25,8 +25,8 @@ export function AfterStepScreen({ justFinished, title, description, hint }: Prop
     if (allDone) {
         return (
             <div className="kiosk-center-card">
-                <h1 className="kiosk-title">Registrando sua avaliação</h1>
-                <p className="kiosk-subtitle">Só um instante — em seguida você vê a conclusão.</p>
+                <h1 className="kiosk-title">Registrando…</h1>
+                <p className="kiosk-subtitle">Só um instante.</p>
             </div>
         );
     }

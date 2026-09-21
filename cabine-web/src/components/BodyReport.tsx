@@ -39,11 +39,6 @@ function markerPct(value: number, low: number, high: number) {
     return 28 + 44 * (value - low) / Math.max(high - low, 0.1);
 }
 
-function ohmAt(segments: BiaSegment[] | undefined, side: string, freq: number) {
-    const hit = segments?.find((item) => item.side === side && item.freq_khz === freq);
-    return hit?.ohm;
-}
-
 /** Fat cutoffs from the BMI × fat% body-type matrix. */
 function fatCuts(sex?: string) {
     return isFemale(sex) ? { lo: 18, hi: 28 } : { lo: 10, hi: 20 };
@@ -180,7 +175,7 @@ function SegmentalPanel({
                 <div className="cabine-seg-card">
                     <h3>Equilíbrio muscular</h3>
                     <p className="cabine-metric-hint">
-                        kg WLA25 e % do padrão da região (membros 80–160%, tronco 90–110%)
+                        Distribuição por região do corpo
                     </p>
                     <SegBodyFigure items={muscleItems} tone="muscle" />
                 </div>
@@ -189,7 +184,7 @@ function SegmentalPanel({
                 <div className="cabine-seg-card">
                     <h3>Gordura segmentar</h3>
                     <p className="cabine-metric-hint">
-                        kg WLA25 e % do padrão da região (membros 80–160%, tronco 90–110%)
+                        Distribuição por região do corpo
                     </p>
                     <SegBodyFigure items={fatItems} tone="fat" />
                 </div>
@@ -421,10 +416,10 @@ export function BodyReport({
     supportsBia,
     weightOnly,
     saved,
-    segments,
+    segments: _segments,
     measuredAt,
 }: Props) {
-    const bia = Boolean(supportsBia && !weightOnly && metrics);
+    void _segments;    const bia = Boolean(supportsBia && !weightOnly && metrics);
     const wla = bia && (metrics?.metodo === 'wla25' || metrics?.agua_pct != null);
     const score = wla ? metrics?.score : undefined;
     const highlights = metrics ? deriveHighlights(metrics) : [];
@@ -476,8 +471,6 @@ export function BodyReport({
     const height = Number(heightCm);
     const weightRange = idealWeightRange(height, sex);
 
-    const z20 = metrics?.z_20khz;
-    const z100 = metrics?.z_100khz;
     const showMap = wla && Boolean(metrics?.segmentos_wla?.length);
     const composeTotal = weightKg ?? 0;
     const fatKg = metrics?.gordura_kg;
@@ -518,7 +511,7 @@ export function BodyReport({
     }
     if (smi != null) {
         indexChips.push({
-            label: 'SMI',
+            label: 'Músculo / altura',
             value: `${fmt(smi)} kg/m²`,
         });
     }
@@ -770,47 +763,14 @@ export function BodyReport({
                 </div>
             )}
 
-            {(segments?.length || z20?.length) ? (
-                <section className="cabine-report-block">
-                    <h3>Impedância</h3>
-                    <p className="cabine-metric-hint">
-                        Valores em ohms. Membros ~200–400 Ω. O tronco é o canal líder já
-                        convertido (~15–25 Ω), não o valor cru do fio.
-                    </p>
-                    <table className="cabine-mini-table">
-                        <thead>
-                            <tr>
-                                <th>Segmento</th>
-                                <th>20 kHz</th>
-                                <th>100 kHz</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {[
-                                ['Braço direito', 'braco_dir', 0],
-                                ['Braço esquerdo', 'braco_esq', 1],
-                                ['Perna direita', 'perna_dir', 2],
-                                ['Perna esquerda', 'perna_esq', 3],
-                                ['Tronco', 'tronco', 4],
-                            ].map(([label, side, idx]) => {
-                                const a = z20?.[Number(idx)] ?? ohmAt(segments, String(side), 20);
-                                const b = z100?.[Number(idx)] ?? ohmAt(segments, String(side), 100);
-                                if (a == null && b == null) return null;
-                                return (
-                                    <tr key={String(side)}>
-                                        <th>{label}</th>
-                                        <td>{a != null ? a.toFixed(1) : '—'}</td>
-                                        <td>{b != null ? b.toFixed(1) : '—'}</td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </section>
-            ) : null}
-
             {metrics?.aviso ? (
-                <p className="cabine-metric-hint" style={{ marginTop: 12 }}>{metrics.aviso}</p>
+                <p className="cabine-metric-hint" style={{ marginTop: 12 }}>
+                    {/wla25|ffm|impedance|ohm|Ω|inválid|invalid/i.test(metrics.aviso)
+                        ? (/inválid|invalid/i.test(metrics.aviso)
+                            ? 'Não foi possível calcular a composição completa. Tente de novo com contato firme.'
+                            : 'Composição corporal calculada a partir desta medição.')
+                        : metrics.aviso}
+                </p>
             ) : null}
         </div>
     );

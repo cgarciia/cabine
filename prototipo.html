@@ -1,0 +1,1975 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CabiNET</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      margin: 0;
+      background: #f4f7f6;
+      color: #0f172a;
+      font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+    }
+    button, input { font-family: inherit; }
+    h1, h2 { font-weight: 500; color: #08060d; margin: 0; }
+    p { margin: 0; }
+    .kiosk-shell {
+      min-height: 100svh; width: 100%; overflow-x: hidden;
+      background:
+        radial-gradient(1000px 420px at 15% -5%, rgba(15, 118, 110, 0.14), transparent 55%),
+        radial-gradient(800px 360px at 90% 0%, rgba(14, 116, 144, 0.1), transparent 50%),
+        #f4f7f6;
+      color: #0f172a; display: flex; flex-direction: column;
+    }
+    .kiosk-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; gap: 12px; }
+    .kiosk-user { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.05rem; }
+    .kiosk-user-avatar {
+      width: 40px; height: 40px; border-radius: 999px;
+      background:
+        radial-gradient(circle at 50% 38%, #fff 0 28%, transparent 29%),
+        radial-gradient(circle at 50% 78%, #fff 0 34%, transparent 35%),
+        #0f766e;
+    }
+    .kiosk-main {
+      flex: 1; display: flex; flex-direction: column;
+      padding: 0.5rem 1.25rem 1.75rem; width: min(720px, 100%);
+      max-width: 100%; margin: 0 auto; min-width: 0;
+    }
+    .kiosk-main:has(.kiosk-menu),
+    .kiosk-main:has(.kiosk-quiz),
+    .kiosk-main:has(.kiosk-report),
+    .kiosk-main:has(.kiosk-step-complete),
+    .kiosk-main:has(.kiosk-login-wide) { width: min(1100px, 100%); }
+    .kiosk-center-card, .kiosk-menu, .kiosk-quiz, .kiosk-login {
+      display: flex; flex-direction: column; gap: 1rem; flex: 1; justify-content: center;
+    }
+    .kiosk-login { justify-content: center; max-width: 28rem; width: 100%; margin-inline: auto; text-align: center; }
+    .kiosk-login .kiosk-back { align-self: center; }
+    .kiosk-login-value {
+      min-height: 4.5rem; display: grid; place-items: center; padding: 0.75rem 1rem;
+      border-radius: 18px; border: 2px solid #0f766e; background: #fff;
+      font-size: clamp(1.55rem, 5vw, 2.1rem); font-weight: 750; letter-spacing: 0.08em;
+      font-variant-numeric: tabular-nums; color: #0f172a; text-align: center;
+    }
+    .kiosk-login-value.is-empty { color: #94a3b8; letter-spacing: 0.12em; }
+    .kiosk-numpad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.7rem; }
+    .kiosk-numpad-key {
+      min-height: 4.4rem; border: 1px solid #dbe4e2; border-radius: 18px; background: #fff;
+      color: #0f172a; font-size: 1.65rem; font-weight: 750; cursor: pointer;
+      display: grid; place-items: center; touch-action: manipulation; user-select: none;
+    }
+    .kiosk-numpad-key:hover, .kiosk-numpad-key:focus-visible { border-color: #0f766e; outline: none; }
+    .kiosk-numpad-key:active { background: #ecfdf5; transform: scale(0.98); }
+    .kiosk-numpad-key:disabled { opacity: 0.55; cursor: not-allowed; }
+    .kiosk-numpad-key-action { color: #0f766e; }
+    .kiosk-login-wide { max-width: 46rem; }
+    .kiosk-login-value.is-text { font-size: clamp(1.2rem, 3.4vw, 1.7rem); letter-spacing: 0.02em; line-height: 1.25; word-break: break-word; }
+    .kiosk-choice-stack { width: 100%; }
+    .kiosk-keyboard { display: flex; flex-direction: column; gap: 0.4rem; }
+    .kiosk-keyboard-row, .kiosk-keyboard-accents { display: flex; justify-content: center; gap: 0.35rem; }
+    .kiosk-keyboard-row.is-bottom { padding-inline: 0.2rem; }
+    .kiosk-keyboard-key {
+      flex: 1 1 0; min-height: 3.05rem; border: 1px solid #dbe4e2; border-radius: 12px;
+      background: #fff; color: #0f172a; font-size: 1.12rem; font-weight: 700; cursor: pointer;
+      display: grid; place-items: center; touch-action: manipulation; user-select: none;
+    }
+    .kiosk-keyboard-key-accent { flex: 1 1 0; min-height: 2.7rem; font-size: 1.05rem; }
+    .kiosk-keyboard-key-action { flex: 1.15 1 0; color: #0f766e; }
+    .kiosk-keyboard-key-action.is-on { background: #ecfdf5; border-color: #0f766e; }
+    .kiosk-keyboard-key-space { flex: 1 1 auto; max-width: 22rem; min-height: 3.15rem; }
+    .kiosk-keyboard-key:hover, .kiosk-keyboard-key:focus-visible { border-color: #0f766e; outline: none; }
+    .kiosk-keyboard-key:active { background: #ecfdf5; transform: scale(0.98); }
+    .kiosk-keyboard-key:disabled { opacity: 0.55; cursor: not-allowed; }
+    .kiosk-report { width: min(100%, 1100px); margin-inline: auto; display: flex; flex-direction: column; gap: 0.85rem; flex: 1; }
+    .kiosk-brand-mark {
+      width: 72px; height: 72px; border-radius: 22px;
+      background: linear-gradient(160deg, #0f766e, #115e59); color: #fff;
+      display: grid; place-items: center; font-size: 2rem; font-weight: 800; margin: 0 auto 0.5rem;
+    }
+    .kiosk-title { margin: 0; font-size: clamp(1.7rem, 4vw, 2.35rem); line-height: 1.15; text-align: center; color: #0f172a; font-weight: 750; }
+    .kiosk-subtitle { margin: 0; text-align: center; color: #64748b; font-size: 1.1rem; line-height: 1.4; }
+    .kiosk-field { display: flex; flex-direction: column; gap: 8px; color: #475569; font-weight: 600; font-size: 0.95rem; }
+    .kiosk-input {
+      font: inherit; border: 1px solid #e2e8f0; background: #fff; color: #0f172a;
+      width: 100%; border-radius: 12px; padding: 10px 12px;
+    }
+    .kiosk-choice-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .kiosk-choice, .kiosk-option, .kiosk-btn {
+      min-height: 58px; border-radius: 16px; border: 1px solid #e2e8f0; background: #fff;
+      font-size: 1.1rem; font-weight: 700; color: #0f172a; cursor: pointer; touch-action: manipulation;
+    }
+    .kiosk-choice.selected, .kiosk-option.selected {
+      background: #ecfdf5; border-color: #0f766e; color: #115e59;
+      box-shadow: inset 0 0 0 2px rgba(15, 118, 110, 0.25);
+    }
+    .kiosk-btn { display: inline-flex; align-items: center; justify-content: center; padding: 0 1.25rem; gap: 8px; }
+    .kiosk-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .kiosk-btn-primary { background: #0f766e; border-color: #0f766e; color: #fff; }
+    .kiosk-btn-secondary { background: #0f172a; border-color: #0f172a; color: #fff; }
+    .kiosk-btn-ghost { background: transparent; }
+    .kiosk-btn-xl { min-height: 68px; font-size: 1.25rem; border-radius: 18px; }
+    .kiosk-link-btn, .kiosk-back {
+      background: none; border: 0; color: #0f766e; font-size: 1.05rem; font-weight: 700;
+      cursor: pointer; padding: 12px; touch-action: manipulation; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .kiosk-back { align-self: flex-start; color: #64748b; }
+    .kiosk-error { margin: 0; color: #b91c1c; font-weight: 600; text-align: center; }
+    .kiosk-muted { color: #64748b; margin: 0; }
+    .kiosk-hamburger {
+      width: 52px; height: 52px; border-radius: 14px; border: 1px solid #e2e8f0; background: #fff;
+      display: grid; place-items: center; color: #0f172a; align-self: flex-start; cursor: pointer; padding: 0;
+    }
+    .kiosk-menu { justify-content: flex-start; gap: 1.35rem; padding-top: 0.25rem; }
+    .kiosk-menu-heading { display: flex; flex-direction: column; gap: 0.55rem; max-width: 40rem; margin: 0 auto; }
+    .kiosk-menu-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; width: 100%; }
+    .kiosk-menu-tile {
+      display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center;
+      min-height: 132px; padding: 1.15rem 1.2rem; text-align: left; border-radius: 22px;
+      border: 1px solid #dbe4e8; background: linear-gradient(180deg, #ffffff 0%, #f7fbfa 100%);
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06); color: #0f172a; cursor: pointer;
+      touch-action: manipulation; transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    }
+    .kiosk-menu-tile:hover, .kiosk-menu-tile:focus-visible {
+      transform: translateY(-2px); border-color: #99c9c3; box-shadow: 0 14px 32px rgba(15, 118, 110, 0.12); outline: none;
+    }
+    .kiosk-menu-tile.is-done { border-color: #a7f3d0; background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%); }
+    .kiosk-menu-tile-icon {
+      width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center;
+      background: #ecfdf5; color: #0f766e; flex-shrink: 0;
+    }
+    .kiosk-menu-tile-icon svg { width: 28px; height: 28px; display: block; }
+    .kiosk-menu-tile-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .kiosk-menu-tile-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .kiosk-menu-tile-top strong { font-size: clamp(1.15rem, 2.4vw, 1.35rem); font-weight: 800; line-height: 1.2; }
+    .kiosk-menu-tile-desc { color: #64748b; font-size: 0.98rem; font-weight: 500; line-height: 1.4; }
+    .kiosk-menu-tile-arrow { color: #94a3b8; flex-shrink: 0; display: block; }
+    .kiosk-menu-footer { display: flex; flex-direction: column; gap: 10px; margin-top: 0.35rem; }
+    .kiosk-menu-actions { display: flex; flex-direction: column; gap: 12px; }
+    .kiosk-done-pill {
+      font-style: normal; font-size: 0.75rem; font-weight: 800; color: #047857;
+      background: #d1fae5; border-radius: 999px; padding: 5px 10px; letter-spacing: 0.02em;
+    }
+    @media (max-width: 820px) {
+      .kiosk-menu-grid { grid-template-columns: 1fr; }
+      .kiosk-menu-tile { min-height: 118px; }
+    }
+    .kiosk-quiz-meta { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 16px; align-items: end; }
+    .kiosk-quiz-progress-label { font-weight: 800; color: #334155; margin-bottom: 8px; }
+    .kiosk-quiz-eta { color: #64748b; font-weight: 700; white-space: nowrap; flex-shrink: 0; align-self: center; padding-bottom: 2px; }
+    .kiosk-progress-track { height: 10px; border-radius: 999px; background: #e2e8f0; overflow: hidden; width: 100%; }
+    .kiosk-progress-fill { height: 100%; background: linear-gradient(90deg, #0f766e, #0ea5e9); border-radius: 999px; transition: width 0.25s ease; }
+    .kiosk-quiz-heading { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .kiosk-quiz-heading .kiosk-back { margin: 0; padding: 4px 2px; }
+    .kiosk-quiz-category { color: #0f766e; font-weight: 800; font-size: 1rem; }
+    .kiosk-quiz-question { margin: 0; font-size: clamp(1.45rem, 3.5vw, 2rem); line-height: 1.25; color: #0f172a; }
+    .kiosk-option-list { display: flex; flex-direction: column; gap: 12px; }
+    .kiosk-quiz { justify-content: flex-start; gap: 1.35rem; width: 100%; padding-top: 0.35rem; overflow-x: clip; }
+    .kiosk-quiz .kiosk-quiz-meta { width: 100%; padding: 0.85rem 1rem; border-radius: 18px; background: #fff; border: 1px solid #e2e8f0; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04); }
+    .kiosk-quiz .kiosk-quiz-progress-label { font-size: 1.15rem; margin-bottom: 10px; }
+    .kiosk-quiz .kiosk-quiz-eta { font-size: 1.05rem; }
+    .kiosk-quiz .kiosk-progress-track { height: 14px; }
+    .kiosk-quiz .kiosk-quiz-category { font-size: 1.15rem; letter-spacing: 0.04em; text-transform: uppercase; }
+    .kiosk-quiz .kiosk-quiz-question { font-size: clamp(1.85rem, 4.2vw, 2.55rem); font-weight: 800; line-height: 1.2; max-width: 38rem; }
+    .kiosk-quiz .kiosk-subtitle { font-size: clamp(1.15rem, 2.4vw, 1.35rem); max-width: 40rem; line-height: 1.45; }
+    .kiosk-quiz .kiosk-option-list { gap: 14px; width: 100%; margin-top: 0.35rem; }
+    .kiosk-quiz .kiosk-option {
+      min-height: 84px; padding: 1.2rem 1.35rem; border-radius: 20px;
+      font-size: clamp(1.2rem, 2.5vw, 1.4rem); font-weight: 750; text-align: left;
+      border: 1px solid #dbe4e8; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+    }
+    .kiosk-quiz .kiosk-option:hover, .kiosk-quiz .kiosk-option:focus-visible {
+      transform: translateY(-1px); border-color: #99c9c3; box-shadow: 0 12px 28px rgba(15, 118, 110, 0.1); outline: none;
+    }
+    .kiosk-quiz .kiosk-option.selected { background: #ecfdf5; border-color: #0f766e; color: #115e59; box-shadow: inset 0 0 0 2px rgba(15, 118, 110, 0.28); }
+    .kiosk-option-scale { display: flex; align-items: center; gap: 0.9rem; }
+    .kiosk-shell svg { width: 22px; height: 22px; flex-shrink: 0; }
+    .kiosk-option-face { width: 2.15rem; height: 2.15rem; flex-shrink: 0; }
+    .kiosk-success-ring svg { width: 40px; height: 40px; }
+    .kiosk-numpad-key svg { width: 28px; height: 28px; }
+    .kiosk-scroll-hint svg { width: 26px; height: 26px; }
+    .kiosk-quiz-hint { margin: -0.35rem 0 0; color: #475569; font-size: 1.05rem; font-weight: 600; }
+    .kiosk-check {
+      width: 1.75rem; height: 1.75rem; flex-shrink: 0; border-radius: 8px; border: 2px solid #94a3b8;
+      background: #fff; display: grid; place-items: center;
+    }
+    .kiosk-check.is-on { border-color: #0f766e; background: #0f766e; }
+    .kiosk-check-mark { width: 1rem; height: 1rem; color: #fff; display: block; }
+    .kiosk-quiz.has-advance { padding-bottom: 6.75rem; }
+    .kiosk-quiz-end { height: 1px; width: 100%; }
+    .kiosk-quiz-advance {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 24; display: flex; justify-content: center;
+      padding: 0.9rem 1.25rem calc(0.9rem + env(safe-area-inset-bottom));
+      background: linear-gradient(180deg, rgba(244, 247, 246, 0) 0%, #f4f7f6 42%); pointer-events: none;
+    }
+    .kiosk-quiz-advance .kiosk-btn { pointer-events: auto; width: min(1100px, calc(100% - 2.5rem)); }
+    .kiosk-scroll-hint {
+      position: fixed; right: max(1.25rem, calc((100vw - min(1100px, 100vw)) / 2 + 1.5rem));
+      bottom: 6.4rem; z-index: 25; width: 3.1rem; height: 3.1rem; border: 0; border-radius: 999px;
+      background: #0f172a; color: #fff; display: grid; place-items: center; cursor: pointer;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22); animation: kiosk-scroll-bounce 1.4s ease-in-out infinite;
+    }
+    @keyframes kiosk-scroll-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(7px); } }
+    .kiosk-quiz .kiosk-option.scale-good { border-left: 7px solid #22c55e; }
+    .kiosk-quiz .kiosk-option.scale-ok { border-left: 7px solid #84cc16; }
+    .kiosk-quiz .kiosk-option.scale-mid { border-left: 7px solid #eab308; }
+    .kiosk-quiz .kiosk-option.scale-poor { border-left: 7px solid #f97316; }
+    .kiosk-quiz .kiosk-option.scale-bad { border-left: 7px solid #ef4444; }
+    .kiosk-quiz .kiosk-quiz-followup { margin: 0.5rem 0 0.25rem; font-size: 1.1rem; }
+    .kiosk-quiz .kiosk-quiz-followup .kiosk-input { min-height: 72px; font-size: 1.25rem; border-radius: 18px; padding: 16px 18px; }
+    .kiosk-quiz .kiosk-btn { min-height: 72px; font-size: 1.25rem; border-radius: 18px; }
+    .kiosk-quiz .kiosk-band { padding: 1.25rem 1.35rem; border-radius: 20px; font-size: 1.15rem; }
+    .kiosk-quiz .kiosk-band strong { font-size: 1.35rem; }
+    .kiosk-quiz .kiosk-advice-list { font-size: 1.1rem; max-width: 42rem; }
+    @media (max-width: 720px) {
+      .kiosk-quiz .kiosk-quiz-meta { grid-template-columns: 1fr; }
+      .kiosk-quiz .kiosk-option { min-height: 74px; padding: 1.05rem 1.15rem; }
+      .kiosk-quiz .kiosk-quiz-question { font-size: clamp(1.55rem, 6vw, 1.9rem); }
+    }
+    .kiosk-band { border-radius: 18px; padding: 1rem 1.15rem; margin: 0.75rem 0 1rem; border: 1px solid #e2e8f0; background: #f8fafc; }
+    .kiosk-band strong { display: block; margin-bottom: 0.35rem; color: #0f172a; }
+    .kiosk-band p { margin: 0; color: #334155; line-height: 1.45; }
+    .kiosk-band.is-ok { background: #ecfdf5; border-color: #a7f3d0; }
+    .kiosk-band.is-watch { background: #fffbeb; border-color: #fde68a; }
+    .kiosk-band.is-alert { background: #fff7ed; border-color: #fdba74; }
+    .kiosk-advice-list { margin: 0.5rem 0 0; padding-left: 1.2rem; color: #334155; line-height: 1.5; text-align: left; max-width: 640px; }
+    .kiosk-option { padding: 1rem 1.15rem; text-align: left; }
+    .kiosk-step-complete { text-align: center; }
+    .kiosk-dots { display: flex; justify-content: center; gap: 8px; }
+    .kiosk-dots span { width: 10px; height: 10px; border-radius: 999px; background: #e2e8f0; }
+    .kiosk-dots span.active { width: 28px; background: #0f766e; }
+    .kiosk-dots span.done { background: #10b981; }
+    .kiosk-success-ring {
+      width: 84px; height: 84px; border-radius: 999px; margin: 0 auto; display: grid; place-items: center;
+      color: #0f766e; background: #ecfdf5; border: 3px solid #99f6e4; animation: kiosk-pop 0.45s ease-out;
+    }
+    @keyframes kiosk-pop { from { transform: scale(0.85); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }
+    .kiosk-print-pair { display: flex; flex-direction: column; gap: 0.85rem; }
+    .kiosk-report-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 1.1rem; }
+    .kiosk-report-card h2 { margin: 0 0 0.75rem; font-size: 1.2rem; color: #0f172a; }
+    .kiosk-report-sub { margin: 1.1rem 0 0.45rem; font-size: 0.95rem; color: #0f766e; }
+    .kiosk-finding-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .kiosk-finding-list li { background: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 12px; padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 2px; }
+    .kiosk-finding-list strong { color: #134e4a; }
+    .kiosk-qa-list { margin: 0; padding-left: 1.15rem; display: flex; flex-direction: column; gap: 10px; }
+    .kiosk-qa-list li p { margin: 0 0 2px; color: #475569; }
+    .kiosk-qa-list li strong { display: block; }
+    .kiosk-qa-list li span { display: block; margin-top: 2px; }
+    .kiosk-score-row { display: flex; gap: 16px; align-items: center; }
+    .kiosk-score-value { font-size: 2.4rem; font-weight: 800; color: #0f766e; }
+    .kiosk-score-label { font-weight: 800; font-size: 1.1rem; }
+    .kiosk-report-actions { display: flex; gap: 12px; flex-wrap: wrap; width: min(100%, 1100px); margin-inline: auto; }
+    .kiosk-history-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow: auto; }
+    .kiosk-history-item { text-align: left; min-height: 52px; border-radius: 14px; border: 1px solid #e2e8f0; background: #fff; padding: 12px 14px; font-weight: 650; cursor: pointer; }
+    .kiosk-history-item.selected { border-color: #0f766e; background: #ecfdf5; }
+    .kiosk-sidebar-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.35); z-index: 40; }
+    .kiosk-sidebar { width: min(320px, 86vw); height: 100%; background: #fff; padding: 1.25rem; display: flex; flex-direction: column; gap: 10px; box-shadow: 8px 0 30px rgba(15, 23, 42, 0.12); }
+    .kiosk-sidebar-title { font-weight: 800; font-size: 1.2rem; margin-bottom: 0.5rem; }
+    .kiosk-sidebar-item { display: flex; align-items: center; gap: 10px; text-decoration: none; color: #0f172a; font-weight: 700; padding: 14px 12px; border-radius: 14px; border: 1px solid transparent; background: none; cursor: pointer; font-size: 1rem; width: 100%; text-align: left; }
+    .kiosk-sidebar-item.active, .kiosk-sidebar-item:active { background: #ecfdf5; border-color: #99f6e4; color: #115e59; }
+    .kiosk-sidebar-close { margin-top: auto; min-height: 52px; border-radius: 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .kiosk-modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); display: grid; place-items: center; z-index: 50; padding: 1rem; }
+    .kiosk-modal { width: min(420px, 100%); background: #fff; border-radius: 20px; padding: 1.4rem; }
+    .kiosk-modal h2 { margin: 0 0 0.5rem; }
+    .kiosk-modal p { margin: 0 0 1.2rem; color: #64748b; }
+    .kiosk-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    @media (max-width: 640px) {
+      .kiosk-main { padding-inline: 1rem; }
+      .kiosk-choice-row { grid-template-columns: 1fr; }
+    }
+    @media print {
+      .no-print, .kiosk-report-actions, .kiosk-header, .kiosk-hamburger, .kiosk-back, .kiosk-sidebar, .kiosk-sidebar-backdrop { display: none !important; }
+      html, body, .kiosk-shell, .kiosk-main { background: #fff !important; margin: 0 !important; padding: 0 !important; width: 100% !important; min-height: 0 !important; height: auto !important; overflow: visible !important; display: block !important; }
+      .kiosk-print-root { width: 100% !important; font-size: 9pt; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+(function () {
+  "use strict";
+
+  const END_SESSION_CONFIRM = {
+    title: "Deseja encerrar?",
+    description: "A sessão será finalizada e você voltará à tela inicial.",
+    cancelLabel: "Voltar",
+    confirmLabel: "Continuar",
+  };
+
+  const STEPS = [
+    { id: "generalHealth", path: "/saude-geral", label: "Ir para saúde geral" },
+    { id: "mentalHealth", path: "/saude-mental", label: "Ir para saúde mental" },
+  ];
+
+  const GENERAL_HEALTH = {
+    id: "general_health",
+    title: "Questionário Saúde Geral",
+    category: "Saúde Geral",
+    estimatedSeconds: 240,
+    questions: [
+      { id: "sg1", text: "Como você considera sua saúde atualmente?", kind: "single", options: [
+        { id: "muito_boa", label: "Muito boa", score: 4 },
+        { id: "boa", label: "Boa", score: 3 },
+        { id: "regular", label: "Regular", score: 2 },
+        { id: "ruim", label: "Ruim", score: 1 },
+        { id: "muito_ruim", label: "Muito ruim", score: 0 },
+      ]},
+      { id: "sg2", text: "Você possui alguma condição de saúde que acompanha ou trata atualmente?", kind: "single", options: [
+        { id: "nao", label: "Não", score: 2 },
+        { id: "sim", label: "Sim", score: 1 },
+      ], followUpWhenOptionId: "sim", followUpPrompt: "Qual?", followUpPlaceholder: "Descreva a condição" },
+      { id: "sg3", text: "Faz uso contínuo de algum medicamento?", kind: "single", options: [
+        { id: "nao", label: "Não", score: 2 },
+        { id: "sim", label: "Sim", score: 1 },
+      ], followUpWhenOptionId: "sim", followUpPrompt: "Qual(is)?", followUpPlaceholder: "Liste o(s) medicamento(s)" },
+      { id: "sg4", text: "Nos últimos 30 dias, apresentou algum destes sintomas?", kind: "multiple", exclusiveOptionId: "nenhum", followUpOptionId: "outro", followUpPrompt: "Qual?", followUpPlaceholder: "Descreva o sintoma", options: [
+        { id: "dor_cabeca", label: "Dor de cabeça frequente", score: 0 },
+        { id: "tontura", label: "Tontura", score: 0 },
+        { id: "falta_ar", label: "Falta de ar", score: 0 },
+        { id: "dor_peito", label: "Dor ou desconforto no peito", score: 0 },
+        { id: "palpitacoes", label: "Palpitações", score: 0 },
+        { id: "cansaco", label: "Cansaço excessivo", score: 0 },
+        { id: "dores_musculares", label: "Dores musculares ou articulares", score: 0 },
+        { id: "sono", label: "Alterações do sono", score: 0 },
+        { id: "gastro", label: "Alterações gastrointestinais", score: 0 },
+        { id: "nenhum", label: "Nenhum dos anteriores", score: 3 },
+        { id: "outro", label: "Outro", score: 0 },
+      ]},
+      { id: "sg5", text: "Como está a qualidade do seu sono?", kind: "single", options: [
+        { id: "boa", label: "Boa", score: 2 },
+        { id: "regular", label: "Regular", score: 1 },
+        { id: "ruim", label: "Ruim", score: 0 },
+      ]},
+      { id: "sg6", text: "Você pratica atividade física regularmente?", kind: "single", options: [
+        { id: "sim", label: "Sim", score: 2 },
+        { id: "as_vezes", label: "Às vezes", score: 1 },
+        { id: "nao", label: "Não", score: 0 },
+      ]},
+      { id: "sg7", text: "Você fuma ou utiliza produtos com nicotina?", kind: "single", options: [
+        { id: "nao", label: "Não", score: 2 },
+        { id: "sim", label: "Sim", score: 0 },
+        { id: "parei", label: "Já utilizei, mas parei", score: 1 },
+      ]},
+      { id: "sg8", text: "Com que frequência consome bebidas alcoólicas?", kind: "single", options: [
+        { id: "nao", label: "Não consumo", score: 4 },
+        { id: "raramente", label: "Raramente", score: 3 },
+        { id: "mes", label: "Algumas vezes por mês", score: 2 },
+        { id: "semana", label: "Algumas vezes por semana", score: 1 },
+        { id: "diario", label: "Diariamente", score: 0 },
+      ]},
+      { id: "sg9", text: "Nos últimos meses, precisou procurar atendimento médico por algum problema de saúde?", kind: "single", options: [
+        { id: "nao", label: "Não", score: 2 },
+        { id: "sim", label: "Sim", score: 1 },
+      ], followUpWhenOptionId: "sim", followUpPrompt: "Motivo:", followUpPlaceholder: "Informe o motivo" },
+      { id: "sg10", text: "Existe alguma questão relacionada à sua saúde que gostaria de informar ou acompanhar?", kind: "single", options: [
+        { id: "nao", label: "Não", score: 1 },
+        { id: "sim", label: "Sim", score: 1 },
+      ], followUpWhenOptionId: "sim", followUpPrompt: "Qual?", followUpPlaceholder: "Descreva o que gostaria de informar" },
+    ],
+  };
+
+  const GATE_QUESTIONS = [
+    "Nas últimas 2 semanas, com que frequência você se sentiu para baixo ou desanimado(a)?",
+    "Nas últimas 2 semanas, com que frequência você se sentiu nervoso(a) ou tenso(a)?",
+    "Nas últimas 2 semanas, com que frequência você bebeu mais do que pretendia?",
+    "Nas últimas 2 semanas, com que frequência você dormiu mal ou se sentiu cansado(a) sem motivo?",
+  ];
+  const GATE_OPTIONS = [
+    { label: "Nenhuma vez", score: 0 },
+    { label: "Alguns dias", score: 1 },
+    { label: "Mais da metade dos dias", score: 2 },
+    { label: "Quase todos os dias", score: 3 },
+  ];
+  const AUDIT_FREQ = [
+    { label: "Nunca", score: 0 },
+    { label: "Menos de uma vez por mês", score: 1 },
+    { label: "Uma vez por mês", score: 2 },
+    { label: "Uma vez por semana", score: 3 },
+    { label: "Todos ou quase todos os dias", score: 4 },
+  ];
+  const HAD_ITEMS = [
+    { id: "h1", scale: "A", text: "Eu me sinto tenso(a) ou contraído(a)", options: [
+      { label: "A maior parte do tempo", score: 3 }, { label: "Boa parte do tempo", score: 2 },
+      { label: "De vez em quando", score: 1 }, { label: "Nunca", score: 0 },
+    ]},
+    { id: "h2", scale: "D", text: "Eu ainda sinto prazer nas coisas de que costumava gostar", options: [
+      { label: "Do mesmo jeito que antes", score: 0 }, { label: "Não tanto quanto antes", score: 1 },
+      { label: "Só um pouco", score: 2 }, { label: "Já não sinto mais prazer em nada", score: 3 },
+    ]},
+    { id: "h3", scale: "A", text: "Eu sinto uma espécie de medo, como se alguma coisa ruim fosse acontecer", options: [
+      { label: "Sim, e muito forte", score: 3 }, { label: "Sim, mas não tão forte", score: 2 },
+      { label: "Um pouco, mas não me preocupa", score: 1 }, { label: "Não sinto nada disso", score: 0 },
+    ]},
+    { id: "h4", scale: "D", text: "Dou risadas e me divirto quando vejo coisas engraçadas", options: [
+      { label: "Do mesmo jeito que antes", score: 0 }, { label: "Atualmente um pouco menos", score: 1 },
+      { label: "Atualmente bem menos", score: 2 }, { label: "Não consigo mais", score: 3 },
+    ]},
+    { id: "h5", scale: "A", text: "Estou com a cabeça cheia de preocupações", options: [
+      { label: "A maior parte do tempo", score: 3 }, { label: "Boa parte do tempo", score: 2 },
+      { label: "De vez em quando", score: 1 }, { label: "Apenas ocasionalmente", score: 0 },
+    ]},
+    { id: "h6", scale: "D", text: "Eu me sinto alegre", options: [
+      { label: "Nunca", score: 3 }, { label: "Poucas vezes", score: 2 },
+      { label: "Algumas vezes", score: 1 }, { label: "A maior parte do tempo", score: 0 },
+    ]},
+    { id: "h7", scale: "A", text: "Consigo ficar sentado(a) à vontade e me sentir relaxado(a)", options: [
+      { label: "Sim, quase sempre", score: 0 }, { label: "Muitas vezes", score: 1 },
+      { label: "Poucas vezes", score: 2 }, { label: "Nunca", score: 3 },
+    ]},
+    { id: "h8", scale: "D", text: "Eu estou lento(a) para pensar e fazer as coisas", options: [
+      { label: "Quase sempre", score: 3 }, { label: "Muitas vezes", score: 2 },
+      { label: "De vez em quando", score: 1 }, { label: "Nunca", score: 0 },
+    ]},
+    { id: "h9", scale: "A", text: "Tenho uma sensação ruim de medo, como um frio na barriga ou aperto no estômago", options: [
+      { label: "Nunca", score: 0 }, { label: "De vez em quando", score: 1 },
+      { label: "Muitas vezes", score: 2 }, { label: "Quase sempre", score: 3 },
+    ]},
+    { id: "h10", scale: "D", text: "Eu perdi o interesse em cuidar da minha aparência", options: [
+      { label: "Completamente", score: 3 }, { label: "Não estou me cuidando tanto quanto deveria", score: 2 },
+      { label: "Talvez não tanto quanto antes", score: 1 }, { label: "Me cuido do mesmo jeito que antes", score: 0 },
+    ]},
+    { id: "h11", scale: "A", text: "Eu me sinto inquieto(a), como se não pudesse ficar parado(a)", options: [
+      { label: "Muito", score: 3 }, { label: "Bastante", score: 2 },
+      { label: "Um pouco", score: 1 }, { label: "Não me sinto assim", score: 0 },
+    ]},
+    { id: "h12", scale: "D", text: "Fico animado(a) esperando coisas boas que estão por vir", options: [
+      { label: "Do mesmo jeito que antes", score: 0 }, { label: "Um pouco menos do que antes", score: 1 },
+      { label: "Bem menos do que antes", score: 2 }, { label: "Quase nunca", score: 3 },
+    ]},
+    { id: "h13", scale: "A", text: "De repente, tenho a sensação de entrar em pânico", options: [
+      { label: "Com muita frequência", score: 3 }, { label: "Com bastante frequência", score: 2 },
+      { label: "Não com muita frequência", score: 1 }, { label: "Nunca", score: 0 },
+    ]},
+    { id: "h14", scale: "D", text: "Consigo sentir prazer ao assistir a um bom programa de TV, rádio ou ao ler algo", options: [
+      { label: "Quase sempre", score: 0 }, { label: "Algumas vezes", score: 1 },
+      { label: "Poucas vezes", score: 2 }, { label: "Quase nunca", score: 3 },
+    ]},
+  ];
+  const AUDIT_ITEMS = [
+    { id: "a1", text: "Com que frequência você consome bebidas alcoólicas?", options: [
+      { label: "Nunca", score: 0 }, { label: "Uma vez por mês ou menos", score: 1 },
+      { label: "De 2 a 4 vezes por mês", score: 2 }, { label: "De 2 a 3 vezes por semana", score: 3 },
+      { label: "4 ou mais vezes por semana", score: 4 },
+    ]},
+    { id: "a2", text: "Nas ocasiões em que bebe, quantas doses costuma consumir? (1 dose = 1 lata de cerveja, 1 taça de vinho ou 1 dose de destilado)", options: [
+      { label: "1 ou 2", score: 0 }, { label: "3 ou 4", score: 1 }, { label: "5 ou 6", score: 2 },
+      { label: "7, 8 ou 9", score: 3 }, { label: "10 ou mais", score: 4 },
+    ]},
+    { id: "a3", text: "Com que frequência você consome 5 ou mais doses em uma única ocasião?", options: AUDIT_FREQ },
+    { id: "a4", text: "Nos últimos 12 meses, com que frequência percebeu que não conseguia parar de beber depois que começava?", options: AUDIT_FREQ },
+    { id: "a5", text: "Nos últimos 12 meses, com que frequência o fato de beber impediu que você fizesse o que era esperado?", options: AUDIT_FREQ },
+    { id: "a6", text: "Nos últimos 12 meses, com que frequência precisou beber logo pela manhã para funcionar após uma bebedeira?", options: AUDIT_FREQ },
+    { id: "a7", text: "Nos últimos 12 meses, com que frequência se sentiu culpado(a) ou com remorso depois de beber?", options: AUDIT_FREQ },
+    { id: "a8", text: "Nos últimos 12 meses, com que frequência não conseguiu lembrar o que aconteceu na noite anterior por causa da bebida?", options: AUDIT_FREQ },
+    { id: "a9", text: "Você ou outra pessoa já se machucou em decorrência do seu modo de beber?", options: [
+      { label: "Não", score: 0 }, { label: "Sim, mas não no último ano", score: 2 }, { label: "Sim, no último ano", score: 4 },
+    ]},
+    { id: "a10", text: "Algum familiar, amigo, médico ou profissional de saúde já se preocupou com seu modo de beber ou sugeriu que diminuísse?", options: [
+      { label: "Não", score: 0 }, { label: "Sim, mas não no último ano", score: 2 }, { label: "Sim, no último ano", score: 4 },
+    ]},
+  ];
+  const WHO5_OPTIONS = [
+    { label: "Todo o tempo", score: 5 }, { label: "Na maior parte do tempo", score: 4 },
+    { label: "Mais da metade do tempo", score: 3 }, { label: "Menos da metade do tempo", score: 2 },
+    { label: "Raramente", score: 1 }, { label: "Em nenhum momento", score: 0 },
+  ];
+  const WHO5_ITEMS = [
+    { id: "w1", text: "Tenho me sentido animado(a) e de bom humor", options: WHO5_OPTIONS },
+    { id: "w2", text: "Tenho me sentido calmo(a) e relaxado(a)", options: WHO5_OPTIONS },
+    { id: "w3", text: "Tenho me sentido ativo(a) e vigoroso(a)", options: WHO5_OPTIONS },
+    { id: "w4", text: "Acordei sentindo-me descansado(a) e renovado(a)", options: WHO5_OPTIONS },
+    { id: "w5", text: "Meu dia a dia tem sido preenchido com coisas que me interessam", options: WHO5_OPTIONS },
+  ];
+
+  function instrumentItems(id) {
+    if (id === "HAD") return HAD_ITEMS;
+    if (id === "AUDIT") return AUDIT_ITEMS;
+    return WHO5_ITEMS;
+  }
+  function instrumentMinutes(id) {
+    if (id === "HAD") return 3;
+    if (id === "AUDIT") return 2;
+    return 1;
+  }
+
+  function followUpVisible(question, selected) {
+    if (question.kind === "single" && question.followUpWhenOptionId) return selected.includes(question.followUpWhenOptionId);
+    if (question.kind === "multiple" && question.followUpOptionId) return selected.includes(question.followUpOptionId);
+    return false;
+  }
+  function isQuestionAnswered(question, selected, detail) {
+    if (selected.length === 0) return false;
+    if (followUpVisible(question, selected) && !String(detail || "").trim()) return false;
+    return true;
+  }
+  function selectedIds(answers, questionId) { return answers[questionId] ?? []; }
+  function optionLabels(def, questionId, ids) {
+    const question = def.questions.find((item) => item.id === questionId);
+    if (!question) return ids.join(", ");
+    return ids.map((id) => question.options.find((option) => option.id === id)?.label ?? id).join(", ");
+  }
+  function detectHealthFindings(def, answers, details, label, percent) {
+    if (def.id !== "general_health") return [{ code: "overall", title: label, detail: "Resultado da triagem." }];
+    const findings = [];
+    if (percent < 75) {
+      findings.push({
+        code: "overall", title: label,
+        detail: percent < 50
+          ? "A triagem aponta vários pontos de atenção. Vale conversar com um profissional de saúde."
+          : "Há hábitos ou sintomas que merecem acompanhamento.",
+      });
+    }
+    const sg1 = selectedIds(answers, "sg1");
+    if (sg1.includes("ruim") || sg1.includes("muito_ruim")) {
+      findings.push({ code: "sg1", title: "Autoavaliação de saúde baixa", detail: optionLabels(def, "sg1", sg1) });
+    }
+    if (selectedIds(answers, "sg2").includes("sim")) {
+      findings.push({ code: "sg2", title: "Condição de saúde em acompanhamento", detail: details.sg2?.trim() || "Informou condição em tratamento." });
+    }
+    if (selectedIds(answers, "sg3").includes("sim")) {
+      findings.push({ code: "sg3", title: "Uso contínuo de medicamento", detail: details.sg3?.trim() || "Informou medicamento de uso contínuo." });
+    }
+    const symptoms = selectedIds(answers, "sg4").filter((id) => id !== "nenhum");
+    if (symptoms.length) {
+      const extra = details.sg4?.trim();
+      findings.push({ code: "sg4", title: "Sintomas recentes", detail: [optionLabels(def, "sg4", symptoms), extra].filter(Boolean).join(" — ") });
+    }
+    if (selectedIds(answers, "sg5").includes("ruim")) {
+      findings.push({ code: "sg5", title: "Qualidade do sono ruim", detail: "Relatou sono ruim nas últimas semanas." });
+    }
+    if (selectedIds(answers, "sg6").includes("nao")) {
+      findings.push({ code: "sg6", title: "Pouca atividade física", detail: "Não pratica atividade física regularmente." });
+    }
+    if (selectedIds(answers, "sg7").includes("sim")) {
+      findings.push({ code: "sg7", title: "Uso de nicotina", detail: "Fuma ou utiliza produtos com nicotina." });
+    }
+    const alcohol = selectedIds(answers, "sg8");
+    if (alcohol.includes("semana") || alcohol.includes("diario")) {
+      findings.push({ code: "sg8", title: "Consumo frequente de álcool", detail: optionLabels(def, "sg8", alcohol) });
+    }
+    if (selectedIds(answers, "sg9").includes("sim")) {
+      findings.push({ code: "sg9", title: "Atendimento médico recente", detail: details.sg9?.trim() || "Procurou atendimento nos últimos meses." });
+    }
+    if (selectedIds(answers, "sg10").includes("sim")) {
+      findings.push({ code: "sg10", title: "Questão de saúde a acompanhar", detail: details.sg10?.trim() || "Pediu para informar ou acompanhar um tema de saúde." });
+    }
+    return findings;
+  }
+  function scoreQuestionnaire(def, answers, details) {
+    let total = 0, max = 0;
+    for (const question of def.questions) {
+      if (question.kind === "multiple" && question.exclusiveOptionId) {
+        const exclusive = question.options.find((o) => o.id === question.exclusiveOptionId);
+        max += exclusive?.score ?? 0;
+      } else {
+        max += Math.max(...question.options.map((o) => o.score), 0);
+      }
+      for (const optionId of (answers[question.id] ?? [])) {
+        const option = question.options.find((o) => o.id === optionId);
+        if (option) total += option.score;
+      }
+    }
+    const percent = max > 0 ? Math.round((total / max) * 100) : 0;
+    let label;
+    if (def.id === "mental_health") {
+      if (percent <= 25) label = "Baixo indício de desconforto";
+      else if (percent <= 50) label = "Desconforto leve";
+      else if (percent <= 75) label = "Desconforto moderado";
+      else label = "Desconforto elevado";
+    } else if (percent >= 75) label = "Saúde geral boa";
+    else if (percent >= 50) label = "Saúde geral regular";
+    else if (percent >= 25) label = "Atenção à saúde geral";
+    else label = "Saúde geral baixa";
+    const items = def.questions.map((question) => {
+      const selected = answers[question.id] ?? [];
+      const answer = selected.map((id) => question.options.find((option) => option.id === id)?.label ?? id).join(", ");
+      const detail = details[question.id]?.trim() || undefined;
+      return { id: question.id, text: question.text, answer, detail };
+    });
+    return { total, max, percent, label, answers, details, items, findings: detectHealthFindings(def, answers, details, label, percent) };
+  }
+
+  function routeInstrument(p) {
+    const had = p[0] >= 2 || p[1] >= 2 || p[3] >= 2;
+    const audit = p[2] >= 2;
+    if (had) return { primary: "HAD", optional: audit ? "AUDIT" : null };
+    if (audit) return { primary: "AUDIT", optional: null };
+    return { primary: "WHO-5", optional: null };
+  }
+  function sumScores(items, answers) {
+    return items.reduce((total, item, index) => total + (item.options[answers[index]]?.score ?? 0), 0);
+  }
+  function scoreHad(answers) {
+    const hadA = HAD_ITEMS.reduce((total, item, index) => item.scale !== "A" ? total : total + (item.options[answers[index]]?.score ?? 0), 0);
+    const hadD = HAD_ITEMS.reduce((total, item, index) => item.scale !== "D" ? total : total + (item.options[answers[index]]?.score ?? 0), 0);
+    const max = Math.max(hadA, hadD);
+    let band = "Sem sintomas relevantes", tone = "ok";
+    if (max >= 11) { band = "Sintomas relevantes"; tone = "alert"; }
+    else if (max >= 8) { band = "Sintomas leves"; tone = "watch"; }
+    return { instrument: "HAD", score: max, hadA, hadD, band, tone };
+  }
+  function scoreAudit(answers, items) {
+    const score = sumScores(items, answers);
+    let band = "Zona I — consumo de baixo risco", tone = "ok";
+    if (score >= 20) { band = "Zona IV — faixa que merece avaliação especializada"; tone = "alert"; }
+    else if (score >= 16) { band = "Zona III — consumo nocivo"; tone = "alert"; }
+    else if (score >= 8) { band = "Zona II — consumo de risco"; tone = "watch"; }
+    return { instrument: "AUDIT", score, band, tone };
+  }
+  function scoreWho5(answers, items) {
+    const raw = sumScores(items, answers);
+    const score = raw * 4;
+    let band = "Bem-estar adequado", tone = "ok";
+    if (score <= 28) { band = "Bem-estar baixo"; tone = "alert"; }
+    else if (score <= 50) { band = "Bem-estar reduzido"; tone = "watch"; }
+    return { instrument: "WHO-5", score, band, tone };
+  }
+  function scoreInstrument(id, answers, items) {
+    if (id === "HAD") return scoreHad(answers);
+    if (id === "AUDIT") return scoreAudit(answers, items);
+    return scoreWho5(answers, items);
+  }
+  function needsSafety(results) {
+    return results.some((result) => {
+      if (result.instrument === "HAD") return (result.hadA ?? 0) >= 15 || (result.hadD ?? 0) >= 15;
+      if (result.instrument === "AUDIT") return result.score >= 20;
+      return false;
+    });
+  }
+  function pickPatientResult(results) {
+    return results.find((item) => item.instrument === "HAD")
+      ?? results.find((item) => item.instrument === "AUDIT")
+      ?? results.find((item) => item.instrument === "WHO-5");
+  }
+  const CESMAM_ADDRESS = "Avenida Desembargador João Machado, 7324, Manaus, Amazonas";
+  const CAPS_ALEIXO = "Alameda Espanha, 5 — Aleixo, Manaus - AM, 69060-020";
+  const CAPS_LESTE = "CAPS AD II Leste Dra. Eliana Vitorino Schramm, Alameda Alphaville, s/n — Tancredo Neves, Manaus";
+  const CVV_SUPPORT = "Se quiser conversar com alguém agora, o CVV atende 24 horas no 188.";
+  function resultCopy(result) {
+    if (result.instrument === "HAD") {
+      if ((result.hadA ?? 0) >= 15 || (result.hadD ?? 0) >= 15) {
+        return `Seu rastreio indica sintomas mais intensos neste momento. Se fizer sentido para você, o CESMAM pode acolher e acompanhar isso com mais calma. O endereço em Manaus é ${CESMAM_ADDRESS}.`;
+      }
+      if ((result.hadA ?? 0) >= 11 || (result.hadD ?? 0) >= 11) {
+        return "Seu rastreio indica vários sintomas de ansiedade ou humor nas últimas duas semanas. Se quiser um olhar de saúde, uma unidade básica de saúde pode conversar com você sobre isso, no seu ritmo.";
+      }
+      if ((result.hadA ?? 0) >= 8 || (result.hadD ?? 0) >= 8) {
+        return "Seu rastreio indica alguns sintomas. Vale observar como você se sente nas próximas semanas e, se quiser, conversar com um profissional de saúde.";
+      }
+      return "Seu rastreio não indica sintomas relevantes neste momento. Continue cuidando do sono, da atividade física e das suas relações.";
+    }
+    if (result.instrument === "AUDIT") {
+      if (result.score >= 20) {
+        return "Seu padrão de consumo está em uma faixa em que pode valer buscar um serviço especializado, como o CAPS. " +
+          `Em Manaus, você pode procurar: ${CAPS_ALEIXO}; ou ${CAPS_LESTE}. ${CVV_SUPPORT}`;
+      }
+      if (result.score >= 16) {
+        return "Seu padrão de consumo está em uma faixa que merece um olhar mais atento. Se quiser, uma unidade básica de saúde pode conversar com você sobre isso, sem pressa. " + CVV_SUPPORT;
+      }
+      if (result.score >= 8) return "Seu padrão de consumo está em uma faixa que merece atenção. Reduzir a frequência pode fazer diferença.";
+      return "Seu padrão de consumo está em uma faixa de baixo risco. Vale manter o cuidado com a frequência e a quantidade.";
+    }
+    if (result.score <= 28) return "Seus indicadores de bem-estar estão baixos. Cuidar do sono, da rotina e das relações pode ajudar. Se quiser, um profissional pode conversar com você.";
+    if (result.score <= 50) return "Seus indicadores de bem-estar estão reduzidos. Cuidar do sono, da rotina e das relações pode ajudar. Vale repetir a avaliação em cerca de 30 dias.";
+    return "Seus indicadores de bem-estar estão adequados. Continue cuidando do seu sono, da atividade física e das suas relações.";
+  }
+  function patientResultCopy(results) {
+    const result = pickPatientResult(results);
+    if (!result) return "Obrigado por responder. Este é um rastreio e não estabelece diagnóstico.";
+    return resultCopy(result);
+  }
+  function mentalAdvice(results, refused) {
+    if (refused) {
+      return ["Tudo bem não responder agora. Se quiser conversar depois, o RH pode indicar os canais de apoio sem você precisar contar o resultado."];
+    }
+    const tone = results?.some((item) => item.tone === "alert") ? "alert"
+      : results?.some((item) => item.tone === "watch") ? "watch" : "ok";
+    if (tone === "alert") {
+      return [
+        "Pode ser um bom momento para conversar com alguém de confiança ou com um profissional de saúde.",
+        "Cuidar do sono, da rotina e das relações ajuda. Se quiser conversar, um amigo, um familiar, um profissional de saúde ou o CVV 188 (24 horas) podem ser um apoio.",
+        "Nada aqui é diagnóstico. O detalhamento fica com o profissional.",
+      ];
+    }
+    if (tone === "watch") {
+      return [
+        "Nas próximas semanas, observe como você se sente e reserve pequenos intervalos de descanso.",
+        "Movimento, sono e conversa com pessoas de confiança costumam ajudar.",
+        "Se quiser, um profissional pode acompanhar isso com mais calma. Este retorno não classifica você.",
+      ];
+    }
+    return [
+      "Siga cuidando do sono, da atividade física e das suas relações.",
+      "Se em algum momento quiser conversar, o RH pode indicar os canais de apoio sem você precisar explicar o questionário.",
+    ];
+  }
+  function patientBandLabel(result) {
+    if (result.tone === "ok") return "Por agora, o sinal está tranquilo";
+    if (result.tone === "watch") return "Vale observar nas próximas semanas";
+    return "Vale um cuidado a mais agora";
+  }
+  function mentalStepLabel(step, gateIndex, itemIndex, total) {
+    if (step === "invite") return "Convite";
+    if (step === "gate") return `Entrada ${gateIndex + 1} de 4`;
+    if (step === "instrument") return `Pergunta ${itemIndex + 1} de ${total}`;
+    if (step === "optional") return "Convite extra";
+    if (step === "safety") return "Acolhimento";
+    if (step === "result") return "Resultado";
+    return "Orientação final";
+  }
+  function mentalStepTime(step, instrument) {
+    if (step === "invite") return "10 s";
+    if (step === "gate") return "30 s";
+    if (step === "instrument") return `~${instrumentMinutes(instrument)} min`;
+    if (step === "optional") return "opcional";
+    if (step === "safety") return "condicional";
+    if (step === "result") return "20 s";
+    return "15 s";
+  }
+  function mentalStepProgress(step, gateIndex, itemIndex, total) {
+    if (step === "invite") return 8;
+    if (step === "gate") return 12 + gateIndex * 10;
+    if (step === "instrument") return 55 + (total ? (itemIndex / total) * 25 : 0);
+    if (step === "optional") return 82;
+    if (step === "safety") return 90;
+    if (step === "result") return 94;
+    return 100;
+  }
+
+  function scaleCue(score, scores, higherIsBetter) {
+    const unique = [...new Set(scores)].sort((a, b) => a - b);
+    if (unique.length < 3) return null;
+    const min = unique[0], max = unique[unique.length - 1];
+    if (max === min) return null;
+    let t = (score - min) / (max - min);
+    if (!higherIsBetter) t = 1 - t;
+    if (t >= 0.8) return { tone: "good" };
+    if (t >= 0.6) return { tone: "ok" };
+    if (t >= 0.4) return { tone: "mid" };
+    if (t >= 0.2) return { tone: "poor" };
+    return { tone: "bad" };
+  }
+  function optionScaleClass(score, scores, higherIsBetter) {
+    const cue = scaleCue(score, scores, higherIsBetter);
+    return cue ? ` scale-${cue.tone}` : "";
+  }
+  function scaleFace(tone) {
+    const fill = { good: "#22c55e", ok: "#84cc16", mid: "#eab308", poor: "#f97316", bad: "#ef4444" }[tone];
+    const mouth = {
+      good: "M 9 20 C 12 24 20 24 23 20",
+      ok: "M 10 20 C 13 23 19 23 22 20",
+      mid: "M 10 21 H 22",
+      poor: "M 9 22 C 12 18 20 18 23 22",
+      bad: "M 9 23 C 12 17 20 17 23 23",
+    }[tone];
+    return `<svg class="kiosk-option-face" viewBox="0 0 32 32" aria-hidden><circle cx="16" cy="16" r="14" fill="${fill}"/><circle cx="11" cy="13" r="2.1" fill="#0f172a"/><circle cx="21" cy="13" r="2.1" fill="#0f172a"/><path d="${mouth}" fill="none" stroke="#0f172a" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+  }
+  function optionContent(label, score, scores, higherIsBetter, checkable, checked) {
+    const cue = scaleCue(score, scores, higherIsBetter);
+    if (!cue && !checkable) return esc(label);
+    const check = checkable
+      ? `<span class="kiosk-check${checked ? " is-on" : ""}" aria-hidden>${checked ? icon("check") : ""}</span>`
+      : "";
+    const face = cue ? scaleFace(cue.tone) : "";
+    return `<span class="kiosk-option-scale">${check}${face}<span>${esc(label)}</span></span>`;
+  }
+
+  function formatBirthDigits(digits) {
+    const mask = [..."DD/MM/AAAA"];
+    let index = 0;
+    return mask.map((slot) => {
+      if (slot === "/") return "/";
+      if (index >= digits.length) return slot;
+      const char = digits[index];
+      index += 1;
+      return char;
+    }).join("");
+  }
+  function isoToBirthDigits(iso) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!match) return "";
+    return `${match[3]}${match[2]}${match[1]}`;
+  }
+  function digitsToIsoDate(digits) {
+    if (digits.length !== 8) return null;
+    const day = Number(digits.slice(0, 2));
+    const month = Number(digits.slice(2, 4));
+    const year = Number(digits.slice(4, 8));
+    if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) return null;
+    const parsed = new Date(year, month - 1, day);
+    if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (year < 1900 || parsed > today) return null;
+    return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+  function ageFromBirth(value) {
+    if (!value) return null;
+    const born = new Date(value);
+    if (Number.isNaN(born.getTime())) return null;
+    const now = new Date();
+    let years = now.getFullYear() - born.getFullYear();
+    const m = now.getMonth() - born.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < born.getDate())) years -= 1;
+    return years > 0 ? years : null;
+  }
+  function newVisitId() {
+    try {
+      const id = globalThis.crypto?.randomUUID?.();
+      if (id) return id;
+    } catch { /* file:// */ }
+    const bytes = new Uint8Array(16);
+    try { globalThis.crypto?.getRandomValues?.(bytes); }
+    catch { for (let i = 0; i < 16; i += 1) bytes[i] = Math.floor(Math.random() * 256); }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  function isMentalDone(session) {
+    return Boolean(session.mentalHealth?.completedAt || session.mentalHealth?.refused);
+  }
+  function isStepDone(session, id, justFinished) {
+    if (justFinished === id) return true;
+    if (id === "generalHealth") return Boolean(session.generalHealth);
+    return isMentalDone(session);
+  }
+  function isVisitComplete(session, justFinished) {
+    return STEPS.every((step) => isStepDone(session, step.id, justFinished));
+  }
+  function nextIncompleteStep(session, justFinished) {
+    return STEPS.find((step) => !isStepDone(session, step.id, justFinished)) ?? null;
+  }
+  function hasReportData(session) {
+    return Boolean(session.generalHealth || isMentalDone(session));
+  }
+  function formatVisitWhen(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  }
+  function visitSummary(visit) {
+    const parts = [];
+    if (visit.health) parts.push("Saúde geral");
+    if (visit.mental) parts.push("Saúde mental");
+    return parts.join(" · ") || "Relatório";
+  }
+  function groupSavedVisits(forms) {
+    const pieces = forms
+      .filter((item) => item.module === "health" || item.module === "mental")
+      .map((item) => ({
+        t: Date.parse(item.created_at) || 0,
+        at: item.created_at,
+        visitId: item.visit_id ?? null,
+        kind: item.module,
+        form: item,
+      }))
+      .sort((a, b) => b.t - a.t);
+    const visits = [];
+    const byVisitId = new Map();
+    const WINDOW_MS = 45 * 60 * 1000;
+    for (const piece of pieces) {
+      if (piece.visitId) {
+        let match = byVisitId.get(piece.visitId);
+        if (!match) {
+          match = { id: piece.visitId, at: piece.at, seedT: piece.t, visitId: piece.visitId, health: null, mental: null };
+          byVisitId.set(piece.visitId, match);
+          visits.push(match);
+        }
+        if (piece.kind === "health" && !match.health) match.health = piece.form;
+        if (piece.kind === "mental" && !match.mental) match.mental = piece.form;
+        if (piece.t > (Date.parse(match.at) || 0)) match.at = piece.at;
+        continue;
+      }
+      const match = visits.find((visit) => !visit.visitId && Math.abs(visit.seedT - piece.t) <= WINDOW_MS);
+      if (match) {
+        if (piece.kind === "health" && !match.health) match.health = piece.form;
+        if (piece.kind === "mental" && !match.mental) match.mental = piece.form;
+        if (piece.t > (Date.parse(match.at) || 0)) match.at = piece.at;
+      } else {
+        const visit = { id: piece.form.id, at: piece.at, seedT: piece.t, visitId: null, health: null, mental: null };
+        if (piece.kind === "health") visit.health = piece.form;
+        if (piece.kind === "mental") visit.mental = piece.form;
+        visits.push(visit);
+      }
+    }
+    visits.sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0));
+    return visits;
+  }
+  function healthKioskPayload(def, score) {
+    return { title: def.title, source: "kiosk", percent: score.percent, total: score.total, max: score.max, label: score.label, findings: score.findings, items: score.items };
+  }
+  function mentalPayload(mental) {
+    const gateItems = GATE_QUESTIONS.map((text, index) => {
+      const score = mental.gate?.[index];
+      const option = GATE_OPTIONS.find((item) => item.score === score);
+      return { id: `p${index + 1}`, text, answer: option?.label ?? (score == null || Number.isNaN(score) ? "" : String(score)), score: score ?? null };
+    });
+    const started = mental.startedAt ? Date.parse(mental.startedAt) : NaN;
+    const ended = mental.completedAt ? Date.parse(mental.completedAt) : Date.now();
+    const durationSeconds = Number.isFinite(started) ? Math.max(0, Math.round((ended - started) / 1000)) : null;
+    return {
+      title: "Saúde mental",
+      accepted: mental.accepted ?? false,
+      refused: Boolean(mental.refusedAt),
+      instrument: mental.instrument ?? null,
+      optionalOffered: mental.optionalOffered ?? null,
+      optionalAccepted: mental.optionalAccepted ?? null,
+      safetyTriggered: Boolean(mental.safetyTriggered),
+      duration_seconds: durationSeconds,
+      gate: gateItems,
+      instruments: mental.instrumentLog ?? [],
+      results: mental.results ?? [],
+    };
+  }
+  function gateItemsFromScores(scores) {
+    return GATE_QUESTIONS.map((text, index) => {
+      const score = scores[index];
+      const option = GATE_OPTIONS.find((item) => item.score === score);
+      return { text, answer: option?.label ?? "—" };
+    });
+  }
+  function healthViewFromPayload(payload) {
+    return {
+      percent: typeof payload.percent === "number" ? payload.percent : undefined,
+      total: typeof payload.total === "number" ? payload.total : undefined,
+      max: typeof payload.max === "number" ? payload.max : undefined,
+      label: typeof payload.label === "string" ? payload.label : undefined,
+      findings: Array.isArray(payload.findings) ? payload.findings : [],
+      items: Array.isArray(payload.items) ? payload.items : [],
+    };
+  }
+  function mentalViewFromPayload(payload) {
+    const gate = Array.isArray(payload.gate) ? payload.gate : [];
+    return {
+      refused: Boolean(payload.refused),
+      accepted: Boolean(payload.accepted),
+      safetyTriggered: Boolean(payload.safetyTriggered),
+      gateItems: gate.map((item, index) => ({
+        text: String(item.text ?? GATE_QUESTIONS[index] ?? `Pergunta ${index + 1}`),
+        answer: String(item.answer ?? ""),
+      })),
+      results: Array.isArray(payload.results) ? payload.results : [],
+      instrumentLog: Array.isArray(payload.instruments) ? payload.instruments : [],
+    };
+  }
+
+  function icon(name, size) {
+    let s = size;
+    if (s == null) {
+      if (name === "check-big") s = 40;
+      else if (name === "menu") s = 26;
+      else s = 22;
+    }
+    const svg = (d) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden>${d}</svg>`;
+    if (name === "menu") return svg('<path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/>');
+    if (name === "clipboard") return svg('<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8"/><path d="M8 15h5"/>');
+    if (name === "brain") return svg('<path d="M12 5a3 3 0 1 0-5.5 1.6"/><path d="M12 5a3 3 0 1 1 5.5 1.6"/><path d="M12 5v3"/><path d="M6.5 6.6A3 3 0 0 0 5 12c0 1.7.7 2.6 1.5 3.4"/><path d="M17.5 6.6A3 3 0 0 1 19 12c0 1.7-.7 2.6-1.5 3.4"/><path d="M8 16.5A3.5 3.5 0 0 0 12 21a3.5 3.5 0 0 0 4-4.5"/><path d="M8.5 16a3 3 0 0 1 0-6"/><path d="M15.5 16a3 3 0 0 0 0-6"/>');
+    if (name === "chevron-right") return svg('<path d="m9 18 6-6-6-6"/>');
+    if (name === "chevron-left") return svg('<path d="m15 18-6-6 6-6"/>');
+    if (name === "chevron-down") return svg('<path d="m6 9 6 6 6-6"/>');
+    if (name === "check-big") return svg('<path d="M21.8 12A10 10 0 1 1 16 3.5"/><path d="m9 12 2 2 8-8"/>');
+    if (name === "logout") return svg('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>');
+    if (name === "pencil") return svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>');
+    if (name === "file") return svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>');
+    if (name === "x") return svg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>');
+    if (name === "check") return `<svg class="kiosk-check-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden><path d="M20 6 9 17l-5-5"/></svg>`;
+    if (name === "delete") return svg('<path d="M10 5a2 2 0 0 0-1.344.519l-6.328 5.74a1 1 0 0 0 0 1.481l6.328 5.741A2 2 0 0 0 10 19h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><path d="m12 9 6 6"/><path d="m18 9-6 6"/>');
+    return "";
+  }
+  function esc(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  const KEYBOARD_ROWS = [
+    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+    ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+    ["z", "x", "c", "v", "b", "n", "m"],
+  ];
+  const ACCENTS = ["á", "é", "í", "ó", "ú", "ã", "õ", "ç"];
+
+  const emptySession = () => ({ visitId: null, person: null, generalHealth: null, mentalHealth: null });
+  const store = {
+    people: [],
+    forms: [],
+    access: false,
+    session: emptySession(),
+    confirmEnd: false,
+    sidebarOpen: false,
+    login: { step: "registration", employeeId: "", birthDigits: "", error: "" },
+    cadastro: null,
+    health: null,
+    mental: null,
+    records: { selectedId: null },
+  };
+
+  function parseRoute() {
+    const raw = (location.hash || "#/").replace(/^#/, "") || "/";
+    const q = raw.indexOf("?");
+    const path = (q >= 0 ? raw.slice(0, q) : raw) || "/";
+    const search = new URLSearchParams(q >= 0 ? raw.slice(q + 1) : "");
+    return { path: path.startsWith("/") ? path : `/${path}`, search };
+  }
+  function navigate(path, replace) {
+    const hash = path.startsWith("#") ? path : `#${path.startsWith("/") ? path : `/${path}`}`;
+    if (replace) {
+      history.replaceState(null, "", hash);
+      render();
+      return;
+    }
+    if (location.hash === hash) render();
+    else location.hash = hash.slice(1) ? hash : "#/";
+  }
+  function emptyHealth() {
+    return { index: 0, answers: {}, details: {}, flashId: null, completed: false, moreBelow: false };
+  }
+  function emptyMental() {
+    return {
+      step: "invite", gateIndex: 0, gate: [NaN, NaN, NaN, NaN],
+      primary: "WHO-5", optional: null, active: "WHO-5",
+      itemIndex: 0, answers: [], instrumentLog: [], results: [],
+      flashId: null, started: new Date().toISOString(),
+    };
+  }
+  function emptyCadastro(prefill, editing) {
+    const person = store.session.person;
+    if (editing && person) {
+      return {
+        form: {
+          employeeId: person.matricula ?? "",
+          name: person.name,
+          birthDate: person.birth_date ?? "",
+          sex: person.sex,
+          heightCm: person.height_cm != null ? String(Math.round(person.height_cm)) : "",
+        },
+        birthDigits: isoToBirthDigits(person.birth_date ?? ""),
+        step: "registration",
+        error: "",
+        skipRegistration: false,
+        shifted: true,
+      };
+    }
+    return {
+      form: { employeeId: prefill || "", name: "", birthDate: "", sex: "", heightCm: "" },
+      birthDigits: "",
+      step: prefill ? "name" : "registration",
+      error: "",
+      skipRegistration: Boolean(prefill),
+      shifted: true,
+    };
+  }
+  function beginVisit(person) {
+    store.session = { ...emptySession(), person, visitId: newVisitId() };
+  }
+  function setPerson(person) {
+    const prev = store.session;
+    const samePerson = Boolean(person && prev.person && prev.person.id === person.id);
+    store.session = samePerson
+      ? { ...prev, person, visitId: prev.visitId || newVisitId() }
+      : { ...emptySession(), person, visitId: person ? newVisitId() : null };
+  }
+  function clearSession() {
+    store.session = emptySession();
+    store.access = false;
+    store.confirmEnd = false;
+    store.sidebarOpen = false;
+  }
+  function saveForm(module, status, payload) {
+    const personId = store.session.person?.id;
+    if (!personId) return;
+    store.forms.push({
+      id: newVisitId(),
+      person_id: personId,
+      module,
+      status,
+      payload,
+      visit_id: store.session.visitId,
+      created_at: new Date().toISOString(),
+    });
+  }
+
+  function requirePerson(route) {
+    const protectedPaths = ["/menu", "/saude-geral", "/saude-mental", "/conclusao", "/relatorio", "/registros"];
+    const editing = route.path === "/cadastro" && route.search.get("edit") === "1";
+    if ((protectedPaths.includes(route.path) || editing) && (!store.session.person || !store.access)) {
+      pendingRedirect = { path: "/matricula", replace: true };
+      return false;
+    }
+    return true;
+  }
+
+  let observerCleanup = null;
+  let advanceTimer = null;
+  let pendingRedirect = null;
+  function clearObserver() {
+    if (observerCleanup) { observerCleanup(); observerCleanup = null; }
+  }
+
+  function renderConfirm() {
+    if (!store.confirmEnd) return "";
+    return `<div class="kiosk-modal-backdrop no-print" data-act="cancel-end">
+      <div class="kiosk-modal" role="dialog" aria-modal="true">
+        <h2>${esc(END_SESSION_CONFIRM.title)}</h2>
+        <p>${esc(END_SESSION_CONFIRM.description)}</p>
+        <div class="kiosk-modal-actions">
+          <button type="button" class="kiosk-btn kiosk-btn-ghost" data-act="cancel-end">${esc(END_SESSION_CONFIRM.cancelLabel)}</button>
+          <button type="button" class="kiosk-btn kiosk-btn-primary" data-act="confirm-end">${esc(END_SESSION_CONFIRM.confirmLabel)}</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  function renderSidebar(active) {
+    if (!store.sidebarOpen) return "";
+    return `<div class="kiosk-sidebar-backdrop no-print" data-act="close-sidebar">
+      <aside class="kiosk-sidebar" data-stop>
+        <div class="kiosk-sidebar-title">Menu</div>
+        <button type="button" class="kiosk-sidebar-item${active === "edit" ? " active" : ""}" data-act="edit-cadastro">${icon("pencil")} Editar cadastro</button>
+        <button type="button" class="kiosk-sidebar-item${active === "records" ? " active" : ""}" data-act="go-records">${icon("file")} Visualizar registros</button>
+        <button type="button" class="kiosk-sidebar-close" data-act="close-sidebar">${icon("x")} Fechar</button>
+      </aside>
+    </div>`;
+  }
+  function layout(inner, opts) {
+    const showUser = opts.showUser !== false;
+    const person = store.session.person;
+    const header = showUser && person
+      ? `<header class="kiosk-header no-print">
+          <div class="kiosk-user"><span class="kiosk-user-avatar" aria-hidden></span><span>${esc(person.name)}${person.matricula ? ` · ${esc(person.matricula)}` : ""}</span></div>
+          <button type="button" class="kiosk-link-btn" data-act="ask-end">${icon("logout")} Sair</button>
+        </header>`
+      : "";
+    return `<div class="kiosk-shell">${header}<main class="kiosk-main">${inner}</main>${renderConfirm()}${renderSidebar(opts.activeSidebar || null)}</div>`;
+  }
+  function backBtn(act) {
+    return `<button type="button" class="kiosk-back" data-act="${act}">${icon("chevron-left")} Voltar</button>`;
+  }
+  function numpad(prefix) {
+    const keys = ["1","2","3","4","5","6","7","8","9"];
+    return `<div class="kiosk-numpad" role="group" aria-label="Teclado numérico">
+      ${keys.map((d) => `<button type="button" class="kiosk-numpad-key" data-act="${prefix}-digit" data-digit="${d}">${d}</button>`).join("")}
+      <button type="button" class="kiosk-numpad-key kiosk-numpad-key-action" data-act="${prefix}-bs" aria-label="Apagar">${icon("delete")}</button>
+      <button type="button" class="kiosk-numpad-key" data-act="${prefix}-digit" data-digit="0">0</button>
+      <span class="kiosk-numpad-spacer" aria-hidden></span>
+    </div>`;
+  }
+  function keyboard() {
+    const shifted = store.cadastro?.shifted !== false;
+    const accentBtns = ACCENTS.map((ch) => {
+      const shown = shifted ? ch.toUpperCase() : ch;
+      return `<button type="button" class="kiosk-keyboard-key kiosk-keyboard-key-accent" data-act="kb-char" data-char="${esc(ch)}">${esc(shown)}</button>`;
+    }).join("");
+    const rows = KEYBOARD_ROWS.map((row, index) => {
+      const shift = index === 2
+        ? `<button type="button" class="kiosk-keyboard-key kiosk-keyboard-key-action${shifted ? " is-on" : ""}" data-act="kb-shift" aria-pressed="${shifted}">⇧</button>`
+        : "";
+      const letters = row.map((ch) => `<button type="button" class="kiosk-keyboard-key" data-act="kb-char" data-char="${ch}">${esc(shifted ? ch.toUpperCase() : ch)}</button>`).join("");
+      const del = index === 2
+        ? `<button type="button" class="kiosk-keyboard-key kiosk-keyboard-key-action" data-act="kb-bs" aria-label="Apagar">${icon("delete")}</button>`
+        : "";
+      return `<div class="kiosk-keyboard-row${index === 2 ? " is-bottom" : ""}">${shift}${letters}${del}</div>`;
+    }).join("");
+    return `<div class="kiosk-keyboard" role="group" aria-label="Teclado">
+      <div class="kiosk-keyboard-accents">${accentBtns}</div>
+      ${rows}
+      <div class="kiosk-keyboard-row"><button type="button" class="kiosk-keyboard-key kiosk-keyboard-key-space" data-act="kb-space">espaço</button></div>
+    </div>`;
+  }
+  function quizHeading(category, backAct) {
+    return `<div class="kiosk-quiz-heading">${backAct ? backBtn(backAct) : ""}<div class="kiosk-quiz-category">${esc(category)}</div></div>`;
+  }
+  function afterStep(justFinished, title, description) {
+    const allDone = isVisitComplete(store.session, justFinished);
+    const persisted = isVisitComplete(store.session);
+    if (allDone && persisted) { pendingRedirect = { path: "/conclusao", replace: true }; return ""; }
+    if (allDone) {
+      return `<div class="kiosk-center-card"><h1 class="kiosk-title">Registrando sua avaliação</h1><p class="kiosk-subtitle">Só um instante — em seguida você vê a conclusão.</p></div>`;
+    }
+    const next = nextIncompleteStep(store.session, justFinished);
+    if (!next) { pendingRedirect = { path: "/conclusao", replace: true }; return ""; }
+    return `<div class="kiosk-center-card kiosk-step-complete">
+      <div class="kiosk-success-ring" aria-hidden>${icon("check-big")}</div>
+      <h1 class="kiosk-title">${esc(title)}</h1>
+      <p class="kiosk-subtitle">${esc(description)}</p>
+      <p class="kiosk-subtitle">Quer ir para a próxima etapa agora?</p>
+      <div class="kiosk-menu-actions">
+        <button type="button" class="kiosk-btn kiosk-btn-primary kiosk-btn-xl" data-act="after-next" data-path="${next.path}">${esc(next.label)}</button>
+        <button type="button" class="kiosk-btn kiosk-btn-ghost" data-act="go-menu">${icon("chevron-left")} Voltar ao menu</button>
+      </div>
+    </div>`;
+  }
+  function sessionReport(person, whenLabel, health, mental) {
+    const mentalShown = mental?.results?.length ? pickPatientResult(mental.results) : undefined;
+    const hasHealth = Boolean(health && (health.items?.length || health.label || health.percent != null));
+    const hasMental = Boolean(mental && (mental.accepted || mental.refused));
+    let healthHtml = "";
+    if (hasHealth && health) {
+      const findings = health.findings ?? [];
+      healthHtml = `<section class="kiosk-report-card"><h2>Saúde Geral</h2>
+        ${health.percent != null || health.label ? `<div class="kiosk-score-row">
+          ${health.percent != null ? `<div class="kiosk-score-value">${health.percent}%</div>` : ""}
+          <div>${health.label ? `<div class="kiosk-score-label">${esc(health.label)}</div>` : ""}
+          ${health.total != null && health.max != null ? `<div class="kiosk-muted">Pontuação ${health.total} de ${health.max}</div>` : ""}</div>
+        </div>` : ""}
+        <h3 class="kiosk-report-sub">Problema detectado</h3>
+        ${findings.length ? `<ul class="kiosk-finding-list">${findings.map((item) => `<li><strong>${esc(item.title)}</strong><span>${esc(item.detail)}</span></li>`).join("")}</ul>`
+          : `<p class="kiosk-muted">Nenhum ponto de atenção destacado nesta triagem.</p>`}
+        ${(health.items ?? []).length ? `<h3 class="kiosk-report-sub">Respostas</h3><ol class="kiosk-qa-list">${health.items.map((item) =>
+          `<li><p>${esc(item.text)}</p><strong>${esc(item.answer || "—")}</strong>${item.detail ? `<span class="kiosk-muted">${esc(item.detail)}</span>` : ""}</li>`).join("")}</ol>` : ""}
+      </section>`;
+    }
+    let mentalHtml = "";
+    if (mental?.refused) {
+      mentalHtml = `<section class="kiosk-report-card"><h2>Saúde Mental</h2><p class="kiosk-muted">Convite recusado nesta sessão.</p></section>`;
+    } else if (hasMental && mental?.accepted) {
+      const results = mental.results ?? [];
+      const nonOk = results.filter((item) => item.tone !== "ok");
+      const findings = [];
+      if (mental.safetyTriggered) findings.push(`<li><strong>Atenção extra</strong><span>O rastreio indica que vale conversar com um profissional de saúde com prioridade.</span></li>`);
+      findings.push(...nonOk.map((item) => `<li><strong>${esc(item.instrument)}: ${esc(item.band)}</strong><span>Pontuação ${item.score}</span></li>`));
+      if (!nonOk.length && !mental.safetyTriggered) {
+        findings.push(`<li><strong>Sem alerta neste rastreio</strong><span>${esc(patientResultCopy(results))}</span></li>`);
+      } else {
+        findings.push(`<li><strong>Orientação</strong><span>${esc(patientResultCopy(results))}</span></li>`);
+      }
+      mentalHtml = `<section class="kiosk-report-card"><h2>Saúde Mental</h2>
+        ${mentalShown ? `<div class="kiosk-score-label">${esc(mentalShown.band)}</div>
+          <p class="kiosk-muted">${esc(mentalShown.instrument)}${mentalShown.instrument === "HAD"
+            ? ` · ansiedade ${mentalShown.hadA ?? "—"} · humor ${mentalShown.hadD ?? "—"}`
+            : ` · pontuação ${mentalShown.score}`}</p>
+          <h3 class="kiosk-report-sub">Problema detectado</h3>
+          <ul class="kiosk-finding-list">${findings.join("")}</ul>`
+          : `<p class="kiosk-muted">Rastreio iniciado, sem instrumento concluído.</p>`}
+        ${(mental.gateItems ?? []).length ? `<h3 class="kiosk-report-sub">Perguntas iniciais</h3><ol class="kiosk-qa-list">${mental.gateItems.map((item) =>
+          `<li><p>${esc(item.text)}</p><strong>${esc(item.answer || "—")}</strong></li>`).join("")}</ol>` : ""}
+        ${(mental.instrumentLog ?? []).map((entry) => `<div class="kiosk-print-instrument"><h3 class="kiosk-report-sub">Instrumento ${esc(entry.instrument)}</h3>
+          <ol class="kiosk-qa-list">${entry.items.map((item) => `<li><p>${esc(item.text)}</p><strong>${esc(item.label || "—")}</strong></li>`).join("")}</ol></div>`).join("")}
+      </section>`;
+    }
+    return `<div class="kiosk-report kiosk-print-root">
+      <h1 class="kiosk-title">Relatório da sessão</h1>
+      <p class="kiosk-subtitle">${esc(person.name)}${person.matricula ? ` · matrícula ${esc(person.matricula)}` : ""} · ${esc(whenLabel)}</p>
+      <div class="kiosk-print-pair">${healthHtml}${mentalHtml}</div>
+      <p class="kiosk-muted" style="text-align:center">Este relatório é um rastreio da sessão e não substitui avaliação clínica.</p>
+    </div>`;
+  }
+
+  function viewWelcome() {
+    return layout(`<div class="kiosk-center-card">
+      <div class="kiosk-brand-mark">CN</div>
+      <h1 class="kiosk-title">CabiNET</h1>
+      <p class="kiosk-subtitle">Acompanhamento de bem-estar</p>
+      <button type="button" class="kiosk-btn kiosk-btn-primary kiosk-btn-xl" data-act="go-matricula">Iniciar</button>
+      ${store.access ? `<button type="button" class="kiosk-btn kiosk-btn-ghost" data-act="ask-end">Encerrar sessão</button>` : ""}
+    </div>`, { showUser: false });
+  }
+  function viewLogin() {
+    if (store.access && store.session.person) { pendingRedirect = { path: "/menu", replace: true }; return ""; }
+    const s = store.login;
+    if (s.step === "firstAccess") {
+      return layout(`<div class="kiosk-login">
+        <h1 class="kiosk-title">Primeiro acesso</h1>
+        <p class="kiosk-subtitle">Não encontramos a matrícula <strong>${esc(s.employeeId.trim())}</strong> no sistema. Complete o cadastro para continuar.</p>
+        <button type="button" class="kiosk-btn kiosk-btn-primary kiosk-btn-xl" data-act="go-cadastro-new">Realizar cadastro</button>
+        ${backBtn("login-back-reg")}
+      </div>`, { showUser: false });
+    }
+    const onRegistration = s.step === "registration";
+    const emptyValue = onRegistration ? !s.employeeId : s.birthDigits.length === 0;
+    const display = onRegistration ? (s.employeeId || "Matrícula") : formatBirthDigits(s.birthDigits);
+    return layout(`<div class="kiosk-login">
+      ${onRegistration ? "" : backBtn("login-back-reg")}
+      <h1 class="kiosk-title">${onRegistration ? "Matrícula" : "Data de nascimento"}</h1>
+      <p class="kiosk-subtitle">${onRegistration ? "Digite sua matrícula no teclado." : "Digite o dia, o mês e o ano de nascimento."}</p>
+      <div class="kiosk-login-value${emptyValue ? " is-empty" : ""}" role="status">${esc(display)}</div>
+      ${s.error ? `<p class="kiosk-error">${esc(s.error)}</p>` : ""}
+      ${numpad("login")}
+      <button type="button" class="kiosk-btn kiosk-btn-primary kiosk-btn-xl" data-act="${onRegistration ? "login-continue" : "login-enter"}">${onRegistration ? "Continuar" : "Entrar"}</button>
+    </div>`, { showUser: false });
+  }
+  function viewCadastro(route) {
+    const editing = route.search.get("edit") === "1";
+    const prefill = (route.search.get("matricula") ?? "").trim();
+    if (editing && (!store.session.person || !store.access)) { pendingRedirect = { path: "/matricula", replace: true }; return ""; }
+    if (!store.cadastro) store.cadastro = emptyCadastro(prefill, editing);
+    const c = store.cadastro;
+    const steps = c.skipRegistration ? ["name", "birthDate", "sex", "height"] : ["registration", "name", "birthDate", "sex", "height"];
+    const stepIndex = Math.max(0, steps.indexOf(c.step));
+    const titles = { registration: "Matrícula", name: "Nome", birthDate: "Data de nascimento", sex: "Gênero", height: "Altura" };
+    const subtitles = {
+      registration: "Digite a matrícula no teclado.",
+      name: "Digite o nome completo no teclado.",
+      birthDate: "Digite o dia, o mês e o ano de nascimento.",
+      sex: "Toque na opção que corresponde a você.",
+      height: "Digite a altura em centímetros.",
+    };
+    const emptyValue = (c.step === "registration" && !c.form.employeeId) || (c.step === "name" && !c.form.name)
+      || (c.step === "birthDate" && !c.birthDigits) || (c.step === "height" && !c.form.heightCm);
+    const display = c.step === "registration" ? (c.form.employeeId || "Matrícula")
+      : c.step === "name" ? (c.form.name || "Nome completo")
+      : c.step === "birthDate" ? formatBirthDigits(c.birthDigits)
+      : c.step === "height" ? (c.form.heightCm ? `${c.form.heightCm} cm` : "cm") : "";
+    const sex = `<div class="kiosk-choice-row kiosk-choice-stack">${[
+      { value: "female", label: "Feminino" },
+      { value: "male", label: "Masculino" },
+    ].map((option) => `<button type="button" class="kiosk-choice${c.form.sex === option.value ? " selected" : ""}" data-act="cad-sex" data-value="${option.value}">${option.label}</button>`).join("")}</div>`;
+    return layout(`<div class="kiosk-login${c.step === "name" ? " kiosk-login-wide" : ""}">
+      ${backBtn("cad-back")}
+      <div class="kiosk-dots" aria-hidden>${steps.map((item, i) => `<span class="${item === c.step ? "active" : (i < stepIndex ? "done" : "")}"></span>`).join("")}</div>
+      <h1 class="kiosk-title">${titles[c.step]}</h1>
+      <p class="kiosk-subtitle">${subtitles[c.step]}</p>
+      ${c.step === "sex" ? sex : `<div class="kiosk-login-value${emptyValue ? " is-empty" : ""}${c.step === "name" ? " is-text" : ""}" role="status">${esc(display)}</div>`}
+      ${c.error ? `<p class="kiosk-error">${esc(c.error)}</p>` : ""}
+      ${c.step === "name" ? keyboard() : ""}
+      ${c.step === "registration" || c.step === "birthDate" || c.step === "height" ? numpad("cad") : ""}
+      ${c.step === "sex" ? "" : `<button type="button" class="kiosk-btn kiosk-btn-primary kiosk-btn-xl" data-act="${c.step === "height" ? "cad-save" : "cad-next"}">${c.step === "height" ? "Salvar" : "Continuar"}</button>`}
+    </div>`, { showUser: editing, activeSidebar: editing ? "edit" : null });
+  }
+  function viewMenu() {
+    if (!store.session.person) { pendingRedirect = { path: "/matricula", replace: true }; return ""; }
+    const visitComplete = isVisitComplete(store.session);
+    const items = [
+      { id: "general", title: "Saúde Geral", subtitle: "Triagem rápida sobre hábitos, sintomas e como você avalia sua saúde hoje.", path: "/saude-geral", done: Boolean(store.session.generalHealth), icon: "clipboard" },
+      { id: "mental", title: "Saúde Mental", subtitle: "Convite opcional com perguntas curtas sobre bem-estar emocional e humor.", path: "/saude-mental", done: isMentalDone(store.session), icon: "brain" },
+    ];
+    return layout(`<div class="kiosk-menu">
+      <button type="button" class="kiosk-hamburger no-print" aria-label="Abrir menu" data-act="open-sidebar">${icon("menu")}</button>
+      <div class="kiosk-menu-heading">
+        <h1 class="kiosk-title">O que você quer fazer agora?</h1>
+        <p class="kiosk-subtitle">Escolha uma etapa. Você pode concluir tudo agora ou voltar depois nesta sessão.</p>
+      </div>
+      <div class="kiosk-menu-grid">${items.map((item) => `
+        <button type="button" class="kiosk-menu-tile${item.done ? " is-done" : ""}" data-act="go-path" data-path="${item.path}">
+          <span class="kiosk-menu-tile-icon">${icon(item.icon)}</span>
+          <span class="kiosk-menu-tile-body">
+            <span class="kiosk-menu-tile-top"><strong>${esc(item.title)}</strong>${item.done ? `<em class="kiosk-done-pill">Concluído</em>` : ""}</span>
+            <span class="kiosk-menu-tile-desc">${esc(item.subtitle)}</span>
+          </span>
+          <span class="kiosk-menu-tile-arrow">${icon("chevron-right")}</span>
+        </button>`).join("")}</div>
+      <div class="kiosk-menu-footer">
+        ${visitComplete ? `<button type="button" class="kiosk-btn kiosk-btn-primary kiosk-btn-xl" data-act="go-path" data-path="/conclusao">Ver conclusão</button>` : ""}
+        <button type="button" class="kiosk-btn kiosk-btn-secondary kiosk-btn-xl" ${hasReportData(store.session) ? "" : "disabled"} data-act="go-path" data-path="/relatorio">Visualizar relatório</button>
+        <button type="button" class="kiosk-btn kiosk-btn-ghost" data-act="ask-end">Encerrar sessão</button>
+      </div>
+    </div>`, { showUser: true });
+  }
+  function viewHealth() {
+    if (!store.session.person) { pendingRedirect = { path: "/matricula", replace: true }; return ""; }
+    if (!store.health) store.health = emptyHealth();
+    const h = store.health;
+    const def = GENERAL_HEALTH;
+    if (h.completed) return layout(afterStep("generalHealth", "Saúde geral concluída", "Suas respostas foram registradas."), { showUser: true });
+    const question = def.questions[h.index];
+    if (!question) { pendingRedirect = { path: "/menu", replace: true }; return ""; }
+    const total = def.questions.length;
+    const progress = ((h.index + 1) / total) * 100;
+    const minutesLabel = def.estimatedSeconds < 60 ? `~${def.estimatedSeconds}s` : `~${Math.max(1, Math.round(def.estimatedSeconds / 60))} min`;
+    const selected = h.answers[question.id] ?? [];
+    const detail = h.details[question.id] ?? "";
+    const showFollowUp = followUpVisible(question, selected);
+    const canAdvance = isQuestionAnswered(question, selected, detail);
+    const needsManualNext = Boolean(question.kind === "multiple" || showFollowUp || (question.followUpWhenOptionId && selected.includes(question.followUpWhenOptionId)));
+    const isMultiple = question.kind === "multiple";
+    const optionScores = question.options.map((item) => item.score);
+    return layout(`<div class="kiosk-quiz${needsManualNext ? " has-advance" : ""}">
+      <div class="kiosk-quiz-meta"><div class="kiosk-quiz-meta-main">
+        <div class="kiosk-quiz-progress-label">Pergunta ${h.index + 1} de ${total}</div>
+        <div class="kiosk-progress-track" aria-hidden><div class="kiosk-progress-fill" style="width:${progress}%"></div></div>
+      </div><div class="kiosk-quiz-eta">${minutesLabel}</div></div>
+      ${quizHeading(def.category, "health-back")}
+      <h1 class="kiosk-quiz-question">${esc(question.text)}</h1>
+      ${isMultiple ? `<p class="kiosk-quiz-hint">Pode marcar mais de uma opção. Depois toque em Avançar.</p>` : ""}
+      <div class="kiosk-option-list">${question.options.map((option) => {
+        const active = selected.includes(option.id) || h.flashId === option.id;
+        return `<button type="button" class="kiosk-option${isMultiple ? " is-checkable" : ""}${active ? " selected" : ""}${optionScaleClass(option.score, optionScores, true)}" ${isMultiple ? `aria-pressed="${active}"` : ""} data-act="health-opt" data-id="${option.id}">${optionContent(option.label, option.score, optionScores, true, isMultiple, active)}</button>`;
+      }).join("")}</div>
+      ${showFollowUp ? `<label class="kiosk-field kiosk-quiz-followup"><span>${esc(question.followUpPrompt ?? "Detalhe")}</span>
+        <input class="kiosk-input" data-act="health-detail" value="${esc(detail)}" placeholder="${esc(question.followUpPlaceholder || "")}"></label>` : ""}
+      <div class="kiosk-quiz-end"></div>
+      ${needsManualNext && h.moreBelow ? `<button type="button" class="kiosk-scroll-hint" aria-label="Há mais opções abaixo. Role a tela." data-act="health-scroll">${icon("chevron-down")}</button>` : ""}
+      ${needsManualNext ? `<div class="kiosk-quiz-advance"><button type="button" class="kiosk-btn kiosk-btn-primary" ${canAdvance ? "" : "disabled"} data-act="health-next">Avançar</button></div>` : ""}
+    </div>`, { showUser: true });
+  }
+  function viewMental() {
+    if (!store.session.person) { pendingRedirect = { path: "/matricula", replace: true }; return ""; }
+    if (!store.mental) store.mental = emptyMental();
+    const m = store.mental;
+    if (m.step === "done") {
+      return layout(afterStep("mentalHealth", "Saúde mental concluída",
+        store.session.mentalHealth?.refused
+          ? "Você optou por não responder agora. Pode seguir para a próxima etapa quando quiser."
+          : "Obrigado por participar. Suas respostas ficam nesta sessão e o resultado é só para você."), { showUser: true });
+    }
+    const items = instrumentItems(m.active);
+    const progress = mentalStepProgress(m.step, m.gateIndex, m.itemIndex, items.length);
+    const shown = pickPatientResult(m.results);
+    const advice = shown?.tone === "ok" ? [] : mentalAdvice(m.results).slice(0, 1);
+    const backAct = (m.step === "gate" || m.step === "instrument" || m.step === "invite") ? "mental-back" : "";
+    let body = "";
+    if (m.step === "invite") {
+      body = `<h1 class="kiosk-quiz-question">Quer saber como você tem se sentido?</h1>
+        <p class="kiosk-subtitle" style="text-align:left;max-width:640px">São 4 perguntas rápidas sobre seu bem-estar emocional. Se necessário, o sistema pode sugerir algumas perguntas adicionais.</p>
+        <p class="kiosk-subtitle" style="text-align:left;max-width:640px">Suas respostas são confidenciais e o resultado aparece somente para você. Este é um rastreio e não substitui avaliação profissional.</p>
+        <div class="kiosk-menu-actions" style="margin-top:1.25rem">
+          <button type="button" class="kiosk-btn kiosk-btn-primary kiosk-btn-xl" data-act="mental-accept">Quero responder</button>
+          <button type="button" class="kiosk-btn kiosk-btn-ghost" data-act="mental-refuse">Prefiro não responder</button>
+        </div>`;
+    } else if (m.step === "gate") {
+      const scores = GATE_OPTIONS.map((item) => item.score);
+      body = `<h1 class="kiosk-quiz-question">${esc(GATE_QUESTIONS[m.gateIndex])}</h1>
+        <div class="kiosk-option-list">${GATE_OPTIONS.map((option) => {
+          const activeOpt = m.flashId === String(option.score) || m.gate[m.gateIndex] === option.score;
+          return `<button type="button" class="kiosk-option${activeOpt ? " selected" : ""}${optionScaleClass(option.score, scores, false)}" data-act="mental-gate" data-score="${option.score}">${optionContent(option.label, option.score, scores, false, false, false)}</button>`;
+        }).join("")}</div>`;
+    } else if (m.step === "instrument") {
+      const item = items[m.itemIndex];
+      const scores = item.options.map((o) => o.score);
+      const higherIsBetter = m.active === "WHO-5";
+      body = `<p class="kiosk-muted" style="margin-bottom:8px">Instrumento ${esc(m.active)} · cerca de ${instrumentMinutes(m.active)} min</p>
+        <h1 class="kiosk-quiz-question">${esc(item.text)}</h1>
+        <div class="kiosk-option-list">${item.options.map((option, optionIndex) => {
+          const activeOpt = m.flashId === option.label || m.answers[m.itemIndex] === optionIndex;
+          return `<button type="button" class="kiosk-option${activeOpt ? " selected" : ""}${optionScaleClass(option.score, scores, higherIsBetter)}" data-act="mental-item" data-index="${optionIndex}">${optionContent(option.label, option.score, scores, higherIsBetter, false, false)}</button>`;
+        }).join("")}</div>`;
+    } else if (m.step === "optional") {
+      body = `<h1 class="kiosk-quiz-question">${m.optional === "AUDIT"
+        ? "Quer responder mais 10 perguntas rápidas sobre álcool?"
+        : "Suas respostas sugerem que vale aprofundar um pouco. Quer responder mais algumas perguntas agora?"}</h1>
+        <p class="kiosk-subtitle" style="text-align:left">${m.optional === "AUDIT"
+          ? `São cerca de ${instrumentMinutes("AUDIT")} minutos. Se preferir, isso pode ficar para outra visita.`
+          : "São mais algumas perguntas, cerca de 3 minutos. Se preferir, isso pode ficar para outra visita."}</p>
+        <div class="kiosk-menu-actions">
+          <button type="button" class="kiosk-btn kiosk-btn-primary" data-act="mental-opt-yes">Sim, continuar</button>
+          <button type="button" class="kiosk-btn kiosk-btn-ghost" data-act="mental-opt-no">Agora não</button>
+        </div>`;
+    } else if (m.step === "safety") {
+      body = `<div class="kiosk-band is-alert"><strong>Você não precisa passar por isso sozinho</strong>
+        <p>Suas respostas indicam que este é um bom momento para conversar com alguém de confiança — um amigo, um familiar ou um profissional de saúde.</p></div>
+        <p class="kiosk-subtitle" style="text-align:left">Se quiser, ligue para o CVV no <strong>188</strong>, disponível 24 horas.</p>
+        <div class="kiosk-menu-actions"><button type="button" class="kiosk-btn kiosk-btn-primary" data-act="mental-see-result">Ver meu resultado</button></div>`;
+    } else if (m.step === "result") {
+      body = `<h1 class="kiosk-quiz-question">Resultado da sua avaliação</h1>
+        ${shown ? `<div class="kiosk-band is-${shown.tone}"><strong>Seu rastreio</strong><p>${esc(patientBandLabel(shown))}</p></div>` : ""}
+        <p class="kiosk-subtitle" style="text-align:left;max-width:640px">${esc(patientResultCopy(m.results))}</p>
+        ${advice.length ? `<ul class="kiosk-advice-list">${advice.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : ""}
+        <p class="kiosk-muted" style="margin-top:12px">Este resultado é um rastreio e não estabelece diagnóstico.</p>
+        <button type="button" class="kiosk-btn kiosk-btn-primary" style="margin-top:16px" data-act="mental-continue">Continuar</button>`;
+    }
+    return layout(`<div class="kiosk-quiz">
+      <div class="kiosk-quiz-meta"><div class="kiosk-quiz-meta-main">
+        <div class="kiosk-quiz-progress-label">${esc(mentalStepLabel(m.step, m.gateIndex, m.itemIndex, items.length))}</div>
+        <div class="kiosk-progress-track" aria-hidden><div class="kiosk-progress-fill" style="width:${progress}%"></div></div>
+      </div><div class="kiosk-quiz-eta">${esc(mentalStepTime(m.step, m.active))}</div></div>
+      ${quizHeading("Saúde Mental", backAct)}
+      ${body}
+    </div>`, { showUser: true });
+  }
+  function viewCompletion() {
+    if (!store.session.person) { pendingRedirect = { path: "/matricula", replace: true }; return ""; }
+    if (!isVisitComplete(store.session)) { pendingRedirect = { path: "/menu", replace: true }; return ""; }
+    return layout(`<div class="kiosk-center-card">
+      <div class="kiosk-success-ring" aria-hidden>${icon("check-big")}</div>
+      <h1 class="kiosk-title">Sua avaliação foi concluída</h1>
+      <p class="kiosk-subtitle">Você pode ver e imprimir o relatório desta sessão agora.</p>
+      <button type="button" class="kiosk-btn kiosk-btn-primary kiosk-btn-xl" data-act="go-path" data-path="/relatorio">Ver e imprimir relatório</button>
+      <button type="button" class="kiosk-btn kiosk-btn-ghost" data-act="go-menu">${icon("chevron-left")} Menu</button>
+    </div>`, { showUser: true });
+  }
+  function viewReport() {
+    if (!store.session.person) { pendingRedirect = { path: "/matricula", replace: true }; return ""; }
+    if (!hasReportData(store.session)) { pendingRedirect = { path: "/menu", replace: true }; return ""; }
+    const person = store.session.person;
+    const generalHealth = store.session.generalHealth;
+    const mental = store.session.mentalHealth;
+    const mentalView = mental ? {
+      accepted: mental.accepted, refused: mental.refused, safetyTriggered: mental.safetyTriggered,
+      results: mental.results, instrumentLog: mental.instrumentLog,
+      gateItems: mental.gate.length ? gateItemsFromScores(mental.gate) : [],
+    } : null;
+    return layout(`${sessionReport(person, new Date().toLocaleString("pt-BR"), generalHealth, mentalView)}
+      <div class="kiosk-report-actions no-print" style="padding:0 0 1.5rem">
+        <button type="button" class="kiosk-btn kiosk-btn-primary" data-act="print">Imprimir</button>
+        <button type="button" class="kiosk-btn kiosk-btn-ghost" data-act="go-menu">${icon("chevron-left")} Voltar ao menu</button>
+      </div>`, { showUser: true });
+  }
+  function viewRecords() {
+    if (!store.session.person) { pendingRedirect = { path: "/matricula", replace: true }; return ""; }
+    const person = store.session.person;
+    const visits = groupSavedVisits(store.forms.filter((f) => f.person_id === person.id));
+    const selected = visits.find((v) => v.id === store.records.selectedId) ?? visits[0] ?? null;
+    store.records.selectedId = selected?.id ?? null;
+    let report = "";
+    if (selected) {
+      report = sessionReport(
+        person,
+        formatVisitWhen(selected.at),
+        selected.health ? healthViewFromPayload(selected.health.payload) : null,
+        selected.mental ? mentalViewFromPayload(selected.mental.payload) : null,
+      );
+    }
+    return layout(`<div class="kiosk-report no-print">
+      <h1 class="kiosk-title">Registros</h1>
+      <p class="kiosk-subtitle">Histórico de relatórios salvos. Escolha uma visita para imprimir.</p>
+      ${visits.length === 0 ? `<p class="kiosk-muted">Nenhum relatório salvo ainda.</p>` : `<div class="kiosk-history-list">${visits.map((visit) =>
+        `<button type="button" class="kiosk-history-item${selected?.id === visit.id ? " selected" : ""}" data-act="pick-visit" data-id="${esc(visit.id)}">${esc(formatVisitWhen(visit.at))}<span class="kiosk-muted" style="display:block;font-weight:500">${esc(visitSummary(visit))}</span></button>`).join("")}</div>`}
+    </div>
+    ${report}
+    <div class="kiosk-report-actions no-print" style="padding:0 0 1.5rem">
+      ${selected ? `<button type="button" class="kiosk-btn kiosk-btn-primary" data-act="print">Imprimir relatório</button>` : ""}
+      <button type="button" class="kiosk-btn kiosk-btn-ghost" data-act="go-menu">${icon("chevron-left")} Voltar ao menu</button>
+    </div>`, { showUser: true, activeSidebar: "records" });
+  }
+
+  function storeMental(partial) {
+    const m = store.mental;
+    const next = {
+      accepted: partial.accepted ?? true,
+      refused: partial.refused,
+      gate: partial.gate ?? m.gate.filter((n) => Number.isFinite(n)),
+      results: partial.results ?? m.results,
+      safetyTriggered: partial.safetyTriggered,
+      completedAt: partial.completedAt,
+      instrument: partial.instrument ?? m.active,
+      instrumentLog: partial.instrumentLog ?? m.instrumentLog,
+    };
+    store.session.mentalHealth = next;
+    return next;
+  }
+  function saveMental(status, mental) {
+    const m = store.mental;
+    const payload = {
+      invitedAt: m.started,
+      accepted: mental.accepted,
+      refusedAt: mental.refused ? new Date().toISOString() : undefined,
+      gate: mental.gate,
+      instrument: mental.instrument,
+      results: mental.results,
+      safetyTriggered: mental.safetyTriggered,
+      completedAt: mental.completedAt,
+      startedAt: m.started,
+      instrumentLog: m.instrumentLog,
+    };
+    saveForm("mental", status, mentalPayload(payload));
+  }
+  function afterInstrument(nextResults, finishedOptional, nextLog) {
+    const m = store.mental;
+    const who = nextResults.find((item) => item.instrument === "WHO-5");
+    const offerHad = !finishedOptional && m.primary === "WHO-5" && (who?.score ?? 100) <= 28 && !nextResults.some((item) => item.instrument === "HAD");
+    const offerAudit = !finishedOptional && m.optional === "AUDIT" && !nextResults.some((item) => item.instrument === "AUDIT");
+    if (offerHad) { m.optional = "HAD"; m.step = "optional"; render(); return; }
+    if (offerAudit) { m.step = "optional"; render(); return; }
+    const flagged = needsSafety(nextResults);
+    const completedAt = new Date().toISOString();
+    const stored = storeMental({
+      accepted: true, gate: m.gate.filter((n) => Number.isFinite(n)),
+      results: nextResults, safetyTriggered: flagged, completedAt, instrument: m.primary, instrumentLog: nextLog,
+    });
+    m.instrumentLog = nextLog;
+    saveMental("completed", stored);
+    m.step = flagged ? "safety" : "result";
+    render();
+  }
+  function finishHealth(nextAnswers, nextDetails) {
+    const score = scoreQuestionnaire(GENERAL_HEALTH, nextAnswers, nextDetails);
+    store.session.generalHealth = score;
+    saveForm("health", "completed", healthKioskPayload(GENERAL_HEALTH, score));
+    store.health.completed = true;
+    render();
+  }
+  function goHealthNext(nextAnswers, nextDetails) {
+    const h = store.health;
+    if (h.index >= GENERAL_HEALTH.questions.length - 1) { finishHealth(nextAnswers, nextDetails); return; }
+    h.index += 1;
+    h.flashId = null;
+    render();
+  }
+
+  function attachHealthObserver() {
+    const el = document.querySelector(".kiosk-quiz-end");
+    const h = store.health;
+    if (!el || !h) return;
+    const question = GENERAL_HEALTH.questions[h.index];
+    if (!question) return;
+    const selected = h.answers[question.id] ?? [];
+    const showFollowUp = followUpVisible(question, selected);
+    const needsManualNext = Boolean(question.kind === "multiple" || showFollowUp || (question.followUpWhenOptionId && selected.includes(question.followUpWhenOptionId)));
+    if (!needsManualNext) { h.moreBelow = false; return; }
+    let intersecting = false;
+    function refresh() {
+      const nearBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 32;
+      const next = !intersecting && !nearBottom;
+      if (next !== h.moreBelow) { h.moreBelow = next; render(); }
+    }
+    const observer = new IntersectionObserver(([entry]) => { intersecting = entry.isIntersecting; refresh(); }, { root: null, rootMargin: "0px 0px -88px 0px", threshold: 0 });
+    observer.observe(el);
+    window.addEventListener("scroll", refresh, { passive: true });
+    refresh();
+    observerCleanup = () => { observer.disconnect(); window.removeEventListener("scroll", refresh); };
+  }
+
+  function lookupPerson(matricula) {
+    const key = matricula.trim();
+    return store.people.find((p) => p.matricula === key) || null;
+  }
+
+  function onAction(act, el) {
+    const route = parseRoute();
+    if (act === "ask-end") { store.confirmEnd = true; render(); return; }
+    if (act === "cancel-end") { store.confirmEnd = false; render(); return; }
+    if (act === "confirm-end") { clearSession(); store.login = { step: "registration", employeeId: "", birthDigits: "", error: "" }; navigate("/", true); return; }
+    if (act === "open-sidebar") { store.sidebarOpen = true; render(); return; }
+    if (act === "close-sidebar") { store.sidebarOpen = false; render(); return; }
+    if (act === "edit-cadastro") { store.sidebarOpen = false; store.cadastro = emptyCadastro("", true); navigate("/cadastro?edit=1"); return; }
+    if (act === "go-records") { store.sidebarOpen = false; store.records.selectedId = null; navigate("/registros"); return; }
+    if (act === "go-matricula") { store.login = { step: "registration", employeeId: "", birthDigits: "", error: "" }; navigate("/matricula"); return; }
+    if (act === "go-menu") { store.health = null; store.mental = null; navigate("/menu", true); return; }
+    if (act === "go-path") { store.health = null; store.mental = null; if (el.dataset.path === "/saude-geral") store.health = emptyHealth(); if (el.dataset.path === "/saude-mental") store.mental = emptyMental(); navigate(el.dataset.path); return; }
+    if (act === "after-next") { store.health = null; store.mental = null; if (el.dataset.path === "/saude-geral") store.health = emptyHealth(); if (el.dataset.path === "/saude-mental") store.mental = emptyMental(); navigate(el.dataset.path, true); return; }
+    if (act === "print") { window.print(); return; }
+    if (act === "pick-visit") { store.records.selectedId = el.dataset.id; render(); return; }
+
+    if (act === "login-digit") {
+      store.login.error = "";
+      if (store.login.step === "registration") {
+        if (store.login.employeeId.length < 40) store.login.employeeId += el.dataset.digit;
+      } else if (store.login.step === "birthDate" && store.login.birthDigits.length < 8) {
+        store.login.birthDigits += el.dataset.digit;
+      }
+      render(); return;
+    }
+    if (act === "login-bs") {
+      store.login.error = "";
+      if (store.login.step === "registration") store.login.employeeId = store.login.employeeId.slice(0, -1);
+      else if (store.login.step === "birthDate") store.login.birthDigits = store.login.birthDigits.slice(0, -1);
+      render(); return;
+    }
+    if (act === "login-continue") {
+      const value = store.login.employeeId.trim();
+      if (!value) { store.login.error = "Informe a matrícula."; render(); return; }
+      store.login.error = "";
+      store.login.step = lookupPerson(value) ? "birthDate" : "firstAccess";
+      store.login.birthDigits = "";
+      render(); return;
+    }
+    if (act === "login-enter") {
+      const iso = digitsToIsoDate(store.login.birthDigits);
+      if (!iso) { store.login.error = "Informe uma data de nascimento válida."; render(); return; }
+      const person = lookupPerson(store.login.employeeId);
+      if (!person || !person.matricula || !person.birth_date || person.birth_date !== iso) {
+        store.login.error = "Matrícula ou data de nascimento incorretas.";
+        render(); return;
+      }
+      store.access = true;
+      beginVisit(person);
+      navigate("/menu", true); return;
+    }
+    if (act === "login-back-reg") {
+      store.login.error = ""; store.login.birthDigits = ""; store.login.step = "registration"; render(); return;
+    }
+    if (act === "go-cadastro-new") {
+      const value = store.login.employeeId.trim();
+      store.cadastro = emptyCadastro(value, false);
+      navigate(`/cadastro?matricula=${encodeURIComponent(value)}`); return;
+    }
+
+    const c = store.cadastro;
+    if (c && (act.startsWith("cad-") || act.startsWith("kb-"))) {
+      const editing = route.search.get("edit") === "1";
+      const steps = c.skipRegistration ? ["name", "birthDate", "sex", "height"] : ["registration", "name", "birthDate", "sex", "height"];
+      const stepIndex = Math.max(0, steps.indexOf(c.step));
+      if (act === "cad-back") {
+        c.error = "";
+        if (stepIndex <= 0) { navigate(editing ? "/menu" : "/matricula"); return; }
+        c.step = steps[stepIndex - 1]; render(); return;
+      }
+      if (act === "cad-digit") {
+        c.error = "";
+        if (c.step === "registration" && c.form.employeeId.length < 40) c.form.employeeId += el.dataset.digit;
+        else if (c.step === "birthDate" && c.birthDigits.length < 8) c.birthDigits += el.dataset.digit;
+        else if (c.step === "height") c.form.heightCm = `${c.form.heightCm}${el.dataset.digit}`.replace(/^0+(?=\d)/, "").slice(0, 3);
+        render(); return;
+      }
+      if (act === "cad-bs") {
+        c.error = "";
+        if (c.step === "registration") c.form.employeeId = c.form.employeeId.slice(0, -1);
+        else if (c.step === "birthDate") c.birthDigits = c.birthDigits.slice(0, -1);
+        else if (c.step === "height") c.form.heightCm = c.form.heightCm.slice(0, -1);
+        render(); return;
+      }
+      if (act === "kb-char") {
+        c.error = "";
+        const raw = el.dataset.char;
+        const nextChar = (c.shifted !== false) ? raw.toUpperCase() : raw;
+        if (c.form.name.length < 120) {
+          const add = nextChar === " " && c.form.name.endsWith(" ") ? "" : nextChar;
+          if (add) c.form.name += add;
+        }
+        c.shifted = false;
+        render(); return;
+      }
+      if (act === "kb-bs") { c.error = ""; c.form.name = c.form.name.slice(0, -1); render(); return; }
+      if (act === "kb-shift") { c.shifted = c.shifted === false; render(); return; }
+      if (act === "kb-space") { c.error = ""; if (c.form.name.length < 120 && !c.form.name.endsWith(" ")) c.form.name += " "; c.shifted = true; render(); return; }
+      if (act === "cad-sex") { c.error = ""; c.form.sex = el.dataset.value; c.step = "height"; render(); return; }
+      if (act === "cad-next") {
+        if (c.step === "registration") {
+          if (!c.form.employeeId.trim()) { c.error = "Informe a matrícula."; render(); return; }
+          c.error = ""; c.step = steps[stepIndex + 1]; render(); return;
+        }
+        if (c.step === "name") {
+          if (c.form.name.trim().length < 2) { c.error = "Informe o nome completo."; render(); return; }
+          c.error = ""; c.step = steps[stepIndex + 1]; render(); return;
+        }
+        if (c.step === "birthDate") {
+          const iso = digitsToIsoDate(c.birthDigits);
+          if (!iso) { c.error = "Informe uma data de nascimento válida."; render(); return; }
+          c.form.birthDate = iso; c.error = ""; c.step = steps[stepIndex + 1]; render(); return;
+        }
+        if (c.step === "sex") {
+          if (!c.form.sex) { c.error = "Escolha o gênero."; render(); return; }
+          c.error = ""; c.step = steps[stepIndex + 1]; render(); return;
+        }
+      }
+      if (act === "cad-save") {
+        const height = Number(c.form.heightCm);
+        const iso = c.form.birthDate || digitsToIsoDate(c.birthDigits);
+        const years = iso ? ageFromBirth(iso) : null;
+        if (!c.form.employeeId.trim() || !c.form.name.trim() || !iso || !c.form.sex) { c.error = "Preencha todos os campos."; render(); return; }
+        if (!Number.isFinite(height) || height < 50 || height > 250) { c.error = "Informe uma altura entre 50 e 250 cm."; render(); return; }
+        if (years == null) { c.error = "Informe a data de nascimento."; render(); return; }
+        const payload = {
+          name: c.form.name.trim(), matricula: c.form.employeeId.trim(), height_cm: height,
+          birth_date: iso, age: years, sex: c.form.sex, people_type: "normal",
+        };
+        if (editing && store.session.person) {
+          const other = store.people.find((p) => p.matricula === payload.matricula && p.id !== store.session.person.id);
+          if (other) { c.error = "Já existe uma pessoa com esta matrícula."; render(); return; }
+          Object.assign(store.session.person, payload);
+          const idx = store.people.findIndex((p) => p.id === store.session.person.id);
+          if (idx >= 0) store.people[idx] = store.session.person;
+          setPerson(store.session.person);
+        } else {
+          if (lookupPerson(payload.matricula)) { c.error = "Já existe uma pessoa com esta matrícula."; render(); return; }
+          const person = { id: newVisitId(), ...payload };
+          store.people.push(person);
+          store.access = true;
+          beginVisit(person);
+        }
+        store.cadastro = null;
+        navigate("/menu", true); return;
+      }
+    }
+
+    const h = store.health;
+    if (h && !h.completed) {
+      const def = GENERAL_HEALTH;
+      const question = def.questions[h.index];
+      if (act === "health-back") {
+        if (h.index === 0) { navigate("/menu"); return; }
+        h.index -= 1; h.flashId = null; render(); return;
+      }
+      if (act === "health-scroll") {
+        document.querySelector(".kiosk-quiz-end")?.scrollIntoView({ behavior: "smooth", block: "end" });
+        return;
+      }
+      if (act === "health-next") {
+        const selected = h.answers[question.id] ?? [];
+        if (!isQuestionAnswered(question, selected, h.details[question.id] ?? "")) return;
+        goHealthNext(h.answers, h.details); return;
+      }
+      if (act === "health-opt") {
+        const optionId = el.dataset.id;
+        if (question.kind === "single") {
+          const nextAnswers = { ...h.answers, [question.id]: [optionId] };
+          const wantsFollowUp = question.followUpWhenOptionId === optionId;
+          const nextDetails = wantsFollowUp ? h.details : (() => { const rest = { ...h.details }; delete rest[question.id]; return rest; })();
+          h.answers = nextAnswers; h.details = nextDetails; h.flashId = optionId;
+          if (wantsFollowUp) { render(); return; }
+          render();
+          if (advanceTimer) clearTimeout(advanceTimer);
+          advanceTimer = setTimeout(() => goHealthNext(nextAnswers, nextDetails), 280);
+          return;
+        }
+        const exclusive = question.exclusiveOptionId;
+        if (exclusive && optionId === exclusive) {
+          const nextAnswers = { ...h.answers, [question.id]: [exclusive] };
+          const nextDetails = { ...h.details }; delete nextDetails[question.id];
+          h.answers = nextAnswers; h.details = nextDetails; h.flashId = optionId;
+          render();
+          if (advanceTimer) clearTimeout(advanceTimer);
+          advanceTimer = setTimeout(() => goHealthNext(nextAnswers, nextDetails), 280);
+          return;
+        }
+        const current = (h.answers[question.id] ?? []).filter((id) => id !== exclusive);
+        const nextSelected = current.includes(optionId) ? current.filter((id) => id !== optionId) : [...current, optionId];
+        h.answers = { ...h.answers, [question.id]: nextSelected };
+        const followUpId = question.followUpOptionId;
+        if (followUpId && !nextSelected.includes(followUpId)) { const rest = { ...h.details }; delete rest[question.id]; h.details = rest; }
+        render(); return;
+      }
+    }
+
+    const m = store.mental;
+    if (m && m.step !== "done") {
+      if (act === "mental-back") {
+        if (m.step === "instrument" && m.itemIndex > 0) { m.itemIndex -= 1; render(); return; }
+        if (m.step === "instrument" && m.itemIndex === 0 && m.active !== m.primary) { m.step = "optional"; render(); return; }
+        if (m.step === "instrument" && m.itemIndex === 0) { m.step = "gate"; m.gateIndex = 3; render(); return; }
+        if (m.step === "gate" && m.gateIndex > 0) { m.gateIndex -= 1; render(); return; }
+        if (m.step === "gate") { m.step = "invite"; render(); return; }
+        navigate("/menu"); return;
+      }
+      if (act === "mental-accept") { m.step = "gate"; render(); return; }
+      if (act === "mental-refuse") {
+        const stored = storeMental({ accepted: false, refused: true, gate: [], results: [], completedAt: new Date().toISOString() });
+        saveMental("refused", stored);
+        m.step = "done"; render(); return;
+      }
+      if (act === "mental-gate") {
+        const score = Number(el.dataset.score);
+        const next = [...m.gate]; next[m.gateIndex] = score;
+        m.gate = next; m.flashId = String(score); render();
+        if (advanceTimer) clearTimeout(advanceTimer);
+        advanceTimer = setTimeout(() => {
+          m.flashId = null;
+          if (m.gateIndex < 3) { m.gateIndex += 1; render(); return; }
+          const routed = routeInstrument(next);
+          m.primary = routed.primary; m.optional = routed.optional; m.active = routed.primary;
+          m.itemIndex = 0; m.answers = [];
+          storeMental({ accepted: true, gate: next, results: [], instrument: routed.primary });
+          m.step = "instrument"; render();
+        }, 220);
+        return;
+      }
+      if (act === "mental-item") {
+        const optionIndex = Number(el.dataset.index);
+        const items = instrumentItems(m.active);
+        const nextAnswers = [...m.answers]; nextAnswers[m.itemIndex] = optionIndex;
+        m.flashId = items[m.itemIndex].options[optionIndex]?.label ?? String(optionIndex);
+        render();
+        if (advanceTimer) clearTimeout(advanceTimer);
+        advanceTimer = setTimeout(() => {
+          m.flashId = null;
+          if (m.itemIndex < items.length - 1) { m.answers = nextAnswers; m.itemIndex += 1; render(); return; }
+          const scored = scoreInstrument(m.active, nextAnswers, items);
+          const nextResults = [...m.results.filter((item) => item.instrument !== scored.instrument), scored];
+          const logEntry = {
+            instrument: m.active,
+            items: items.map((item, index) => ({
+              id: item.id, text: item.text,
+              label: item.options[nextAnswers[index]]?.label ?? "",
+              score: item.options[nextAnswers[index]]?.score ?? 0,
+            })),
+          };
+          const nextLog = [...m.instrumentLog.filter((entry) => entry.instrument !== m.active), logEntry];
+          m.instrumentLog = nextLog; m.results = nextResults; m.answers = []; m.itemIndex = 0;
+          afterInstrument(nextResults, m.active !== m.primary, nextLog);
+        }, 220);
+        return;
+      }
+      if (act === "mental-opt-yes") {
+        m.active = m.optional ?? "HAD"; m.answers = []; m.itemIndex = 0; m.step = "instrument"; render(); return;
+      }
+      if (act === "mental-opt-no") { afterInstrument(m.results, true, m.instrumentLog); return; }
+      if (act === "mental-see-result") { m.step = "result"; render(); return; }
+      if (act === "mental-continue") { m.step = "done"; render(); return; }
+    }
+  }
+
+  function bind() {
+    const root = document.getElementById("app");
+    root.onclick = (event) => {
+      const stop = event.target.closest("[data-stop]");
+      if (event.target.closest(".kiosk-sidebar-backdrop") && !event.target.closest("[data-stop]") && event.target.closest("[data-act=close-sidebar]")) {
+        /* handled below */
+      }
+      if (event.target.classList.contains("kiosk-modal-backdrop")) { onAction("cancel-end", event.target); return; }
+      if (event.target.classList.contains("kiosk-sidebar-backdrop")) { onAction("close-sidebar", event.target); return; }
+      const btn = event.target.closest("[data-act]");
+      if (!btn) return;
+      event.preventDefault();
+      onAction(btn.getAttribute("data-act"), btn);
+    };
+    root.oninput = (event) => {
+      if (event.target.getAttribute("data-act") === "health-detail" && store.health) {
+        const q = GENERAL_HEALTH.questions[store.health.index];
+        store.health.details = { ...store.health.details, [q.id]: event.target.value };
+        const btn = document.querySelector("[data-act=health-next]");
+        const selected = store.health.answers[q.id] ?? [];
+        if (btn) btn.disabled = !isQuestionAnswered(q, selected, event.target.value);
+      }
+    };
+    root.onkeydown = (event) => {
+      if (event.key === "Escape" && store.confirmEnd) { store.confirmEnd = false; render(); }
+    };
+  }
+
+  function render() {
+    clearObserver();
+    const route = parseRoute();
+    if (!requirePerson(route)) {
+      if (pendingRedirect) {
+        const next = pendingRedirect;
+        pendingRedirect = null;
+        navigate(next.path, next.replace);
+      }
+      return;
+    }
+    if (route.path === "/matricula" && store.login.step === "registration" && !store.login.employeeId) {
+      /* keep */
+    }
+    if (route.path !== "/saude-geral") store.health = route.path === "/saude-geral" ? (store.health || emptyHealth()) : store.health;
+    if (route.path !== "/saude-mental") { /* keep mental only on that page for in-progress? original remounts each visit */ }
+    if (route.path !== "/cadastro") store.cadastro = route.path === "/cadastro" ? store.cadastro : null;
+    let html = "";
+    if (route.path === "/" || route.path === "") html = viewWelcome();
+    else if (route.path === "/matricula") html = viewLogin();
+    else if (route.path === "/cadastro") html = viewCadastro(route);
+    else if (route.path === "/menu") html = viewMenu();
+    else if (route.path === "/saude-geral") html = viewHealth();
+    else if (route.path === "/saude-mental") html = viewMental();
+    else if (route.path === "/conclusao") html = viewCompletion();
+    else if (route.path === "/relatorio") html = viewReport();
+    else if (route.path === "/registros") html = viewRecords();
+    else html = viewWelcome();
+    if (html) document.getElementById("app").innerHTML = html;
+    if (route.path === "/saude-geral" && store.health && !store.health.completed) {
+      const input = document.querySelector("[data-act=health-detail]");
+      if (input) input.focus();
+      attachHealthObserver();
+    }
+    if (pendingRedirect) {
+      const next = pendingRedirect;
+      pendingRedirect = null;
+      navigate(next.path, next.replace);
+    }
+  }
+
+  window.addEventListener("hashchange", () => {
+    const route = parseRoute();
+    if (route.path === "/saude-geral") store.health = emptyHealth();
+    if (route.path === "/saude-mental") store.mental = emptyMental();
+    if (route.path === "/cadastro") {
+      const editing = route.search.get("edit") === "1";
+      const prefill = (route.search.get("matricula") ?? "").trim();
+      store.cadastro = emptyCadastro(prefill, editing);
+    }
+    if (route.path === "/matricula") {
+      store.login = { step: "registration", employeeId: "", birthDigits: "", error: "" };
+    }
+    render();
+  });
+  bind();
+  if (!location.hash) history.replaceState(null, "", "#/");
+  render();
+})();
+
+  </script>
+</body>
+</html>
