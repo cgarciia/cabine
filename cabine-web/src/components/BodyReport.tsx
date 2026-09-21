@@ -1,4 +1,4 @@
-import type { Destaque, ScaleMetrics, SegKey, Segmento, WlaSegmento } from '../types/measurement';
+import type { BiaSegment, MetricHighlight, ScaleMetrics, SegKey, WlaSegment } from '../types/measurement';
 
 type Band = 'baixo' | 'saudavel' | 'alto';
 
@@ -39,8 +39,8 @@ function markerPct(value: number, low: number, high: number) {
     return 28 + 44 * (value - low) / Math.max(high - low, 0.1);
 }
 
-function ohmAt(segmentos: Segmento[] | undefined, lado: string, freq: number) {
-    const hit = segmentos?.find((item) => item.lado === lado && item.freq_khz === freq);
+function ohmAt(segments: BiaSegment[] | undefined, side: string, freq: number) {
+    const hit = segments?.find((item) => item.lado === side && item.freq_khz === freq);
     return hit?.ohm;
 }
 
@@ -81,7 +81,7 @@ function statusFromStandardPct(pct: number, key: SegKey): Band {
     return 'saudavel';
 }
 
-function fromWlaSegments(rows: WlaSegmento[] | undefined, kind: 'muscle' | 'fat'): SegEstimate[] {
+function fromWlaSegments(rows: WlaSegment[] | undefined, kind: 'muscle' | 'fat'): SegEstimate[] {
     if (!rows?.length) return [];
     const byKey = new Map(rows.map((row) => [row.key, row]));
     return SEG_ORDER.flatMap((key) => {
@@ -168,7 +168,7 @@ function SegBodyFigure({
 function SegmentalPanel({
     rows,
 }: {
-    rows?: WlaSegmento[];
+    rows?: WlaSegment[];
 }) {
     const muscleItems = fromWlaSegments(rows, 'muscle');
     const fatItems = fromWlaSegments(rows, 'fat');
@@ -297,9 +297,9 @@ function TypeGrid({
     );
 }
 
-function deriveHighlights(metrics: ScaleMetrics): Destaque[] {
+function deriveHighlights(metrics: ScaleMetrics): MetricHighlight[] {
     if (metrics.destaques?.length) return metrics.destaques;
-    const items: Destaque[] = [];
+    const items: MetricHighlight[] = [];
     if (metrics.gordura_pct_status === 'alto') {
         items.push({
             codigo: 'gordura_alta',
@@ -400,12 +400,12 @@ type Props = {
     age: string;
     sex?: string;
     peopleType?: string;
-    pesoKg: number | null;
+    weightKg: number | null;
     metrics: ScaleMetrics | null;
     supportsBia: boolean;
     weightOnly?: boolean;
     saved?: boolean;
-    segmentos?: Segmento[];
+    segments?: BiaSegment[];
     measuredAt?: string;
 };
 
@@ -416,12 +416,12 @@ export function BodyReport({
     age,
     sex,
     peopleType,
-    pesoKg,
+    weightKg,
     metrics,
     supportsBia,
     weightOnly,
     saved,
-    segmentos,
+    segments,
     measuredAt,
 }: Props) {
     const bia = Boolean(supportsBia && !weightOnly && metrics);
@@ -437,7 +437,7 @@ export function BodyReport({
     const skeletalKgBand = kgCuts(metrics, 'esqueletico');
     const leanKgBand = kgCuts(metrics, 'magra');
     const proteinKg = metrics?.proteina_kg
-        ?? (metrics?.proteina_pct != null && pesoKg != null ? pesoKg * metrics.proteina_pct / 100 : null);
+        ?? (metrics?.proteina_pct != null && weightKg != null ? weightKg * metrics.proteina_pct / 100 : null);
     const smi = metrics?.smi;
     const tipo = deriveBodyType(metrics?.imc, metrics?.gordura_pct, sex, peopleType)
         ?? (metrics?.tipo_corporal
@@ -450,12 +450,12 @@ export function BodyReport({
             } as Record<string, string>)[metrics.tipo_corporal] ?? metrics.tipo_corporal
             : null);
     const musclePctOfWeight = metrics?.musculo_esqueletico_pct
-        ?? (metrics?.musculo_esqueletico_kg != null && pesoKg
-            ? (metrics.musculo_esqueletico_kg / pesoKg) * 100
+        ?? (metrics?.musculo_esqueletico_kg != null && weightKg
+            ? (metrics.musculo_esqueletico_kg / weightKg) * 100
             : null);
     const skeletalKg = metrics?.musculo_esqueletico_kg
-        ?? (musclePctOfWeight != null && pesoKg != null
-            ? (musclePctOfWeight / 100) * pesoKg
+        ?? (musclePctOfWeight != null && weightKg != null
+            ? (musclePctOfWeight / 100) * weightKg
             : null);
     const muscleStatus = metrics?.musculo_esqueletico_status;
     const muscleStatusBand: Band | undefined =
@@ -465,8 +465,8 @@ export function BodyReport({
                 ? bandOf(skeletalKg, skeletalKgBand.lo, skeletalKgBand.hi)
                 : (musclePctOfWeight != null ? bandOf(musclePctOfWeight, muscleLo, muscleHi) : undefined));
     const leanKg = metrics?.massa_magra_kg
-        ?? (pesoKg != null && metrics?.gordura_kg != null ? pesoKg - metrics.gordura_kg : null);
-    const leanPct = leanKg != null && pesoKg ? (leanKg / pesoKg) * 100 : null;
+        ?? (weightKg != null && metrics?.gordura_kg != null ? weightKg - metrics.gordura_kg : null);
+    const leanPct = leanKg != null && weightKg ? (leanKg / weightKg) * 100 : null;
     const fatToLose = metrics?.controle_gordura_kg != null && metrics.controle_gordura_kg < -0.5
         ? Math.abs(metrics.controle_gordura_kg)
         : null;
@@ -479,7 +479,7 @@ export function BodyReport({
     const z20 = metrics?.z_20khz;
     const z100 = metrics?.z_100khz;
     const showMap = wla && Boolean(metrics?.segmentos_wla?.length);
-    const composeTotal = pesoKg ?? 0;
+    const composeTotal = weightKg ?? 0;
     const fatKg = metrics?.gordura_kg;
     const waterKg = metrics?.agua_kg;
     const boneKg = metrics?.osso_kg;
@@ -671,8 +671,8 @@ export function BodyReport({
                                 <h3>Controle de peso</h3>
                                 <table className="cabine-mini-table">
                                     <tbody>
-                                        {pesoKg != null ? (
-                                            <tr><th>Peso atual</th><td>{pesoKg.toFixed(1)} kg</td></tr>
+                                        {weightKg != null ? (
+                                            <tr><th>Peso atual</th><td>{weightKg.toFixed(1)} kg</td></tr>
                                         ) : null}
                                         {weightRange ? (
                                             <tr>
@@ -733,10 +733,10 @@ export function BodyReport({
                 </>
             ) : (
                 <div className="cabine-metric-grid">
-                    {pesoKg != null ? (
+                    {weightKg != null ? (
                         <article className="cabine-metric-card">
                             <div className="cabine-metric-label"><span>Peso</span></div>
-                            <div className="cabine-metric-value">{pesoKg.toFixed(1)} kg</div>
+                            <div className="cabine-metric-value">{weightKg.toFixed(1)} kg</div>
                         </article>
                     ) : null}
                     {metrics?.imc != null ? (
@@ -770,7 +770,7 @@ export function BodyReport({
                 </div>
             )}
 
-            {(segmentos?.length || z20?.length) ? (
+            {(segments?.length || z20?.length) ? (
                 <section className="cabine-report-block">
                     <h3>Impedância</h3>
                     <p className="cabine-metric-hint">
@@ -792,12 +792,12 @@ export function BodyReport({
                                 ['Perna direita', 'perna_dir', 2],
                                 ['Perna esquerda', 'perna_esq', 3],
                                 ['Tronco', 'tronco', 4],
-                            ].map(([label, lado, idx]) => {
-                                const a = z20?.[Number(idx)] ?? ohmAt(segmentos, String(lado), 20);
-                                const b = z100?.[Number(idx)] ?? ohmAt(segmentos, String(lado), 100);
+                            ].map(([label, side, idx]) => {
+                                const a = z20?.[Number(idx)] ?? ohmAt(segments, String(side), 20);
+                                const b = z100?.[Number(idx)] ?? ohmAt(segments, String(side), 100);
                                 if (a == null && b == null) return null;
                                 return (
-                                    <tr key={String(lado)}>
+                                    <tr key={String(side)}>
                                         <th>{label}</th>
                                         <td>{a != null ? a.toFixed(1) : '—'}</td>
                                         <td>{b != null ? b.toFixed(1) : '—'}</td>

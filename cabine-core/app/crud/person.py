@@ -17,8 +17,8 @@ async def get_by_id(db: AsyncSession, person_id: UUID) -> ScalePerson | None:
     return result.scalars().first()
 
 
-async def get_by_matricula(db: AsyncSession, matricula: str) -> ScalePerson | None:
-    key = matricula.strip()
+async def get_by_registration(db: AsyncSession, registration: str) -> ScalePerson | None:
+    key = registration.strip()
     if not key:
         return None
     result = await db.execute(select(ScalePerson).where(ScalePerson.matricula == key))
@@ -27,7 +27,7 @@ async def get_by_matricula(db: AsyncSession, matricula: str) -> ScalePerson | No
 
 async def create(db: AsyncSession, data: PersonCreate) -> ScalePerson:
     if data.matricula:
-        existing = await get_by_matricula(db, data.matricula)
+        existing = await get_by_registration(db, data.matricula)
         if existing:
             raise ValueError("Já existe uma pessoa com esta matrícula.")
     person = ScalePerson(
@@ -51,7 +51,7 @@ async def update_person(db: AsyncSession, person: ScalePerson, data: PersonUpdat
         person.name = data.name
     if data.matricula is not None:
         if data.matricula:
-            existing = await get_by_matricula(db, data.matricula)
+            existing = await get_by_registration(db, data.matricula)
             if existing and existing.id != person.id:
                 raise ValueError("Já existe uma pessoa com esta matrícula.")
         person.matricula = data.matricula

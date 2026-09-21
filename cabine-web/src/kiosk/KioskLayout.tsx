@@ -1,3 +1,4 @@
+import { FileText, LogOut, PencilLine, X } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useState, type ReactNode } from 'react';
 
@@ -10,7 +11,7 @@ type Props = {
     showUser?: boolean;
     sidebarOpen?: boolean;
     onCloseSidebar?: () => void;
-    activeSidebar?: 'editar' | 'registros' | null;
+    activeSidebar?: 'edit' | 'records' | null;
 };
 
 export function KioskLayout({
@@ -44,6 +45,7 @@ export function KioskLayout({
                         </span>
                     </div>
                     <button type="button" className="kiosk-link-btn" onClick={() => setConfirmEnd(true)}>
+                        <LogOut size={18} strokeWidth={2.2} aria-hidden />
                         Sair
                     </button>
                 </header>
@@ -71,19 +73,22 @@ export function KioskLayout({
                         <div className="kiosk-sidebar-title">Menu</div>
                         <NavLink
                             to="/cadastro?edit=1"
-                            className={() => `kiosk-sidebar-item${activeSidebar === 'editar' ? ' active' : ''}`}
+                            className={() => `kiosk-sidebar-item${activeSidebar === 'edit' ? ' active' : ''}`}
                             onClick={onCloseSidebar}
                         >
+                            <PencilLine size={20} strokeWidth={2} aria-hidden />
                             Editar cadastro
                         </NavLink>
                         <NavLink
                             to="/registros"
-                            className={() => `kiosk-sidebar-item${activeSidebar === 'registros' ? ' active' : ''}`}
+                            className={() => `kiosk-sidebar-item${activeSidebar === 'records' ? ' active' : ''}`}
                             onClick={onCloseSidebar}
                         >
+                            <FileText size={20} strokeWidth={2} aria-hidden />
                             Visualizar registros
                         </NavLink>
                         <button type="button" className="kiosk-sidebar-close" onClick={onCloseSidebar}>
+                            <X size={20} strokeWidth={2} aria-hidden />
                             Fechar
                         </button>
                     </aside>

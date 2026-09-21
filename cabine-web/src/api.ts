@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 import { clearAccessSession, getAccessToken, isAccessSessionValid } from './session/authSession';
+import type { BloodPressureReading } from './types/bloodPressure';
 import type { FormSubmission } from './types/form';
 import type { MeasurementRecord } from './types/measurement';
 import type { OximeterReading } from './types/oximeter';
@@ -55,7 +56,10 @@ export function withAccessToken(params: URLSearchParams): URLSearchParams {
     return params;
 }
 
-export function deviceSocket(path: '/ws/scale' | '/ws/oximeter', params: URLSearchParams): WebSocket {
+export function deviceSocket(
+    path: '/ws/scale' | '/ws/oximeter' | '/ws/blood-pressure',
+    params: URLSearchParams,
+): WebSocket {
     return new WebSocket(`${wsBaseUrl()}${path}?${withAccessToken(params).toString()}`);
 }
 
@@ -69,18 +73,34 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
                 .filter(Boolean)
                 .join(' ');
         }
+        if (!error.response) {
+            return 'Não foi possível falar com o servidor. Confira se a API está ligada.';
+        }
     }
     return fallback;
 }
 
-export type MatriculaSession = {
+export type RegistrationSession = {
     access_token: string;
     expires_in: number;
     person: ScalePerson;
 };
 
-export async function loginByMatricula(matricula: string): Promise<MatriculaSession> {
-    const { data } = await api.post<MatriculaSession>('/login/matricula', { matricula });
+export async function lookupRegistration(registration: string): Promise<{ exists: boolean }> {
+    const { data } = await api.post<{ exists: boolean }>('/login/lookup', {
+        matricula: registration,
+    });
+    return data;
+}
+
+export async function loginByRegistration(
+    registration: string,
+    birthDate: string,
+): Promise<RegistrationSession> {
+    const { data } = await api.post<RegistrationSession>('/login/matricula', {
+        matricula: registration,
+        birth_date: birthDate,
+    });
     return data;
 }
 
@@ -111,6 +131,28 @@ export async function fetchPersonOximeter(personId: string): Promise<OximeterRea
     const id = encodeURIComponent(personId);
     const { data } = await api.get<OximeterReading[]>(`/people/${id}/oximeter`);
     return Array.isArray(data) ? data : [];
+}
+
+export async function fetchPersonBloodPressure(personId: string): Promise<BloodPressureReading[]> {
+    const id = encodeURIComponent(personId);
+    const { data } = await api.get<BloodPressureReading[]>(`/people/${id}/blood-pressure`);
+    return Array.isArray(data) ? data : [];
+}
+
+export async function saveBloodPressureReading(body: {
+    person_id: string;
+    device_name: string;
+    device_address?: string | null;
+    sys_mmhg: number;
+    dia_mmhg: number;
+    pulse_bpm: number;
+    movement?: boolean;
+    irregular_heartbeat?: boolean;
+    measured_at: string;
+    visit_id?: string | null;
+}): Promise<BloodPressureReading> {
+    const { data } = await api.post<BloodPressureReading>('/blood-pressures', body);
+    return data;
 }
 
 export async function saveOximeterReading(body: {

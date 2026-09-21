@@ -69,12 +69,12 @@ export function HistoryDialog({ person, records, loading, error, selected, onSel
                                     age={String(report.age)}
                                     sex={report.sex}
                                     peopleType={report.people_type}
-                                    pesoKg={report.peso_kg}
+                                    weightKg={report.peso_kg}
                                     metrics={report.metricas}
                                     supportsBia={report.adapter === 'ble_icomon'}
                                     weightOnly={isWeightOnlyReport(report)}
                                     saved
-                                    segmentos={report.segmentos ?? undefined}
+                                    segments={report.segmentos ?? undefined}
                                     measuredAt={formatWhen(report.created_at)}
                                 />
                                 <button

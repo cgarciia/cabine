@@ -89,11 +89,11 @@ def _split_frame(buf: bytes) -> bytes | None:
     return None
 
 
-def label_segments(impedancias: list[float]) -> list[SegmentImpedance]:
+def label_segments(impedances: list[float]) -> list[SegmentImpedance]:
     labeled: list[SegmentImpedance] = []
-    for i, ohm in enumerate(impedancias[: len(SEGMENT_ORDER)]):
-        nome, lado, freq = SEGMENT_ORDER[i]
-        labeled.append(SegmentImpedance(nome=nome, lado=lado, freq_khz=freq, ohm=ohm))
+    for i, ohm in enumerate(impedances[: len(SEGMENT_ORDER)]):
+        name, side, freq = SEGMENT_ORDER[i]
+        labeled.append(SegmentImpedance(nome=name, lado=side, freq_khz=freq, ohm=ohm))
     return labeled
 
 

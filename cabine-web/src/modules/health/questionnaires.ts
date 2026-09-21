@@ -11,27 +11,27 @@ export type Question = {
     text: string;
     kind: QuestionKind;
     options: QuestionOption[];
-    /** Em múltipla escolha, selecionar esta opção limpa as demais e avança. */
+    /** In multiple choice, selecting this option clears the others and advances. */
     exclusiveOptionId?: string;
-    /** Em única escolha, mostra campo de texto quando esta opção é escolhida. */
+    /** In single choice, shows a text field when this option is chosen. */
     followUpWhenOptionId?: string;
-    /** Em múltipla escolha, mostra campo de texto quando esta opção está marcada. */
+    /** In multiple choice, shows a text field when this option is checked. */
     followUpOptionId?: string;
     followUpPrompt?: string;
     followUpPlaceholder?: string;
 };
 
 export type QuestionnaireDef = {
-    id: 'saude_geral' | 'saude_mental';
+    id: 'general_health' | 'mental_health';
     title: string;
     category: string;
     estimatedSeconds: number;
     questions: Question[];
 };
 
-/** Triagem de saúde geral — Questionário de Triagem Cabine de Saúde. */
-export const SAUDE_GERAL: QuestionnaireDef = {
-    id: 'saude_geral',
+/** General health screening — Cabine triage questionnaire. */
+export const GENERAL_HEALTH: QuestionnaireDef = {
+    id: 'general_health',
     title: 'Questionário Saúde Geral',
     category: 'Saúde Geral',
     estimatedSeconds: 240,
@@ -163,8 +163,8 @@ export const SAUDE_GERAL: QuestionnaireDef = {
     ],
 };
 
-export const SAUDE_MENTAL: QuestionnaireDef = {
-    id: 'saude_mental',
+export const MENTAL_HEALTH_SCREEN: QuestionnaireDef = {
+    id: 'mental_health',
     title: 'Questionário Saúde Mental',
     category: 'Saúde Mental',
     estimatedSeconds: 60,
@@ -283,7 +283,7 @@ export function scoreQuestionnaire(
     const percent = max > 0 ? Math.round((total / max) * 100) : 0;
 
     let label: string;
-    if (def.id === 'saude_mental') {
+    if (def.id === 'mental_health') {
         if (percent <= 25) label = 'Baixo indício de desconforto';
         else if (percent <= 50) label = 'Desconforto leve';
         else if (percent <= 75) label = 'Desconforto moderado';
@@ -333,7 +333,7 @@ export function detectHealthFindings(
     label: string,
     percent: number,
 ): HealthFinding[] {
-    if (def.id !== 'saude_geral') {
+    if (def.id !== 'general_health') {
         return [{ code: 'overall', title: label, detail: 'Resultado da triagem.' }];
     }
 

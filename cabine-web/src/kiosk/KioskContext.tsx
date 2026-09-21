@@ -11,6 +11,7 @@ import type { QuestionnaireScore } from '../modules/health/questionnaires';
 import { clearCurrentPersonId, saveCurrentPersonId } from '../session/currentPerson';
 import { LEGACY_STORAGE_KEYS, STORAGE_KEYS } from '../session/keys';
 import { newVisitId } from '../session/visitId';
+import type { BloodPressureReading } from '../types/bloodPressure';
 import type { MeasurementRecord } from '../types/measurement';
 import type { MentalInstrumentId, MentalInstrumentLog, MentalResult } from '../types/mental';
 import type { OximeterReading } from '../types/oximeter';
@@ -30,20 +31,22 @@ export type MentalKioskSession = {
 export type KioskSession = {
     visitId: string | null;
     person: ScalePerson | null;
-    saudeGeral: QuestionnaireScore | null;
-    saudeMental: MentalKioskSession | null;
+    generalHealth: QuestionnaireScore | null;
+    mentalHealth: MentalKioskSession | null;
     lastMeasurement: MeasurementRecord | null;
     lastOximeter: OximeterReading | null;
+    lastBloodPressure: BloodPressureReading | null;
 };
 
 type KioskContextValue = {
     session: KioskSession;
     setPerson: (person: ScalePerson | null) => void;
     beginVisit: (person: ScalePerson) => void;
-    setSaudeGeral: (score: QuestionnaireScore | null) => void;
-    setSaudeMental: (score: MentalKioskSession | null) => void;
+    setGeneralHealth: (score: QuestionnaireScore | null) => void;
+    setMentalHealth: (score: MentalKioskSession | null) => void;
     setLastMeasurement: (record: MeasurementRecord | null) => void;
     setLastOximeter: (reading: OximeterReading | null) => void;
+    setLastBloodPressure: (reading: BloodPressureReading | null) => void;
     clearSession: () => void;
     hasReportData: boolean;
 };
@@ -51,10 +54,11 @@ type KioskContextValue = {
 const empty: KioskSession = {
     visitId: null,
     person: null,
-    saudeGeral: null,
-    saudeMental: null,
+    generalHealth: null,
+    mentalHealth: null,
     lastMeasurement: null,
     lastOximeter: null,
+    lastBloodPressure: null,
 };
 
 function loadSession(): KioskSession {
@@ -63,11 +67,17 @@ function loadSession(): KioskSession {
             sessionStorage.getItem(STORAGE_KEYS.kioskSession)
             || sessionStorage.getItem(LEGACY_STORAGE_KEYS.kioskSession);
         if (!raw) return empty;
-        const parsed = { ...empty, ...JSON.parse(raw) } as KioskSession;
-        if (parsed.person && !parsed.visitId) parsed.visitId = newVisitId();
-        sessionStorage.setItem(STORAGE_KEYS.kioskSession, JSON.stringify(parsed));
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        const next: KioskSession = {
+            ...empty,
+            ...parsed,
+            generalHealth: (parsed.generalHealth ?? parsed.saudeGeral ?? null) as QuestionnaireScore | null,
+            mentalHealth: (parsed.mentalHealth ?? parsed.saudeMental ?? null) as MentalKioskSession | null,
+        };
+        if (next.person && !next.visitId) next.visitId = newVisitId();
+        sessionStorage.setItem(STORAGE_KEYS.kioskSession, JSON.stringify(next));
         sessionStorage.removeItem(LEGACY_STORAGE_KEYS.kioskSession);
-        return parsed;
+        return next;
     } catch {
         return empty;
     }
@@ -78,7 +88,7 @@ function persist(session: KioskSession) {
         sessionStorage.setItem(STORAGE_KEYS.kioskSession, JSON.stringify(session));
         sessionStorage.removeItem(LEGACY_STORAGE_KEYS.kioskSession);
     } catch {
-        /* quota / modo privado */
+        /* quota / private mode */
     }
 }
 
@@ -128,20 +138,25 @@ export function KioskProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const mentalDone = Boolean(
-        session.saudeMental?.completedAt || session.saudeMental?.refused,
+        session.mentalHealth?.completedAt || session.mentalHealth?.refused,
     );
 
     const value = useMemo<KioskContextValue>(() => ({
         session,
         setPerson,
         beginVisit,
-        setSaudeGeral: (saudeGeral) => update({ saudeGeral }),
-        setSaudeMental: (saudeMental) => update({ saudeMental }),
+        setGeneralHealth: (generalHealth) => update({ generalHealth }),
+        setMentalHealth: (mentalHealth) => update({ mentalHealth }),
         setLastMeasurement: (lastMeasurement) => update({ lastMeasurement }),
         setLastOximeter: (lastOximeter) => update({ lastOximeter }),
+        setLastBloodPressure: (lastBloodPressure) => update({ lastBloodPressure }),
         clearSession,
         hasReportData: Boolean(
-            session.saudeGeral || session.lastMeasurement || session.lastOximeter || mentalDone,
+            session.generalHealth
+            || session.lastMeasurement
+            || session.lastOximeter
+            || session.lastBloodPressure
+            || mentalDone,
         ),
     }), [session, setPerson, beginVisit, update, clearSession, mentalDone]);
 
@@ -150,6 +165,6 @@ export function KioskProvider({ children }: { children: ReactNode }) {
 
 export function useKiosk() {
     const ctx = useContext(KioskContext);
-    if (!ctx) throw new Error('useKiosk deve ser usado dentro de KioskProvider');
+    if (!ctx) throw new Error('useKiosk must be used inside KioskProvider');
     return ctx;
 }

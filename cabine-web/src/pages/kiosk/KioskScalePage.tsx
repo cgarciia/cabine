@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 import { api, apiErrorMessage, deviceSocket } from '../../api';
-import { BiaGuideIllustration } from '../../components/BiaGuideIllustration';
 import { AfterStepScreen } from '../../components/AfterStepScreen';
+import { BiaGuideIllustration } from '../../components/BiaGuideIllustration';
+import { KioskBackButton } from '../../components/KioskIcon';
 import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
-import { hasBiaImpedances, type MeasurementPayload, type MeasurementRecord, type ScaleLiveMessage, type ScaleMetrics, type Segmento } from '../../types/measurement';
+import { hasBiaImpedances, type MeasurementPayload, type MeasurementRecord, type ScaleLiveMessage, type ScaleMetrics, type BiaSegment } from '../../types/measurement';
 import type { Scale } from '../../types/scale';
 
 const GUIDE = [
@@ -65,7 +66,7 @@ export function KioskScalePage() {
         completo: boolean;
         metricas?: ScaleMetrics | null;
         impedancias_ohm?: number[];
-        segmentos?: Segmento[];
+        segmentos?: BiaSegment[];
         balanca_nome?: string;
     } | null>(null);
 
@@ -75,7 +76,7 @@ export function KioskScalePage() {
         completo: boolean;
         metricas?: ScaleMetrics | null;
         impedancias_ohm?: number[];
-        segmentos?: Segmento[];
+        segmentos?: BiaSegment[];
         balanca_nome?: string;
     }) => {
         if (!person || reading.peso_kg <= 0) return;
@@ -186,7 +187,7 @@ export function KioskScalePage() {
             completo: boolean;
             metricas?: ScaleMetrics | null;
             impedancias_ohm?: number[];
-            segmentos?: Segmento[];
+            segmentos?: BiaSegment[];
             balanca_nome?: string;
         }) => {
             if (finishedRef.current) return;
@@ -320,9 +321,7 @@ export function KioskScalePage() {
                     ))}
                 </div>
 
-                <button type="button" className="kiosk-back" onClick={() => navigate('/menu')}>
-                    ← Voltar ao menu
-                </button>
+                <KioskBackButton onClick={() => navigate('/menu')}>Voltar ao menu</KioskBackButton>
             </div>
         </KioskLayout>
     );

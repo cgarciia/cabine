@@ -1,4 +1,5 @@
 from app.models.base import Base
+from app.models.blood_pressure_reading import BloodPressureReading
 from app.models.fhir_patient import FHIRPatient
 from app.models.form_submission import FormSubmission
 from app.models.measurement import ScaleMeasurement
@@ -9,6 +10,7 @@ from app.models.user import User
 
 __all__ = [
     "Base",
+    "BloodPressureReading",
     "FHIRPatient",
     "FormSubmission",
     "OximeterReading",

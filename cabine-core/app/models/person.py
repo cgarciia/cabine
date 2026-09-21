@@ -21,3 +21,4 @@ class ScalePerson(Base):
     measurements = relationship("ScaleMeasurement", back_populates="person")
     forms = relationship("FormSubmission", back_populates="person")
     oximeter_readings = relationship("OximeterReading", back_populates="person")
+    blood_pressure_readings = relationship("BloodPressureReading", back_populates="person")

@@ -87,10 +87,25 @@ export function pickPatientResult(results: MentalResult[]): MentalResult | undef
         ?? results.find((item) => item.instrument === 'WHO-5');
 }
 
+const CESMAM_ADDRESS = 'Avenida Desembargador João Machado, 7324, Manaus, Amazonas';
+const CAPS_ALEIXO = 'Alameda Espanha, 5 — Aleixo, Manaus - AM, 69060-020';
+const CAPS_LESTE =
+    'CAPS AD II Leste Dra. Eliana Vitorino Schramm, Alameda Alphaville, s/n — Tancredo Neves, Manaus';
+const CVV_SUPPORT = 'Se quiser conversar com alguém agora, o CVV atende 24 horas no 188.';
+
 export function resultCopy(result: MentalResult) {
     if (result.instrument === 'HAD') {
+        if ((result.hadA ?? 0) >= 15 || (result.hadD ?? 0) >= 15) {
+            return (
+                `Seu rastreio indica sintomas mais intensos neste momento. Se fizer sentido para você, ` +
+                `o CESMAM pode acolher e acompanhar isso com mais calma. O endereço em Manaus é ${CESMAM_ADDRESS}.`
+            );
+        }
         if ((result.hadA ?? 0) >= 11 || (result.hadD ?? 0) >= 11) {
-            return 'Seu rastreio indica vários sintomas de ansiedade e humor nas últimas duas semanas. Pode ser útil conversar com um profissional de saúde.';
+            return (
+                'Seu rastreio indica vários sintomas de ansiedade ou humor nas últimas duas semanas. ' +
+                'Se quiser um olhar de saúde, uma unidade básica de saúde pode conversar com você sobre isso, no seu ritmo.'
+            );
         }
         if ((result.hadA ?? 0) >= 8 || (result.hadD ?? 0) >= 8) {
             return 'Seu rastreio indica alguns sintomas. Vale observar como você se sente nas próximas semanas e, se quiser, conversar com um profissional de saúde.';
@@ -99,10 +114,17 @@ export function resultCopy(result: MentalResult) {
     }
     if (result.instrument === 'AUDIT') {
         if (result.score >= 20) {
-            return 'Seu padrão de consumo está em uma faixa que merece avaliação especializada.';
+            return (
+                'Seu padrão de consumo está em uma faixa em que pode valer buscar um serviço especializado, como o CAPS. ' +
+                `Em Manaus, você pode procurar: ${CAPS_ALEIXO}; ou ${CAPS_LESTE}. ${CVV_SUPPORT}`
+            );
         }
         if (result.score >= 16) {
-            return 'Seu padrão de consumo está em uma faixa que merece conversa com um profissional e acompanhamento.';
+            return (
+                'Seu padrão de consumo está em uma faixa que merece um olhar mais atento. ' +
+                'Se quiser, uma unidade básica de saúde pode conversar com você sobre isso, sem pressa. ' +
+                CVV_SUPPORT
+            );
         }
         if (result.score >= 8) {
             return 'Seu padrão de consumo está em uma faixa que merece atenção. Reduzir a frequência pode fazer diferença.';

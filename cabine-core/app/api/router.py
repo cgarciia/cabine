@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.routes import (
     auth,
+    blood_pressure,
     fhir_patients,
     forms,
     health,
@@ -22,3 +23,4 @@ api_router.include_router(people.router)
 api_router.include_router(measurements.router)
 api_router.include_router(forms.router)
 api_router.include_router(oximeter.router)
+api_router.include_router(blood_pressure.router)

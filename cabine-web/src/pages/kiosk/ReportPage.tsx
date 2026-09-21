@@ -1,3 +1,4 @@
+import { ChevronLeft } from 'lucide-react';
 import { useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
@@ -7,7 +8,7 @@ import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
 import type { OximeterReading } from '../../types/oximeter';
 
-export function RelatorioPage() {
+export function ReportPage() {
     const navigate = useNavigate();
     const { session, setLastMeasurement, setLastOximeter, hasReportData } = useKiosk();
     const personId = session.person?.id;
@@ -52,15 +53,15 @@ export function RelatorioPage() {
     if (!hasReportData) return <Navigate to="/menu" replace />;
 
     const person = session.person;
-    const geral = session.saudeGeral;
-    const mental = session.saudeMental;
+    const generalHealth = session.generalHealth;
+    const mental = session.mentalHealth;
 
     return (
         <KioskLayout>
             <SessionReport
                 person={person}
                 whenLabel={new Date().toLocaleString('pt-BR')}
-                health={geral}
+                health={generalHealth}
                 mental={mental ? {
                     accepted: mental.accepted,
                     refused: mental.refused,
@@ -71,12 +72,14 @@ export function RelatorioPage() {
                 } : null}
                 measurement={session.lastMeasurement}
                 oximeter={session.lastOximeter}
+                bloodPressure={session.lastBloodPressure}
             />
             <div className="kiosk-report-actions no-print" style={{ padding: '0 0 1.5rem' }}>
                 <button type="button" className="kiosk-btn kiosk-btn-primary" onClick={() => window.print()}>
                     Imprimir
                 </button>
                 <button type="button" className="kiosk-btn kiosk-btn-ghost" onClick={() => navigate('/menu')}>
+                    <ChevronLeft size={20} strokeWidth={2.2} aria-hidden />
                     Voltar ao menu
                 </button>
             </div>

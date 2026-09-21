@@ -87,7 +87,7 @@ async def require_access(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> ScalePerson | User:
-    """Aceita sessão de matrícula (kiosk) ou usuário do sistema."""
+    """Accept a kiosk registration session or a system user."""
     person = await resolve_person_from_token(token, db)
     if person is not None:
         return person

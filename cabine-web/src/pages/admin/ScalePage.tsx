@@ -14,7 +14,7 @@ import {
     type MeasurementRecord,
     type ScaleLiveMessage,
     type ScaleMetrics,
-    type Segmento,
+    type BiaSegment,
 } from '../../types/measurement';
 import type { Scale } from '../../types/scale';
 
@@ -81,8 +81,8 @@ export function ScalePage() {
     const [stable, setStable] = useState(false);
     const [complete, setComplete] = useState(false);
     const [metrics, setMetrics] = useState<ScaleMetrics | null>(null);
-    const [segments, setSegments] = useState<Segmento[]>([]);
-    const [impedanciasOhm, setImpedanciasOhm] = useState<number[]>([]);
+    const [segments, setSegments] = useState<BiaSegment[]>([]);
+    const [impedancesOhm, setImpedancesOhm] = useState<number[]>([]);
     const [scaleName, setScaleName] = useState('Balança');
     const [status, setStatus] = useState('Escolha quem vai se avaliar');
     const [guideStep, setGuideStep] = useState('step_on');
@@ -103,7 +103,7 @@ export function ScalePage() {
         completo: boolean;
         metricas?: ScaleMetrics | null;
         impedancias_ohm?: number[];
-        segmentos?: Segmento[];
+        segmentos?: BiaSegment[];
         balanca_nome?: string;
     } | null>(null);
 
@@ -155,7 +155,7 @@ export function ScalePage() {
         completo: boolean;
         metricas?: ScaleMetrics | null;
         impedancias_ohm?: number[];
-        segmentos?: Segmento[];
+        segmentos?: BiaSegment[];
         balanca_nome?: string;
     }) => {
         const session = snapshotRef.current;
@@ -286,7 +286,7 @@ export function ScalePage() {
         setComplete(false);
         setMetrics(null);
         setSegments([]);
-        setImpedanciasOhm([]);
+        setImpedancesOhm([]);
         setGuideStep('step_on');
         setGuideMsg((selectedScale?.adapter === 'ble_icomon' ? BIA_GUIDE : WEIGHT_GUIDE)[0].detail);
         setView('ready');
@@ -341,7 +341,7 @@ export function ScalePage() {
                         setComplete(true);
                         setMetrics(last.metricas ?? null);
                         setSegments(last.segmentos ?? []);
-                        setImpedanciasOhm(last.impedancias_ohm ?? []);
+                        setImpedancesOhm(last.impedancias_ohm ?? []);
                         setGuideStep('done');
                         setGuideMsg(activeGuide[activeGuide.length - 1].detail);
                         setStatus('Avaliação concluída');
@@ -355,7 +355,7 @@ export function ScalePage() {
                     setComplete(false);
                     setMetrics(null);
                     setSegments([]);
-                    setImpedanciasOhm([]);
+                    setImpedancesOhm([]);
                     setStable(false);
                     setCurrentWeight(null);
                     setGuideStep(data.step);
@@ -391,7 +391,7 @@ export function ScalePage() {
                     setComplete(true);
                     setMetrics(data.metricas ?? null);
                     setSegments(bia ? (data.segmentos ?? []) : []);
-                    setImpedanciasOhm(bia ? (data.impedancias_ohm ?? []) : []);
+                    setImpedancesOhm(bia ? (data.impedancias_ohm ?? []) : []);
                     if (data.balanca_nome) setScaleName(data.balanca_nome);
                     setView('report');
                     void persistRef.current({
@@ -410,7 +410,7 @@ export function ScalePage() {
                 setStable(Boolean(data.estavel));
                 setMetrics(data.metricas ?? null);
                 if (bia && data.segmentos?.length) setSegments(data.segmentos);
-                if (bia && data.impedancias_ohm?.length) setImpedanciasOhm(data.impedancias_ohm);
+                if (bia && data.impedancias_ohm?.length) setImpedancesOhm(data.impedancias_ohm);
                 if (data.balanca_nome) setScaleName(data.balanca_nome);
             }
         };
@@ -432,7 +432,7 @@ export function ScalePage() {
     const activeGuide = stepIndex(guide, guideStep);
     const currentGuide = guide[activeGuide] ?? guide[0];
     const weightOnlyResult = supportsBia && view === 'report' && !complete
-        && !hasBiaImpedances(impedanciasOhm)
+        && !hasBiaImpedances(impedancesOhm)
         && metrics?.metodo !== 'wla25'
         && metrics?.agua_pct == null;
     const readyLabel = friendlyStatus(status, view === 'ready');
@@ -465,7 +465,7 @@ export function ScalePage() {
         setComplete(false);
         setMetrics(null);
         setSegments([]);
-        setImpedanciasOhm([]);
+        setImpedancesOhm([]);
         setCurrentWeight(null);
         setGuideStep('step_on');
         setGuideMsg(guide[0].detail);
@@ -687,12 +687,12 @@ export function ScalePage() {
                             age={age}
                             sex={sex}
                             peopleType={peopleType}
-                            pesoKg={currentWeight}
+                            weightKg={currentWeight}
                             metrics={metrics}
                             supportsBia={supportsBia}
                             weightOnly={weightOnlyResult}
                             saved={reportSaved}
-                            segmentos={segments}
+                            segments={segments}
                         />
                         <div className="no-print" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
                             <button type="button" className="cabine-btn cabine-btn-primary" onClick={() => window.print()}>

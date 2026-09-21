@@ -2,16 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 import { deviceSocket, fetchPersonOximeter, saveOximeterReading } from '../../api';
+import { AfterStepScreen } from '../../components/AfterStepScreen';
+import { KioskBackButton } from '../../components/KioskIcon';
 import { OximeterGuideIllustration } from '../../components/OximeterGuideIllustration';
 import { OximeterPulseGraph } from '../../components/OximeterPulseGraph';
-import { AfterStepScreen } from '../../components/AfterStepScreen';
 import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
 import { loadOximeterAddress, saveOximeterAddress } from '../../session/oximeterDevice';
 import { newVisitId } from '../../session/visitId';
 import type { OximeterLive, OximeterReading } from '../../types/oximeter';
 
-export function OximetroPage() {
+export function KioskOximeterPage() {
     const navigate = useNavigate();
     const { session, setLastOximeter } = useKiosk();
     const person = session.person;
@@ -294,7 +295,7 @@ export function OximetroPage() {
         return (
             <KioskLayout>
                 <AfterStepScreen
-                    justFinished="oximetro"
+                    justFinished="oximeter"
                     title="Oximetria concluída"
                     description="Sua oxigenação e pulso foram registrados."
                 />
@@ -372,9 +373,7 @@ export function OximetroPage() {
                     </p>
                 ) : null}
 
-                <button type="button" className="kiosk-back" onClick={goBack}>
-                    ← Voltar ao menu
-                </button>
+                <KioskBackButton onClick={goBack}>Voltar ao menu</KioskBackButton>
             </div>
         </KioskLayout>
     );
