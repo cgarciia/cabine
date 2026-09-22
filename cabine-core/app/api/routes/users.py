@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user, oauth2_optional, resolve_user_from_token
 from app.crud import user as user_crud
-from app.models.user import User
+from app.models.user import ROLE_OPERATOR, User
 from app.schemas.user import UserCreate, UserResponse
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -19,15 +19,15 @@ async def register_user(
     if await user_crud.get_by_email(db, user.email):
         raise HTTPException(status_code=400, detail="Este e-mail já está cadastrado.")
     if await user_crud.count_all(db) == 0:
-        return await user_crud.create(db, user)
+        return await user_crud.create(db, user, role=ROLE_OPERATOR)
     operator = await resolve_user_from_token(token, db) if token else None
-    if operator is None:
+    if operator is None or not operator.is_operator:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Apenas um operador autenticado pode cadastrar usuários.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return await user_crud.create(db, user)
+    return await user_crud.create(db, user, role=ROLE_OPERATOR)
 
 
 @router.get("/me", response_model=UserResponse)

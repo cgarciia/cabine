@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
-import { api, apiErrorMessage, fetchPersonMeasurements } from '../../api';
+import { api, apiErrorMessage, fetchPeople, fetchPersonMeasurements } from '../../api';
 import { AppLayout } from '../../components/AppLayout';
 import { HistoryDialog } from '../../components/HistoryDialog';
 import {
@@ -28,8 +28,8 @@ export function PeoplePage() {
     const [selectedReport, setSelectedReport] = useState<MeasurementRecord | null>(null);
 
     async function load() {
-        const { data } = await api.get<ScalePerson[]>('/people');
-        setPeople(data);
+        const data = await fetchPeople({ limit: 200 });
+        setPeople(data.items);
     }
 
     useEffect(() => {

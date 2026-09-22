@@ -3,7 +3,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import require_operator
 from app.crud import fhir_patient as fhir_patient_crud
 from app.models.user import User
 from app.schemas.fhir_patient import FHIRPatientWrite
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/fhir/Patient", tags=["FHIR - Patient"])
 async def create_fhir_patient(
     patient_data: FHIRPatientWrite,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_operator),
 ):
     payload = patient_data.model_dump(exclude_none=True)
     try:
@@ -48,7 +48,7 @@ async def create_fhir_patient(
 async def get_fhir_patient(
     fhir_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_operator),
 ):
     record = await fhir_patient_crud.get_by_fhir_id(db, fhir_id)
     if not record:

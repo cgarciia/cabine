@@ -135,3 +135,10 @@ class PersonResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PersonListResponse(BaseModel):
+    items: list[PersonResponse]
+    total: int
+    limit: int
+    offset: int

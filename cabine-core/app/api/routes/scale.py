@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import authenticate_websocket, get_current_user, require_access
+from app.core.deps import authenticate_websocket, require_access, require_operator
 from app.crud import scale as scale_crud
 from app.schemas.scale import (
     ScaleCatalogResponse,
@@ -17,7 +17,7 @@ from app.services.scale.stream import stream_scale
 
 router = APIRouter(tags=["Scales"])
 protected = APIRouter(dependencies=[Depends(require_access)])
-operator = APIRouter(dependencies=[Depends(get_current_user)])
+operator = APIRouter(dependencies=[Depends(require_operator)])
 
 
 @protected.get("/scales/catalog", response_model=ScaleCatalogResponse)

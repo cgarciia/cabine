@@ -12,6 +12,13 @@ export interface ScalePerson {
     updated_at: string;
 }
 
+export interface PersonListResponse {
+    items: ScalePerson[];
+    total: number;
+    limit: number;
+    offset: number;
+}
+
 export interface PersonPayload {
     name: string;
     registration?: string | null;

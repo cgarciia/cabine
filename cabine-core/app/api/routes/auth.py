@@ -11,8 +11,10 @@ from app.core.database import get_db
 from app.core.security import create_access_token, verify_password
 from app.crud import person as person_crud
 from app.crud import user as user_crud
+from app.models.user import User
 from app.schemas.person import PersonResponse
 from app.schemas.token import Token
+from app.schemas.user import ProfessionalRegister, UserResponse
 
 router = APIRouter(tags=["Auth"])
 
@@ -34,6 +36,10 @@ class RegistrationSessionResponse(Token):
     person: PersonResponse
 
 
+class ProfessionalSessionResponse(Token):
+    user: UserResponse
+
+
 def _issue_person_token(person_id: UUID, registration: str) -> Token:
     expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
@@ -42,6 +48,18 @@ def _issue_person_token(person_id: UUID, registration: str) -> Token:
             "typ": "person",
             "registration": registration,
         },
+        expires_delta=expires,
+    )
+    return Token(
+        access_token=access_token,
+        expires_in=int(expires.total_seconds()),
+    )
+
+
+def issue_user_token(user: User) -> Token:
+    expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email, "typ": "user", "role": user.role},
         expires_delta=expires,
     )
     return Token(
@@ -89,7 +107,6 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    """Operator login (e-mail). The kiosk uses POST /login/registration."""
     user = await user_crud.get_by_email(db, form_data.username)
     if (
         not user
@@ -101,13 +118,24 @@ async def login(
             detail="E-mail ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    return issue_user_token(user)
 
-    expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.email, "typ": "user"},
-        expires_delta=expires,
-    )
-    return Token(
-        access_token=access_token,
-        expires_in=int(expires.total_seconds()),
+
+@router.post(
+    "/professionals/register",
+    response_model=ProfessionalSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def register_professional(
+    payload: ProfessionalRegister,
+    db: AsyncSession = Depends(get_db),
+):
+    if await user_crud.get_by_email(db, payload.email):
+        raise HTTPException(status_code=400, detail="Este e-mail já está cadastrado.")
+    user = await user_crud.create_professional(db, payload)
+    token = issue_user_token(user)
+    return ProfessionalSessionResponse(
+        access_token=token.access_token,
+        expires_in=token.expires_in,
+        user=UserResponse.model_validate(user),
     )

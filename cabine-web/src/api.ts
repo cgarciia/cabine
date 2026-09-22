@@ -5,7 +5,7 @@ import type { BloodPressureReading } from './types/bloodPressure';
 import type { FormSubmission } from './types/form';
 import type { MeasurementRecord } from './types/measurement';
 import type { OximeterReading } from './types/oximeter';
-import type { ScalePerson } from './types/person';
+import type { PersonListResponse, ScalePerson } from './types/person';
 
 export function apiBaseUrl() {
     const env = import.meta.env.VITE_API_URL as string | undefined;
@@ -116,6 +116,21 @@ export async function loginOperator(email: string, password: string): Promise<{
     body.set('username', email);
     body.set('password', password);
     const { data } = await api.post<{ access_token: string; expires_in: number }>('/login', body);
+    return data;
+}
+
+export async function fetchPeople(params?: {
+    q?: string;
+    limit?: number;
+    offset?: number;
+}): Promise<PersonListResponse> {
+    const { data } = await api.get<PersonListResponse>('/people', {
+        params: {
+            q: params?.q || undefined,
+            limit: params?.limit ?? 200,
+            offset: params?.offset ?? 0,
+        },
+    });
     return data;
 }
 

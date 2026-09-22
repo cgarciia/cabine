@@ -36,6 +36,14 @@ _FORBIDDEN_PERSON = HTTPException(
     status_code=status.HTTP_403_FORBIDDEN,
     detail="Esta sessão não pode acessar dados de outra pessoa.",
 )
+_FORBIDDEN_OPERATOR = HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail="Apenas operadores da cabine podem realizar esta ação.",
+)
+_FORBIDDEN_PROFESSIONAL_MUTATION = HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail="Profissionais de saúde têm acesso somente leitura aos pacientes.",
+)
 
 
 @dataclass(frozen=True)
@@ -115,6 +123,14 @@ async def get_current_user(
     return user
 
 
+async def require_operator(
+    user: User = Depends(get_current_user),
+) -> User:
+    if not user.is_operator:
+        raise _FORBIDDEN_OPERATOR
+    return user
+
+
 async def require_access(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
@@ -136,6 +152,12 @@ def ensure_person_scope(actor: ScalePerson | User, person_id: UUID) -> None:
         raise _FORBIDDEN_PERSON
 
 
+def ensure_can_mutate_person(actor: ScalePerson | User) -> None:
+    """Professionals may read people/visits but cannot create/update/delete them."""
+    if isinstance(actor, User) and actor.is_professional:
+        raise _FORBIDDEN_PROFESSIONAL_MUTATION
+
+
 async def authenticate_websocket(websocket: WebSocket, token: str | None) -> AccessPrincipal | None:
     if not token:
         await websocket.close(code=4401)
@@ -146,6 +168,9 @@ async def authenticate_websocket(websocket: WebSocket, token: str | None) -> Acc
             return AccessPrincipal(kind="person", person_id=person.id)
         user = await resolve_user_from_token(token, db)
         if user is not None:
+            if user.is_professional:
+                await websocket.close(code=4403)
+                return None
             return AccessPrincipal(kind="user")
     await websocket.close(code=4401)
     return None

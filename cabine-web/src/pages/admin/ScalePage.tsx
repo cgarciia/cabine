@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
-import { api, apiErrorMessage, deviceSocket, fetchPersonMeasurements } from '../../api';
+import { api, apiErrorMessage, deviceSocket, fetchPeople, fetchPersonMeasurements } from '../../api';
 import { AppLayout } from '../../components/AppLayout';
 import { BodyReport } from '../../components/BodyReport';
 import { HistoryDialog } from '../../components/HistoryDialog';
@@ -197,8 +197,8 @@ export function ScalePage() {
             setReportSaved(true);
             setExpectedWeight(String(reading.weight_kg));
             setSaveMsg('Relatório salvo no histórico.');
-            const { data } = await api.get<ScalePerson[]>('/people');
-            setPeople(data);
+            const data = await fetchPeople({ limit: 200 });
+            setPeople(data.items);
         } catch (err) {
             setSaveMsg(apiErrorMessage(err, 'Não foi possível salvar o relatório.'));
         } finally {
@@ -262,9 +262,9 @@ export function ScalePage() {
         }).catch(() => {
             setStatus('Não foi possível carregar as balanças cadastradas.');
         });
-        api.get<ScalePerson[]>('/people').then(({ data }) => {
-            setPeople(data);
-            const rememberedPerson = data.find((item) => item.id === remembered);
+        fetchPeople({ limit: 200 }).then((data) => {
+            setPeople(data.items);
+            const rememberedPerson = data.items.find((item) => item.id === remembered);
             if (rememberedPerson) applyPerson(rememberedPerson);
         }).catch(() => {
             setStatus('Não foi possível carregar as pessoas.');

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.person import ScalePerson
@@ -10,6 +10,37 @@ from app.schemas.person import PersonCreate, PersonUpdate, _age_from_birth
 async def list_all(db: AsyncSession) -> list[ScalePerson]:
     result = await db.execute(select(ScalePerson).order_by(ScalePerson.name))
     return list(result.scalars().all())
+
+
+async def list_page(
+    db: AsyncSession,
+    *,
+    q: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[ScalePerson], int]:
+    filters = []
+    if q:
+        term = f"%{q.strip()}%"
+        if term != "%%":
+            filters.append(
+                or_(
+                    ScalePerson.name.ilike(term),
+                    ScalePerson.registration.ilike(term),
+                )
+            )
+
+    count_stmt = select(func.count()).select_from(ScalePerson)
+    if filters:
+        count_stmt = count_stmt.where(*filters)
+    total = int((await db.execute(count_stmt)).scalar_one())
+
+    stmt = select(ScalePerson).order_by(ScalePerson.name)
+    if filters:
+        stmt = stmt.where(*filters)
+    stmt = stmt.limit(limit).offset(offset)
+    rows = list((await db.execute(stmt)).scalars().all())
+    return rows, total
 
 
 async def get_by_id(db: AsyncSession, person_id: UUID) -> ScalePerson | None:
