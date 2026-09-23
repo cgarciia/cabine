@@ -382,8 +382,8 @@ Marque o que está enviando (ajustar ao pacote real):
 - [x] Dependências: `cabine-core/pyproject.toml` + `uv.lock`; `cabine-web/package.json` + lock; `cabine-profissional/package.json` + lock
 - [x] `cabine-core/docker-compose.yml` (Postgres)
 - [ ] Configuração de CI — **não existe**
-- [x] Prints das telas principais do totem e do painel — pasta `docs/01-levantamento-anexos/imagens/`
-- [x] Exemplo do papel impresso — ver imagens na pasta de anexos (se aplicável)
+- [x] Prints das telas principais do totem e do painel — pasta `Transire -> Cabine de diagnostico -> (08) Cabinet IA -> Anexos`
+- [x] Exemplo do papel impresso — pasta `Transire -> Cabine de diagnostico -> (08) Cabinet IA -> Anexos`
 - [x] Textos exibidos ao participante — no repo: `cabine-web/src/advice/`, `cabine-web/src/modules/health/`, `cabine-web/src/modules/mental/`
 - [x] Documentação existente: `README.md`, `cabine-core/SPEC.md`, `cabine-web/SPEC.md`, `SPEC-portal-profissional.md`, `docs/relatorio-protocolos-balancas.md`
 
