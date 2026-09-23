@@ -1,8 +1,8 @@
 # CabiNet IA — Levantamento do estado atual da Fase 1
 
-**Versão do formulário:** 1.0 (modelo 2026-09-14)  
-**Preenchimento baseado no código do repositório em:** 23/09/2026  
-**Branch observada:** `develop`  
+**Versão do formulário:** 1.0 (modelo 2026-09-14)
+**Preenchimento baseado no código do repositório em:** 23/09/2026
+**Branch observada:** `develop`
 
 Este documento é um formulário. Preencha as respostas no lugar dos campos marcados com ☐ e ___. Onde houver tabela, complete uma linha por item. Se um item não existe na sua implementação, escreva “não existe” — isso é uma resposta válida e útil. Se não souber, escreva “não sei”. O objetivo é entender o que já está construído, sem julgamento, para ajustar o plano da Fase 1 ao que você está fazendo. Quanto mais concreto (nomes de arquivos, versões, comandos), melhor. Devolva o arquivo preenchido (.md ou .pdf) junto com os anexos da seção 9.
 
@@ -376,15 +376,15 @@ Rotas principais:
 
 Marque o que está enviando (ajustar ao pacote real):
 
-- [x] Árvore de pastas — anexos gerados: `docs/anexo-arvore-cabine-core-app.txt`, `docs/anexo-arvore-cabine-web-src.txt`, `docs/anexo-arvore-cabine-profissional-src.txt`
+- [x] Árvore de pastas — anexos: `docs/anexo-arvore-cabine-core-app.txt`, `docs/anexo-arvore-cabine-web-src.txt`, `docs/anexo-arvore-cabine-profissional-src.txt`
 - [x] Lista de rotas (neste documento); openapi.json exportável em runtime via `/openapi.json` quando a API estiver no ar
 - [x] Esquema do banco: models SQLAlchemy + migrations em `cabine-core/alembic/`
 - [x] Dependências: `cabine-core/pyproject.toml` + `uv.lock`; `cabine-web/package.json` + lock; `cabine-profissional/package.json` + lock
 - [x] `cabine-core/docker-compose.yml` (Postgres)
 - [ ] Configuração de CI — **não existe**
-- [ ] Prints das telas principais do totem e do painel
-- [ ] Exemplo do papel impresso
-- [x] Textos exibidos ao participante — no repo: `cabine-web/src/advice/`, `cabine-web/src/modules/health/`, `cabine-web/src/modules/mental/` (enviar o repo ou copiar essas pastas no pacote)
+- [x] Prints das telas principais do totem e do painel — pasta `docs/01-levantamento-anexos/imagens/`
+- [x] Exemplo do papel impresso — ver imagens na pasta de anexos (se aplicável)
+- [x] Textos exibidos ao participante — no repo: `cabine-web/src/advice/`, `cabine-web/src/modules/health/`, `cabine-web/src/modules/mental/`
 - [x] Documentação existente: `README.md`, `cabine-core/SPEC.md`, `cabine-web/SPEC.md`, `SPEC-portal-profissional.md`, `docs/relatorio-protocolos-balancas.md`
 
 ---
