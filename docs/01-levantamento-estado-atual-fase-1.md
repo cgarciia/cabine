@@ -8,6 +8,8 @@ Este documento é um formulário. Preencha as respostas no lugar dos campos marc
 
 ---
 
+
+
 ## 1. Identificação
 
 
@@ -21,6 +23,8 @@ Este documento é um formulário. Preencha as respostas no lugar dos campos marc
 
 
 ---
+
+
 
 ## 2. Visão geral
 
@@ -46,7 +50,11 @@ Há um terceiro frontend em construção, `cabine-profissional` (portal clínico
 
 ---
 
+
+
 ## 3. Backend (servidor)
+
+
 
 ### 3.1 Stack
 
@@ -60,6 +68,8 @@ Há um terceiro frontend em construção, `cabine-profissional` (portal clínico
 | Ferramenta de migrations                      | Alembic **1.19.1**                                                                                                                                                                             |
 | Gerenciador de dependências e arquivo de lock | **uv** — `pyproject.toml` + `uv.lock`                                                                                                                                                          |
 | Outras bibliotecas relevantes                 | bcrypt, python-jose (JWT HS256), bleak (BLE), pydantic / pydantic-settings, fhir.resources, python-multipart, email-validator (valida formato de e-mail nos schemas de usuário via `EmailStr`) |
+
+
 
 
 ### 3.2 Estrutura
@@ -100,6 +110,8 @@ cabine-core/
 | Existe separação entre “identidade do participante” e “dados da avaliação”? Como? | **Sim.** Identidade: tabela `people` (`ScalePerson`). Avaliações/leituras: `scale_measurements`, `oximeter_readings`, `blood_pressure_readings`, `form_submissions`, ligadas por `person_id` e opcionalmente `visit_id`. Usuários do sistema (`users`) são outra entidade (administrador/profissional), não o participante. |
 
 
+
+
 ### 3.3 Modelo de dados
 
 Tabelas/entidades existentes (campos principais; PK = `id` UUID + `created_at`/`updated_at` herdados de `Base`, salvo indicação):
@@ -128,6 +140,8 @@ Tabelas/entidades existentes (campos principais; PK = `id` UUID + `created_at`/`
 | Estimativas (IMC, %gordura etc.) são gravadas ou calculadas na hora?                   | Gravadas em `scale_measurements.metrics` (JSONB). Cálculo no core (`services/scale/metrics.py`); método básico registra `"metodo": "imc_deurenberg"`; com impedâncias usa fluxo WLA/BIA. Não há campo separado de “versão da fórmula” além do que entra no JSON `metrics`. Na leitura, `metrics_from_stored` pode reutilizar o armazenado.                   |
 | Existe versionamento do questionário (perguntas mudam sem quebrar avaliações antigas)? | Não. Não há tabela/versão de questionário no banco. As perguntas vivem no código do frontend (`cabine-web/src/modules/...`). O que fica salvo é o `payload` JSONB daquela avaliação; se as perguntas mudarem no código depois, as respostas antigas continuam no JSON como foram gravadas, mas sem um número de versão formal ligando “qual formulário era”. |
 | Existe alguma rotina de anonimização, exclusão ou retenção?                            | não existe rotina automática no código. Existe `DELETE /people/{id}` (adiministrador).                                                                                                                                                                                                                                                                       |
+
+
 
 
 ### 3.4 API
@@ -163,6 +177,8 @@ Lista principal de endpoints (auth conforme deps atuais). Swagger/OpenAPI: FastA
 | Existe conceito de “avaliação aberta / encerrada / abandonada”?     | não existe como status de visita no banco. Agrupamento lógico por `visit_id` (ou fallback temporal no serviço de visitas). `form_submissions.status` existe (default `completed`). |
 
 
+
+
 ### 3.5 Autenticação e perfis
 
 
@@ -174,6 +190,8 @@ Lista principal de endpoints (auth conforme deps atuais). Swagger/OpenAPI: FastA
 | Alguém do lado da empresa (RH, gestor) consegue ver dado de uma pessoa específica? | **não existe** perfil RH/gestor no código. Operador e profissional (portal) conseguem listar/ver pessoas conforme permissões das rotas.                                                                                                             |
 | Como o totem se autentica no servidor?                                             | `POST /login/registration` (matrícula + data de nascimento) → JWT de pessoa.                                                                                                                                                                        |
 | Como a senha é armazenada?                                                         | **bcrypt** (`bcrypt.hashpw` / `checkpw` em `app/core/security.py`).                                                                                                                                                                                 |
+
+
 
 
 ### 3.6 Logs, testes e qualidade
@@ -192,7 +210,11 @@ Lista principal de endpoints (auth conforme deps atuais). Swagger/OpenAPI: FastA
 
 ---
 
+
+
 ## 4. Frontend
+
+
 
 ### 4.1 Stack
 
@@ -207,6 +229,8 @@ Lista principal de endpoints (auth conforme deps atuais). Swagger/OpenAPI: FastA
 | Cliente HTTP               | **axios**                                                                                             |
 | UI / design system / CSS   | CSS global próprio (`index.css`); ícones **lucide-react**                                             |
 | Formulários e validação    | Controles React controlados; validação de API via Pydantic no backend                                 |
+
+
 
 
 ### 4.2 Aplicações e telas
@@ -237,6 +261,8 @@ Rotas principais:
 | cabine-profissional | `/pacientes`, `/pacientes/:id`                           | Lista e perfil + visitas/comparação  | parcial / em construção                                      |
 
 
+
+
 ### 4.3 Comportamento da tela do totem
 
 
@@ -252,6 +278,8 @@ Rotas principais:
 | Navegador e modo (quiosque, tela cheia, normal)?           | Em campo: **modo quiosque** (kiosk). Em desenvolvimento: navegador normal com Vite (HTTPS local).                                                                                                                                              |
 
 
+
+
 ### 4.4 Build e qualidade
 
 
@@ -264,28 +292,32 @@ Rotas principais:
 
 ---
 
+
+
 ## 5. Serviço no totem (hardware, balança, integração)
 
 
-| Pergunta                                                      | Resposta                                                                                                                                                                                                                                                                               |
-| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Existe um programa rodando no totem além do navegador?        | **Não** como app separado. O **mesmo** processo `cabine-core` (FastAPI + Bleak) precisa estar acessível à máquina que tem o rádio BLE (tipicamente o Windows do totem).                                                                                                                |
+| Pergunta                                                      | Resposta                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Existe um programa rodando no totem além do navegador?        | **Não** como app separado. O **mesmo** processo `cabine-core` (FastAPI + Bleak) precisa estar acessível à máquina que tem o rádio BLE (tipicamente o Windows do totem).                                                                                                                                                                                                |
 | Como ele é instalado e iniciado?                              | **Manual por terminal** (não há serviço Windows / NSSM / Task Scheduler no repo). No dia a dia: (1) `cabine-core`: `docker compose up -d` → `uv run alembic upgrade head` → `uv run uvicorn app.main:app --reload --port 8000`; (2) em outro terminal, `cabine-web`: `npm run dev -- --host 127.0.0.1 --port 5174`. Navegador em modo quiosque apontando para o front. |
-| Sistema operacional do totem e versão                         | Código BLE assume Windows (patches WinRT no core). Versão exata do SO em campo: não sei.                                                                                                                                                                                               |
-| Modelo da balança e forma de comunicação?                     | **RM-RD2504A**, BLE GATT (adapter `ble_rm_rd2504a` / parser dedicado).                                                                                                                                                                                                                 |
-| Biblioteca usada para falar com a balança                     | **Bleak** (Python) no `cabine-core`                                                                                                                                                                                                                                                    |
-| Como o peso chega à tela?                                     | **WebSocket** `/ws/scale`                                                                                                                                                                                                                                                              |
-| Como o serviço do totem fala com o servidor?                  | O core **é** o servidor. A tela fala HTTP/WS com o core. Não há fila/sincronização offline dedicada no código.                                                                                                                                                                         |
-| O totem guarda dados localmente (banco, arquivos, fila)?      | Persistência oficial no **Postgres** do core. No browser: session/localStorage (sessão e token), não banco local de avaliações.                                                                                                                                                        |
-| Existe algum sinal de “estou vivo” do totem para o servidor?  | **não existe** heartbeat de totem além de `/health` da API.                                                                                                                                                                                                                            |
-| Como o serviço sabe se a balança/impressora está funcionando? | Balança/oxímetro/PA: via scan/stream BLE e eventos no WS. Impressora: só via diálogo do browser — sem healthcheck no código.                                                                                                                                                           |
-| Problemas conhecidos de hardware/driver                       | Há documentação em `docs/relatorio-protocolos-balancas.md` e notas no SPEC.                                                                                                                                                                                                            |
-| Outros sensores ou dispositivos                               | **Oxímetro PC-60NW** (BLE); **pressão HEM-7530T** (BLE); ECG ultrassônico mencionado no SPEC como opcional no front.                                                                                                                                                                   |
+| Sistema operacional do totem e versão                         | Código BLE assume Windows (patches WinRT no core). Versão exata do SO em campo: não sei.                                                                                                                                                                                                                                                                               |
+| Modelo da balança e forma de comunicação?                     | **RM-RD2504A**, BLE GATT (adapter `ble_rm_rd2504a` / parser dedicado).                                                                                                                                                                                                                                                                                                 |
+| Biblioteca usada para falar com a balança                     | **Bleak** (Python) no `cabine-core`                                                                                                                                                                                                                                                                                                                                    |
+| Como o peso chega à tela?                                     | **WebSocket** `/ws/scale`                                                                                                                                                                                                                                                                                                                                              |
+| Como o serviço do totem fala com o servidor?                  | O core **é** o servidor. A tela fala HTTP/WS com o core. Não há fila/sincronização offline dedicada no código.                                                                                                                                                                                                                                                         |
+| O totem guarda dados localmente (banco, arquivos, fila)?      | Persistência oficial no **Postgres** do core. No browser: session/localStorage (sessão e token), não banco local de avaliações.                                                                                                                                                                                                                                        |
+| Existe algum sinal de “estou vivo” do totem para o servidor?  | **não existe** heartbeat de totem além de `/health` da API.                                                                                                                                                                                                                                                                                                            |
+| Como o serviço sabe se a balança/impressora está funcionando? | Balança/oxímetro/PA: via scan/stream BLE e eventos no WS. Impressora: só via diálogo do browser — sem healthcheck no código.                                                                                                                                                                                                                                           |
+| Problemas conhecidos de hardware/driver                       | Há documentação em `docs/relatorio-protocolos-balancas.md` e notas no SPEC.                                                                                                                                                                                                                                                                                            |
+| Outros sensores ou dispositivos                               | **Oxímetro PC-60NW** (BLE); **pressão HEM-7530T** (BLE); ECG ultrassônico mencionado no SPEC como opcional no front.                                                                                                                                                                                                                                                   |
 
 
 Árvore do “serviço” de hardware: dentro de `cabine-core/app/services/` (não é repo separado).
 
 ---
+
+
 
 ## 6. Infraestrutura e operação
 
@@ -304,6 +336,8 @@ Rotas principais:
 
 ---
 
+
+
 ## 7. Dados pessoais e conformidade
 
 
@@ -320,6 +354,8 @@ Rotas principais:
 
 ---
 
+
+
 ## 8. Dificuldades, decisões e próximos passos
 
 
@@ -329,10 +365,12 @@ Rotas principais:
 | O que você faria diferente se começasse hoje                           | Documentaria o desenvolvimento desde o início; faria commits menores e mais frequentes (evitar grandes mudanças em um único commit); seguiria um plano de atividades compartilhado com o time de desenvolvimento.                                                                                                                                                                                                 |
 | Maiores dificuldades encontradas (técnicas ou de requisito)            | Conectar e estabilizar a balança de 8 sensores (BIA / RM-RD2504A via BLE no Windows). Trazer uma boa leitura do eletrocardiograma no monitor de pressão: a captura existe, mas ainda há muito ruído e a qualidade não está boa.                                                                                                                                                                                   |
 | O que está planejado para as próximas semanas                          | Portal profissional (conforme `SPEC-portal-profissional.md`).                                                                                                                                                                                                                                                                                                                                                     |
-| Dúvidas que você tem sobre o produto ou a arquitetura                  | (1) Quais dispositivos serão oficiais em produção (lista fechada) vs. o admin cadastrar novos ao longo do uso? (2) O cadastro de dispositivos no `/admin` cobre o que o produto precisa, ou falta algo? (3) Em qual SO a cabine sobe de forma definitiva (só Windows do totem)? (4) Precisa funcionar offline (sem rede / sem Postgres remoto)? |
+| Dúvidas que você tem sobre o produto ou a arquitetura                  | (1) Quais dispositivos serão oficiais em produção (lista fechada) vs. o admin cadastrar novos ao longo do uso? (2) O cadastro de dispositivos no `/admin` cobre o que o produto precisa, ou falta algo? (3) Em qual SO a cabine sobe de forma definitiva (só Windows do totem)? (4) Precisa funcionar offline (sem rede / sem Postgres remoto)?                                                                   |
 
 
 ---
+
+
 
 ## 9. Anexos solicitados
 
