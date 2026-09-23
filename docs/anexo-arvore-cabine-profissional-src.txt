@@ -1,0 +1,23 @@
+Listagem de caminhos de pasta para o volume Windows-SSD
+O número de série do volume é CED9-978E
+C:\USERS\ISATECH\PROJETOS\CABINE\CABINE-PROFISSIONAL\SRC
+|   api.ts
+|   App.tsx
+|   index.css
+|   main.tsx
+|   types.ts
+|   vite-env.d.ts
+|   
++---components
+|       AppShell.tsx
+|       RequireProfessional.tsx
+|       
++---pages
+|       LoginPage.tsx
+|       PatientProfilePage.tsx
+|       PatientsPage.tsx
+|       RegisterPage.tsx
+|       
+\---session
+        auth.ts
+        

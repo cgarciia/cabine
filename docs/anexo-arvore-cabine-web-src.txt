@@ -1,0 +1,105 @@
+Listagem de caminhos de pasta para o volume Windows-SSD
+O número de série do volume é CED9-978E
+C:\USERS\ISATECH\PROJETOS\CABINE\CABINE-WEB\SRC
+|   api.ts
+|   App.tsx
+|   index.css
+|   main.tsx
+|   
++---advice
+|       patientAdvice.ts
+|       
++---assets
+|       hero.png
+|       react.svg
+|       vite.svg
+|       
++---components
+|       AfterStepScreen.tsx
+|       AppLayout.tsx
+|       BiaGuideIllustration.tsx
+|       BodyReport.tsx
+|       BpGuideIllustration.tsx
+|       ConfirmDialog.tsx
+|       FormHistoryDialog.tsx
+|       HeartbeatMonitor.tsx
+|       HistoryDialog.tsx
+|       KioskIcon.tsx
+|       KioskKeyboard.tsx
+|       KioskNumpad.tsx
+|       KioskOptionContent.tsx
+|       KioskQuizHeading.tsx
+|       OximeterGuideIllustration.tsx
+|       OximeterHistoryDialog.tsx
+|       OximeterPulseGraph.tsx
+|       OximeterPulsePreview.tsx
+|       PersonForm.tsx
+|       PersonPicker.tsx
+|       RequireAuth.tsx
+|       RequireOperator.tsx
+|       SessionReport.tsx
+|       StepCompleteScreen.tsx
+|       
++---kiosk
+|       KioskContext.tsx
+|       KioskLayout.tsx
+|       
++---modules
+|   +---health
+|   |       questionnaires.ts
+|   |       
+|   \---mental
+|           instruments.ts
+|           scoring.ts
+|           
++---pages
+|   +---admin
+|   |       BloodPressurePage.tsx
+|   |       OperatorLoginPage.tsx
+|   |       OximeterPage.tsx
+|   |       PeoplePage.tsx
+|   |       ScalePage.tsx
+|   |       ScalesPage.tsx
+|   |       
+|   \---kiosk
+|           CompletionPage.tsx
+|           KioskBloodPressurePage.tsx
+|           KioskOximeterPage.tsx
+|           KioskScalePage.tsx
+|           MentalHealthPage.tsx
+|           MenuPage.tsx
+|           QuestionnairePage.tsx
+|           RecordsPage.tsx
+|           RegistrationLoginPage.tsx
+|           RegistrationPage.tsx
+|           ReportPage.tsx
+|           WelcomePage.tsx
+|           
++---session
+|       authSession.ts
+|       bloodPressureDevice.ts
+|       cabineSession.ts
+|       currentPerson.ts
+|       formPayload.ts
+|       keys.ts
+|       oximeterDevice.ts
+|       visitId.ts
+|       
++---types
+|       bloodPressure.ts
+|       form.ts
+|       measurement.ts
+|       mental.ts
+|       oximeter.ts
+|       person.ts
+|       scale.ts
+|       
+\---utils
+        friendlyScaleStatus.ts
+        hem7530EcgMic.ts
+        hem7530EcgWorklet.ts
+        kioskDate.ts
+        kioskProgress.ts
+        scaleCue.ts
+        sessionBundles.ts
+        

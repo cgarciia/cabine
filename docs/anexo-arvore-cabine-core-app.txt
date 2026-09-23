@@ -1,0 +1,237 @@
+Listagem de caminhos de pasta para o volume Windows-SSD
+O número de série do volume é CED9-978E
+C:\USERS\ISATECH\PROJETOS\CABINE\CABINE-CORE\APP
+|   main.py
+|   __init__.py
+|   
++---api
+|   |   router.py
+|   |   __init__.py
+|   |   
+|   +---routes
+|   |   |   auth.py
+|   |   |   blood_pressure.py
+|   |   |   fhir_patients.py
+|   |   |   forms.py
+|   |   |   health.py
+|   |   |   measurements.py
+|   |   |   oximeter.py
+|   |   |   people.py
+|   |   |   scale.py
+|   |   |   users.py
+|   |   |   __init__.py
+|   |   |   
+|   |   \---__pycache__
+|   |           auth.cpython-314.pyc
+|   |           blood_pressure.cpython-314.pyc
+|   |           fhir_patients.cpython-314.pyc
+|   |           forms.cpython-314.pyc
+|   |           health.cpython-314.pyc
+|   |           measurements.cpython-314.pyc
+|   |           oximeter.cpython-314.pyc
+|   |           people.cpython-314.pyc
+|   |           scale.cpython-314.pyc
+|   |           users.cpython-314.pyc
+|   |           __init__.cpython-314.pyc
+|   |           
+|   \---__pycache__
+|           router.cpython-314.pyc
+|           __init__.cpython-314.pyc
+|           
++---core
+|   |   config.py
+|   |   database.py
+|   |   deps.py
+|   |   security.py
+|   |   __init__.py
+|   |   
+|   \---__pycache__
+|           config.cpython-314.pyc
+|           database.cpython-314.pyc
+|           deps.cpython-314.pyc
+|           security.cpython-314.pyc
+|           __init__.cpython-314.pyc
+|           
++---crud
+|   |   blood_pressure_reading.py
+|   |   fhir_patient.py
+|   |   form_submission.py
+|   |   measurement.py
+|   |   oximeter_reading.py
+|   |   person.py
+|   |   scale.py
+|   |   user.py
+|   |   __init__.py
+|   |   
+|   \---__pycache__
+|           blood_pressure_reading.cpython-314.pyc
+|           fhir_patient.cpython-314.pyc
+|           form_submission.cpython-314.pyc
+|           measurement.cpython-314.pyc
+|           oximeter_reading.cpython-314.pyc
+|           person.cpython-314.pyc
+|           scale.cpython-314.pyc
+|           user.cpython-314.pyc
+|           __init__.cpython-314.pyc
+|           
++---models
+|   |   base.py
+|   |   blood_pressure_reading.py
+|   |   fhir_patient.py
+|   |   form_submission.py
+|   |   measurement.py
+|   |   oximeter_reading.py
+|   |   person.py
+|   |   scale.py
+|   |   user.py
+|   |   __init__.py
+|   |   
+|   \---__pycache__
+|           base.cpython-314.pyc
+|           blood_pressure_reading.cpython-314.pyc
+|           fhir_patient.cpython-314.pyc
+|           form_submission.cpython-314.pyc
+|           measurement.cpython-314.pyc
+|           oximeter_reading.cpython-314.pyc
+|           patient.cpython-314.pyc
+|           person.cpython-314.pyc
+|           scale.cpython-314.pyc
+|           user.cpython-314.pyc
+|           __init__.cpython-314.pyc
+|           
++---schemas
+|   |   blood_pressure.py
+|   |   fhir_patient.py
+|   |   form_submission.py
+|   |   measurement.py
+|   |   oximeter.py
+|   |   person.py
+|   |   scale.py
+|   |   token.py
+|   |   user.py
+|   |   visit.py
+|   |   __init__.py
+|   |   
+|   \---__pycache__
+|           blood_pressure.cpython-314.pyc
+|           fhir_patient.cpython-314.pyc
+|           form_submission.cpython-314.pyc
+|           measurement.cpython-314.pyc
+|           oximeter.cpython-314.pyc
+|           person.cpython-314.pyc
+|           scale.cpython-314.pyc
+|           token.cpython-314.pyc
+|           user.cpython-314.pyc
+|           visit.cpython-314.pyc
+|           __init__.cpython-314.pyc
+|           
++---services
+|   |   fhir.py
+|   |   visits.py
+|   |   __init__.py
+|   |   
+|   +---ble
+|   |   |   common.py
+|   |   |   ids.py
+|   |   |   winrt_patch.py
+|   |   |   __init__.py
+|   |   |   
+|   |   \---__pycache__
+|   |           common.cpython-314.pyc
+|   |           ids.cpython-314.pyc
+|   |           winrt_patch.cpython-314.pyc
+|   |           __init__.cpython-314.pyc
+|   |           
+|   +---blood_pressure
+|   |   |   ble.py
+|   |   |   gatt_bp.py
+|   |   |   hem7530.py
+|   |   |   persist.py
+|   |   |   protocol.py
+|   |   |   stream.py
+|   |   |   __init__.py
+|   |   |   
+|   |   \---__pycache__
+|   |           ble.cpython-314.pyc
+|   |           gatt_bp.cpython-314.pyc
+|   |           hem7530.cpython-314.pyc
+|   |           persist.cpython-314.pyc
+|   |           protocol.cpython-314.pyc
+|   |           stream.cpython-314.pyc
+|   |           __init__.cpython-314.pyc
+|   |           
+|   +---omron
+|   |   \---__pycache__
+|   |           ble.cpython-314.pyc
+|   |           gatt_bp.cpython-314.pyc
+|   |           hem7530.cpython-314.pyc
+|   |           persist.cpython-314.pyc
+|   |           protocol.cpython-314.pyc
+|   |           stream.cpython-314.pyc
+|   |           __init__.cpython-314.pyc
+|   |           
+|   +---oximeter
+|   |   |   ble.py
+|   |   |   parsers.py
+|   |   |   persist.py
+|   |   |   stream.py
+|   |   |   __init__.py
+|   |   |   
+|   |   \---__pycache__
+|   |           ble.cpython-314.pyc
+|   |           parsers.cpython-314.pyc
+|   |           persist.cpython-314.pyc
+|   |           stream.cpython-314.pyc
+|   |           __init__.cpython-314.pyc
+|   |           
+|   +---scale
+|   |   |   metrics.py
+|   |   |   parsers.py
+|   |   |   persist.py
+|   |   |   reading.py
+|   |   |   registry.py
+|   |   |   rm_rd2504a.py
+|   |   |   spec.py
+|   |   |   stream.py
+|   |   |   wla25.py
+|   |   |   __init__.py
+|   |   |   
+|   |   +---adapters
+|   |   |   |   base.py
+|   |   |   |   ble_broadcast.py
+|   |   |   |   ble_gatt.py
+|   |   |   |   ble_rm_rd2504a.py
+|   |   |   |   __init__.py
+|   |   |   |   
+|   |   |   \---__pycache__
+|   |   |           base.cpython-314.pyc
+|   |   |           ble_broadcast.cpython-314.pyc
+|   |   |           ble_common.cpython-314.pyc
+|   |   |           ble_gatt.cpython-314.pyc
+|   |   |           ble_icomon.cpython-314.pyc
+|   |   |           ble_rm_rd2504a.cpython-314.pyc
+|   |   |           ble_winrt_patch.cpython-314.pyc
+|   |   |           __init__.cpython-314.pyc
+|   |   |           
+|   |   \---__pycache__
+|   |           icomon.cpython-314.pyc
+|   |           metrics.cpython-314.pyc
+|   |           parsers.cpython-314.pyc
+|   |           persist.cpython-314.pyc
+|   |           reading.cpython-314.pyc
+|   |           registry.cpython-314.pyc
+|   |           rm_rd2504a.cpython-314.pyc
+|   |           spec.cpython-314.pyc
+|   |           stream.cpython-314.pyc
+|   |           wla25.cpython-314.pyc
+|   |           __init__.cpython-314.pyc
+|   |           
+|   \---__pycache__
+|           fhir.cpython-314.pyc
+|           visits.cpython-314.pyc
+|           __init__.cpython-314.pyc
+|           
+\---__pycache__
+        main.cpython-314.pyc
+        __init__.cpython-314.pyc
+        
