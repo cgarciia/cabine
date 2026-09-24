@@ -29,7 +29,13 @@ NAME_HINTS = (
     "viatom",
     "lepu",
     "prince",
+    "yk-81",
+    "yk81",
+    "yonker",
 )
+
+YK81_NOTIFY = "cdeacd81-5235-4c07-8846-93a37ee6b86d"
+YK81_DEVICE_NAME = "Incoterm OX500 BLE"
 
 NUS_NOTIFY = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 NUS_WRITE = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
@@ -99,7 +105,7 @@ async def wait_for_oximeter(
     cancelled,
     on_waiting=None,
 ) -> BLEDevice | None:
-    """Fica varrendo até o PC-60NW aparecer (em geral, quando o dedo liga o aparelho)."""
+    """Fica varrendo até o oxímetro aparecer (PC-60NW liga com o dedo; OX500 pelo botão)."""
     loop = asyncio.get_running_loop()
     found: asyncio.Future[BLEDevice] = loop.create_future()
     preferred = (preferred_address or "").strip().upper() or None
@@ -108,8 +114,7 @@ async def wait_for_oximeter(
         name = device.name or advertisement.local_name
         address = (device.address or "").upper()
         mac_hit = bool(preferred and address == preferred)
-        name_hit = name_looks_like_oximeter(name)
-        if not mac_hit and not name_hit:
+        if not mac_hit and not name_looks_like_oximeter(name):
             return
 
         def _accept() -> None:
@@ -130,7 +135,7 @@ async def wait_for_oximeter(
                 return await asyncio.wait_for(asyncio.shield(found), timeout=3.0)
             except asyncio.TimeoutError:
                 if on_waiting is not None:
-                    await on_waiting("Ligando o oxímetro. Encaixe o dedo no clipe e aguarde — está sob controle.")
+                    await on_waiting("Procurando o oxímetro. Encaixe o dedo no clipe e, se ele não ligar, aperte o botão.")
                 continue
         return None
     finally:
@@ -163,8 +168,7 @@ async def connect_oximeter(device: BLEDevice) -> BleakClient:
         client = BleakClient(device, timeout=30.0, **kwargs)
         try:
             await client.connect()
-            count = _service_count(client)
-            if count == 0:
+            if _service_count(client) == 0:
                 raise BleakError("Nenhum serviço GATT encontrado.")
             return client
         except Exception as exc:
@@ -178,6 +182,41 @@ async def connect_oximeter(device: BLEDevice) -> BleakClient:
         "Não foi possível conectar ao oxímetro. "
         + (errors[-1] if errors else "erro desconhecido")
     )
+
+
+def is_yk81(client: BleakClient) -> bool:
+    """Yonker YK-81C (Incoterm OX500 BLE): transmite sozinho em cdeacd81, sem comando do host."""
+    try:
+        return client.services.get_characteristic(YK81_NOTIFY) is not None
+    except Exception:
+        return False
+
+
+def _can_notify(char) -> bool:
+    return "notify" in char.properties or "indicate" in char.properties
+
+
+def _ignore_notify(_sender, _data: bytearray) -> None:
+    pass
+
+
+async def subscribe_yk81(client: BleakClient, handler) -> int:
+    """Assina cdeacd81 (dados) e também os demais notify, como o app de referência faz."""
+    try:
+        await client.start_notify(YK81_NOTIFY, handler)
+    except Exception:
+        logger.warning("Notify YK-81C falhou em %s", YK81_NOTIFY, exc_info=True)
+        return 0
+
+    for service in client.services:
+        for char in service.characteristics:
+            if str(char.uuid).lower() == YK81_NOTIFY or not _can_notify(char):
+                continue
+            try:
+                await client.start_notify(char, _ignore_notify)
+            except Exception:
+                logger.debug("Notify extra ignorado em %s", char.uuid, exc_info=True)
+    return 1
 
 
 def _skip_notify(uuid: str) -> bool:
@@ -224,24 +263,33 @@ def _write_chars(client: BleakClient) -> list:
     return found
 
 
+STREAM_REQUESTS = (
+    make_creative_frame(0x0F, bytes([0x84, 0x01])),
+    make_creative_frame(0x0F, bytes([0x84, 0x02])),
+)
+
+
+async def _write_to_all(client: BleakClient, chars: list, payload: bytes) -> int:
+    sent = 0
+    for char in chars:
+        try:
+            no_response = "write-without-response" in char.properties
+            await client.write_gatt_char(char.uuid, payload, response=not no_response)
+            sent += 1
+        except Exception:
+            logger.debug("Write FFF2 falhou em %s", char.uuid, exc_info=True)
+    return sent
+
+
 async def write_start_stream(client: BleakClient, *, all_candidates: bool = False) -> int:
     chars = _write_chars(client)
     if not chars:
         logger.warning("Oxímetro sem característica de escrita (FFF2).")
         return 0
-    commands = start_commands() if all_candidates else [
-        ("AA55-0F-84-01", make_creative_frame(0x0F, bytes([0x84, 0x01]))),
-        ("AA55-0F-84-02", make_creative_frame(0x0F, bytes([0x84, 0x02]))),
-    ]
+    payloads = [payload for _, payload in start_commands()] if all_candidates else STREAM_REQUESTS
     sent = 0
-    for label, payload in commands:
-        for char in chars:
-            try:
-                no_response = "write-without-response" in char.properties
-                await client.write_gatt_char(char.uuid, payload, response=not no_response)
-                sent += 1
-            except Exception:
-                logger.debug("Write FFF2 falhou em %s", char.uuid, exc_info=True)
+    for payload in payloads:
+        sent += await _write_to_all(client, chars, payload)
         await asyncio.sleep(0.15)
     return sent
 
@@ -250,18 +298,9 @@ async def keep_alive_stream(client: BleakClient, interval: float = 2.0) -> None:
     chars = _write_chars(client)
     if not chars:
         return
-    payloads = [
-        make_creative_frame(0x0F, bytes([0x84, 0x01])),
-        make_creative_frame(0x0F, bytes([0x84, 0x02])),
-    ]
     while client.is_connected:
-        for payload in payloads:
-            for char in chars:
-                try:
-                    no_response = "write-without-response" in char.properties
-                    await client.write_gatt_char(char.uuid, payload, response=not no_response)
-                except Exception:
-                    logger.debug("Keep-alive FFF2 falhou.", exc_info=True)
+        for payload in STREAM_REQUESTS:
+            await _write_to_all(client, chars, payload)
             await asyncio.sleep(0.12)
         await asyncio.sleep(interval)
 
@@ -270,9 +309,7 @@ async def subscribe_notifications(client: BleakClient, handler) -> int:
     subscribed = 0
     for char_uuid in PREFERRED_NOTIFY:
         char = client.services.get_characteristic(char_uuid)
-        if char is None or _skip_notify(str(char.uuid)):
-            continue
-        if "notify" not in char.properties and "indicate" not in char.properties:
+        if char is None or _skip_notify(str(char.uuid)) or not _can_notify(char):
             continue
         try:
             await client.start_notify(char.uuid, handler)
@@ -284,9 +321,7 @@ async def subscribe_notifications(client: BleakClient, handler) -> int:
     if not subscribed:
         for service in client.services:
             for char in service.characteristics:
-                if _skip_notify(str(char.uuid)):
-                    continue
-                if "notify" not in char.properties and "indicate" not in char.properties:
+                if _skip_notify(str(char.uuid)) or not _can_notify(char):
                     continue
                 try:
                     await client.start_notify(char.uuid, handler)

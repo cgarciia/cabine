@@ -49,6 +49,26 @@ def _valid_pulse(value: int) -> bool:
     return 30 <= value <= 240
 
 
+NO_FINGER = OximeterSample(spo2_pct=None, pulse_bpm=None, finger_on=False, kind="values")
+
+
+def _values_sample(spo2: int, pulse: int, pi_raw: int) -> OximeterSample:
+    spo2_ok = spo2 if _valid_spo2(spo2) else None
+    pulse_ok = pulse if _valid_pulse(pulse) else None
+    pi = round(pi_raw / 10.0, 1) if pi_raw and pi_raw != 0xFF else None
+    return OximeterSample(
+        spo2_pct=spo2_ok,
+        pulse_bpm=pulse_ok,
+        pi_pct=pi,
+        finger_on=spo2_ok is not None and pulse_ok is not None,
+        kind="values",
+    )
+
+
+def _wave_sample(points: tuple[int, ...]) -> OximeterSample:
+    return OximeterSample(spo2_pct=None, pulse_bpm=None, finger_on=True, kind="wave", waveform=points)
+
+
 def _decode_wave_byte(byte: int) -> int:
     """PC-60: amostra 0–127; bit 7 marca spike (subtrai 0x80)."""
     return byte - 0x80 if byte >= 0x80 else byte
@@ -76,41 +96,20 @@ def parse_creative_frame(frame: bytes) -> OximeterSample | None:
         pulse = frame[6]
         pi_raw = frame[8] if expected > 8 else 0
         if spo2 in {0, 0x7F, 0xFF} or pulse in {0, 0xFF}:
-            return OximeterSample(spo2_pct=None, pulse_bpm=None, finger_on=False, kind="values")
-        spo2_ok = spo2 if _valid_spo2(spo2) else None
-        pulse_ok = pulse if _valid_pulse(pulse) else None
-        pi = round(pi_raw / 10.0, 1) if pi_raw else None
-        return OximeterSample(
-            spo2_pct=spo2_ok,
-            pulse_bpm=pulse_ok,
-            pi_pct=pi,
-            finger_on=spo2_ok is not None and pulse_ok is not None,
-            kind="values",
-        )
+            return NO_FINGER
+        return _values_sample(spo2, pulse, pi_raw)
 
     # Pleth real (func 0x02) — vários pontos por quadro, ~25 Hz no conjunto
     if token == 0x0F and func == 0x02 and length >= 2:
         points = tuple(_decode_wave_byte(byte) for byte in frame[5 : expected - 1])
         if points:
-            return OximeterSample(
-                spo2_pct=None,
-                pulse_bpm=None,
-                finger_on=True,
-                kind="wave",
-                waveform=points,
-            )
+            return _wave_sample(points)
 
     # Alguns firmwares mandam onda em 0xF0 (exceto bateria 0x03)
     if token == 0xF0 and func != 0x03 and length >= 3:
         points = tuple(_decode_wave_byte(byte) for byte in frame[5 : expected - 1])
         if len(points) >= 2:
-            return OximeterSample(
-                spo2_pct=None,
-                pulse_bpm=None,
-                finger_on=True,
-                kind="wave",
-                waveform=points,
-            )
+            return _wave_sample(points)
 
     # ACK / status (ex.: aa 55 0f 03 04 01 …) — não é onda
     return None
@@ -137,6 +136,44 @@ def parse_berrymed_packet(packet: bytes) -> OximeterSample | None:
         waveform=(packet[0] & 0x7F,),
         kind="wave",
     )
+
+
+YK81_PACKET_LEN = 15
+YK81_VALUES = 0x81
+YK81_WAVE = 0x80
+YK81_WAVE_POINTS = 10
+
+
+def parse_yk81_packet(packet: bytes) -> OximeterSample | None:
+    """Yonker YK-81C (Incoterm OX500 BLE), característica cdeacd81.
+
+    0x81: [0x81, SpO2, pulso, PI*10, 0…] — 1 Hz.
+    0x80: [0x80, 10 amostras de pleth, 0x01, 0…] — ~48 Hz no conjunto.
+    """
+    if len(packet) < 4:
+        return None
+    kind = packet[0]
+
+    if kind == YK81_VALUES:
+        spo2, pulse, pi_raw = packet[1], packet[2], packet[3]
+        if spo2 in {0, 0x7F, 0xFF} or pulse in {0, 0x7F, 0xFF}:
+            return NO_FINGER
+        return _values_sample(spo2, pulse, pi_raw)
+
+    if kind == YK81_WAVE:
+        points = tuple(min(byte, 127) for byte in packet[1 : 1 + YK81_WAVE_POINTS])
+        if any(points):
+            return _wave_sample(points)
+
+    return None
+
+
+class Yk81PacketBuffer:
+    """Cada notify do YK-81C traz um pacote de 15 bytes; aceita também pacotes concatenados."""
+
+    def feed(self, chunk: bytes) -> list[OximeterSample]:
+        packets = (chunk[i : i + YK81_PACKET_LEN] for i in range(0, len(chunk), YK81_PACKET_LEN))
+        return [s for s in map(parse_yk81_packet, packets) if s is not None]
 
 
 class CreativeFrameBuffer:

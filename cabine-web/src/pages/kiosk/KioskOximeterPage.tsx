@@ -74,7 +74,7 @@ export function KioskOximeterPage() {
             const local: OximeterReading = {
                 id: newVisitId(),
                 person_id: person.id,
-                device_name: reading.device_name ?? 'PC-60NW',
+                device_name: reading.device_name ?? 'Oxímetro',
                 device_address: reading.device_address ?? null,
                 spo2_pct: reading.spo2_pct,
                 pulse_bpm: reading.pulse_bpm,

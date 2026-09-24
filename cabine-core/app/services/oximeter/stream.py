@@ -9,13 +9,21 @@ from fastapi import WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from app.services.oximeter.ble import (
+    YK81_DEVICE_NAME,
     connect_oximeter,
+    is_yk81,
     keep_alive_stream,
     subscribe_notifications,
+    subscribe_yk81,
     wait_for_oximeter,
     write_start_stream,
 )
-from app.services.oximeter.parsers import CreativeFrameBuffer
+from app.services.oximeter.parsers import (
+    NO_FINGER,
+    CreativeFrameBuffer,
+    OximeterSample,
+    Yk81PacketBuffer,
+)
 from app.services.oximeter.persist import save_oximeter_reading
 from app.services.ble import ble_radio_lock, parse_uuid
 
@@ -30,6 +38,30 @@ def _same_reading(previous: tuple[int, int], current: tuple[int, int]) -> bool:
     prev_spo2, prev_pulse = previous
     spo2, pulse = current
     return prev_spo2 == spo2 and abs(prev_pulse - pulse) <= PULSE_TOLERANCE_BPM
+
+
+def _reading_payload(
+    device_name: str,
+    device_address: str | None,
+    sample: OximeterSample = NO_FINGER,
+    *,
+    stable: bool = False,
+    hits: int = 0,
+) -> dict:
+    return {
+        "type": "OXIMETER",
+        "device_name": device_name,
+        "device_address": device_address,
+        "spo2_pct": sample.spo2_pct,
+        "pulse_bpm": sample.pulse_bpm,
+        "pi_pct": sample.pi_pct,
+        "finger_on": sample.finger_on,
+        "stable": stable,
+        "waveform": list(sample.waveform),
+        "stable_hits": hits,
+        "stable_needed": STABLE_HITS,
+        "timestamp": datetime.now().strftime("%H:%M:%S"),
+    }
 
 
 async def stream_oximeter(
@@ -77,8 +109,9 @@ async def stream_oximeter(
 
     def cancelled() -> bool:
         return websocket.client_state != WebSocketState.CONNECTED
+
     try:
-        await send_status("Ligando o oxímetro. Encaixe o dedo indicador no clipe — a espera faz parte.")
+        await send_status("Encaixe o dedo indicador no clipe e, se o oxímetro não ligar, aperte o botão.")
         async with ble_radio_lock:
             while not cancelled():
                 try:
@@ -89,7 +122,7 @@ async def stream_oximeter(
                     )
                 except Exception:
                     logger.exception("Varredura BLE do oxímetro falhou")
-                    await send_status("Ainda procurando. Deixe o dedo no clipe; o aparelho liga sozinho.")
+                    await send_status("Ainda procurando. Deixe o dedo no clipe e confira se o oxímetro está ligado.")
                     await asyncio.sleep(1.5)
                     continue
                 if device is None or cancelled():
@@ -114,34 +147,22 @@ async def stream_oximeter(
                         pass
                     continue
 
-                buffer = CreativeFrameBuffer()
+                yk81 = is_yk81(client)
+                if yk81:
+                    device_name = YK81_DEVICE_NAME
+                buffer = Yk81PacketBuffer() if yk81 else CreativeFrameBuffer()
                 queue: asyncio.Queue[dict] = asyncio.Queue()
-                got_data = {"n": 0}
+                packets = 0
                 wave_acc: list[int] = []
 
                 def on_notify(_sender, data: bytearray) -> None:
-                    nonlocal hits, last_key, saved
-                    got_data["n"] += 1
-                    raw = bytes(data)
-                    samples = buffer.feed(raw)
-                    if not samples:
-                        # ACK/status sem SpO2 nem onda — não inventar waveform.
-                        return
-                    for sample in samples:
+                    nonlocal hits, last_key, saved, packets
+                    packets += 1
+                    for sample in buffer.feed(bytes(data)):
                         if sample.waveform:
                             wave_acc.extend(sample.waveform)
                             del wave_acc[:-480]
-                        payload = {
-                            "type": "OXIMETER",
-                            "device_name": device_name,
-                            "device_address": device_address,
-                            "spo2_pct": sample.spo2_pct,
-                            "pulse_bpm": sample.pulse_bpm,
-                            "finger_on": sample.finger_on,
-                            "stable": False,
-                            "waveform": list(sample.waveform),
-                            "timestamp": datetime.now().strftime("%H:%M:%S"),
-                        }
+                        stable = False
                         if sample.finger_on and sample.spo2_pct and sample.pulse_bpm:
                             key = (sample.spo2_pct, sample.pulse_bpm)
                             if last_key is not None and _same_reading(last_key, key):
@@ -150,7 +171,7 @@ async def stream_oximeter(
                                 last_key = key
                                 hits = 1
                             if hits >= STABLE_HITS:
-                                payload["stable"] = True
+                                stable = True
                                 pid = person_id_box[0]
                                 if pid is not None and not saved:
                                     saved = True
@@ -178,20 +199,24 @@ async def stream_oximeter(
                             hits = 0
                             last_key = None
                             wave_acc.clear()
-                        payload["stable_hits"] = hits
-                        payload["stable_needed"] = STABLE_HITS
-                        queue.put_nowait(payload)
+                        queue.put_nowait(
+                            _reading_payload(device_name, device_address, sample, stable=stable, hits=hits)
+                        )
 
                 try:
-                    subscribed = await subscribe_notifications(client, on_notify)
+                    if yk81:
+                        subscribed = await subscribe_yk81(client, on_notify)
+                    else:
+                        subscribed = await subscribe_notifications(client, on_notify)
                     if subscribed == 0:
                         await send_status("Conectou, mas o canal de dados não abriu. Tentando de novo…")
                         await client.disconnect()
                         await asyncio.sleep(1.0)
                         continue
 
-                    await send_status("Conectado. Pedindo a leitura ao oxímetro…")
-                    await write_start_stream(client, all_candidates=True)
+                    if not yk81:
+                        await send_status("Conectado. Pedindo a leitura ao oxímetro…")
+                        await write_start_stream(client, all_candidates=True)
                     await send_status("Conectado. Fique parado: a cabine espera o sinal ficar estável.")
                     consumer = asyncio.create_task(_consume_queue(websocket, queue))
                     keepalive: asyncio.Task | None = None
@@ -199,7 +224,9 @@ async def stream_oximeter(
                         silent_for = 0.0
                         while client.is_connected and not cancelled():
                             await asyncio.sleep(0.4)
-                            if got_data["n"] == 0:
+                            if yk81:
+                                continue
+                            if packets == 0:
                                 silent_for += 0.4
                                 if silent_for >= 2.0 and keepalive is None:
                                     await write_start_stream(client, all_candidates=True)
@@ -225,6 +252,16 @@ async def stream_oximeter(
 
                 if cancelled():
                     break
+                if yk81:
+                    hits = 0
+                    last_key = None
+                    try:
+                        await websocket.send_json(_reading_payload(device_name, device_address))
+                    except Exception:
+                        pass
+                    await send_status("O oxímetro desligou. Encaixe o dedo e aperte o botão para ligar de novo.")
+                    await asyncio.sleep(0.8)
+                    continue
                 await send_status("Reconectando. Mantenha o dedo no clipe.")
                 await asyncio.sleep(0.8)
     except WebSocketDisconnect:
@@ -249,4 +286,5 @@ async def _consume_queue(websocket: WebSocket, queue: asyncio.Queue) -> None:
         try:
             await websocket.send_json(data)
         except Exception:
+            logger.exception("Falha ao enviar dados do oxímetro para a tela")
             return
