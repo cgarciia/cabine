@@ -147,7 +147,7 @@ function paintMonitor(
         ctx.fillStyle = '#94a3b8';
         ctx.font = '13px "Segoe UI", system-ui, sans-serif';
         const msg = state.bpm != null
-            ? 'Números estão vindo; a curva só aparece se o PC-60NW enviar pacotes de onda.'
+            ? 'Números estão vindo; a curva só aparece se o oxímetro enviar pacotes de onda.'
             : 'Sem onda ainda';
         ctx.fillText(msg, padX + 4, padY + innerH / 2);
         return;
