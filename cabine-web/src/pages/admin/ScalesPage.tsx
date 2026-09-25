@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react';
 
-import { api, apiErrorMessage } from '../../api';
+import {
+    apiErrorMessage,
+    createScale,
+    deleteScale,
+    fetchScaleCatalog,
+    fetchScales,
+    updateScale,
+} from '../../api';
 import { AppLayout } from '../../components/AppLayout';
 import type { Scale, ScaleAdapterOption, ScalePayload } from '../../types/scale';
 
@@ -48,15 +55,12 @@ export function ScalesPage() {
     );
 
     async function load() {
-        const [catalogRes, scalesRes] = await Promise.all([
-            api.get<{ adapters: ScaleAdapterOption[] }>('/scales/catalog'),
-            api.get<Scale[]>('/scales'),
-        ]);
-        setAdapters(catalogRes.data.adapters);
-        setScales(scalesRes.data);
+        const [catalog, list] = await Promise.all([fetchScaleCatalog(), fetchScales()]);
+        setAdapters(catalog.adapters);
+        setScales(list);
         setForm((current) => {
             if (current.name || editingId) return current;
-            return emptyForm(catalogRes.data.adapters);
+            return emptyForm(catalog.adapters);
         });
     }
 
@@ -99,9 +103,9 @@ export function ScalesPage() {
         setError('');
         try {
             if (editingId) {
-                await api.patch(`/scales/${editingId}`, form);
+                await updateScale(editingId, form);
             } else {
-                await api.post('/scales', form);
+                await createScale(form);
             }
             resetForm();
             await load();
@@ -115,7 +119,7 @@ export function ScalesPage() {
     async function handleDelete(scale: Scale) {
         if (!window.confirm(`Excluir a balança "${scale.name}"?`)) return;
         try {
-            await api.delete(`/scales/${scale.id}`);
+            await deleteScale(scale.id);
             if (editingId === scale.id) resetForm();
             await load();
         } catch (err) {
@@ -125,7 +129,7 @@ export function ScalesPage() {
 
     async function makeDefault(scale: Scale) {
         try {
-            await api.patch(`/scales/${scale.id}`, { is_default: true });
+            await updateScale(scale.id, { is_default: true });
             await load();
         } catch (err) {
             setError(apiErrorMessage(err, 'Não foi possível definir a balança padrão.'));

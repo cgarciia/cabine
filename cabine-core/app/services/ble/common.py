@@ -1,7 +1,7 @@
 import asyncio
 import re
 
-from fastapi import WebSocket
+from starlette.websockets import WebSocket
 
 MAC_RE = re.compile(r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$")
 

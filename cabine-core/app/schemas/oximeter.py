@@ -1,17 +1,8 @@
-from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
-
-class OximeterDevice(BaseModel):
-    name: str
-    address: str
-    rssi: int | None = None
-
-
-class OximeterScanResponse(BaseModel):
-    devices: list[OximeterDevice]
+from app.schemas.ble import DeviceReadingResponseBase
 
 
 class OximeterReadingCreate(BaseModel):
@@ -34,18 +25,9 @@ class OximeterReadingCreate(BaseModel):
         return cleaned or None
 
 
-class OximeterReadingResponse(BaseModel):
-    id: UUID
-    person_id: UUID
-    device_name: str
-    device_address: str | None
+class OximeterReadingResponse(DeviceReadingResponseBase):
     spo2_pct: int
     pulse_bpm: int
     pi_pct: float | None
     stable: bool
     waveform: list[int] | None = None
-    visit_id: UUID | None = None
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)

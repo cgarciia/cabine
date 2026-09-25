@@ -2,12 +2,15 @@ import { Activity, HeartPulse, LogOut, Scale, Stethoscope, Users } from 'lucide-
 import type { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
+import { useKiosk } from '../kiosk/KioskContext';
 import { clearAccessSession } from '../session/authSession';
 
 export function AppLayout({ children, bare }: { children: ReactNode; bare?: boolean }) {
     const navigate = useNavigate();
+    const { clearSession } = useKiosk();
 
     function signOut() {
+        clearSession();
         clearAccessSession();
         navigate('/admin/login', { replace: true });
     }

@@ -4,35 +4,17 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud import base
 from app.models.oximeter_reading import OximeterReading
 from app.schemas.oximeter import OximeterReadingCreate
 
 
 async def create(db: AsyncSession, data: OximeterReadingCreate) -> OximeterReading:
-    record = OximeterReading(
-        person_id=data.person_id,
-        device_name=data.device_name,
-        device_address=data.device_address,
-        spo2_pct=data.spo2_pct,
-        pulse_bpm=data.pulse_bpm,
-        pi_pct=data.pi_pct,
-        stable=data.stable,
-        waveform=data.waveform,
-        visit_id=data.visit_id,
-    )
-    db.add(record)
-    await db.commit()
-    await db.refresh(record)
-    return record
+    return await base.create_from_schema(db, OximeterReading, data)
 
 
 async def list_by_person(db: AsyncSession, person_id: UUID) -> list[OximeterReading]:
-    result = await db.execute(
-        select(OximeterReading)
-        .where(OximeterReading.person_id == person_id)
-        .order_by(OximeterReading.created_at.desc())
-    )
-    return list(result.scalars().all())
+    return await base.list_by_person(db, OximeterReading, person_id)
 
 
 async def recently_saved(

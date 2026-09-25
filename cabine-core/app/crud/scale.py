@@ -5,18 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.scale import Scale
 from app.schemas.scale import ScaleCreate, ScaleUpdate
-from app.services.scale.registry import adapter_accepts_parser, normalize_address
-from app.services.scale.spec import ScaleSpec
-
-
-def to_spec(scale: Scale) -> ScaleSpec:
-    return ScaleSpec(
-        id=scale.id,
-        name=scale.name,
-        adapter=scale.adapter,
-        address=scale.address,
-        parser=scale.parser,
-    )
 
 
 async def list_all(db: AsyncSession) -> list[Scale]:
@@ -25,8 +13,7 @@ async def list_all(db: AsyncSession) -> list[Scale]:
 
 
 async def get_by_id(db: AsyncSession, scale_id: UUID) -> Scale | None:
-    result = await db.execute(select(Scale).where(Scale.id == scale_id))
-    return result.scalars().first()
+    return await db.get(Scale, scale_id)
 
 
 async def get_by_address(db: AsyncSession, address: str) -> Scale | None:
@@ -48,12 +35,10 @@ async def get_default(db: AsyncSession) -> Scale | None:
 
 
 async def _clear_default(db: AsyncSession, except_id: UUID | None = None) -> None:
-    stmt = update(Scale).where(Scale.is_default.is_(True)).values(is_default=False)
+    stmt = update(Scale).where(Scale.is_default.is_(True))
     if except_id is not None:
-        stmt = update(Scale).where(Scale.id != except_id, Scale.is_default.is_(True)).values(
-            is_default=False
-        )
-    await db.execute(stmt)
+        stmt = stmt.where(Scale.id != except_id)
+    await db.execute(stmt.values(is_default=False))
 
 
 async def create(db: AsyncSession, data: ScaleCreate) -> Scale:
@@ -76,17 +61,14 @@ async def create(db: AsyncSession, data: ScaleCreate) -> Scale:
     return scale
 
 
-def _merged_transport(scale: Scale, data: ScaleUpdate) -> tuple[str, str, str]:
-    adapter = data.adapter.value if data.adapter else scale.adapter
-    parser = data.parser.value if data.parser else scale.parser
-    address = data.address if data.address is not None else scale.address
-    if not adapter_accepts_parser(adapter, parser):
-        raise ValueError(f"Parser '{parser}' não é compatível com o adapter '{adapter}'.")
-    return adapter, normalize_address(adapter, address), parser
-
-
-async def update_scale(db: AsyncSession, scale: Scale, data: ScaleUpdate) -> Scale:
-    adapter, address, parser = _merged_transport(scale, data)
+async def update_scale(
+    db: AsyncSession,
+    scale: Scale,
+    data: ScaleUpdate,
+    transport: tuple[str, str, str],
+) -> Scale:
+    """`transport` is the already-validated (adapter, address, parser) triple."""
+    adapter, address, parser = transport
     if address != scale.address:
         other = await get_by_address(db, address)
         if other and other.id != scale.id:

@@ -2,19 +2,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 
-from bleak import BleakClient, BleakError, BleakScanner
+from bleak import BleakClient
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 
-from app.schemas.oximeter import OximeterDevice
+from app.schemas.ble import BleDevice
+from app.services.ble.connect import connect_with_fallback
+from app.services.ble.scanner import advertised_name, as_ble_devices, scan_devices, wait_for_device
 from app.services.oximeter.parsers import make_creative_frame, make_xor_frame
-from app.services.ble import apply_winrt_descriptor_tolerance
 
 logger = logging.getLogger(__name__)
 
-apply_winrt_descriptor_tolerance()
+DEVICE_LABEL = "oxímetro"
+WAITING_MESSAGE = "Procurando o oxímetro. Encaixe o dedo no clipe e, se ele não ligar, aperte o botão."
 
 NAME_HINTS = (
     "pc-60",
@@ -67,36 +68,12 @@ def name_looks_like_oximeter(name: str | None) -> bool:
     return any(hint.replace("-", "") in lowered for hint in NAME_HINTS)
 
 
-def _rssi_of(advertisement: AdvertisementData | None) -> int | None:
-    if advertisement is None:
-        return None
-    rssi = getattr(advertisement, "rssi", None)
-    return int(rssi) if rssi is not None else None
+def _matches(device: BLEDevice, advertisement: AdvertisementData) -> bool:
+    return name_looks_like_oximeter(advertised_name(device, advertisement))
 
 
-async def scan_oximeters(timeout: float = 10.0) -> list[OximeterDevice]:
-    found: dict[str, OximeterDevice] = {}
-
-    def _on_detect(device: BLEDevice, advertisement: AdvertisementData) -> None:
-        name = device.name or advertisement.local_name
-        if not name_looks_like_oximeter(name):
-            return
-        address = (device.address or "").upper()
-        if not address:
-            return
-        found[address] = OximeterDevice(
-            name=name or "Oxímetro",
-            address=address,
-            rssi=_rssi_of(advertisement),
-        )
-
-    scanner = BleakScanner(detection_callback=_on_detect)
-    await scanner.start()
-    try:
-        await asyncio.sleep(timeout)
-    finally:
-        await scanner.stop()
-    return sorted(found.values(), key=lambda item: item.rssi or -999, reverse=True)
+async def scan_oximeters(timeout: float = 10.0) -> list[BleDevice]:
+    return as_ble_devices(await scan_devices(_matches, timeout), "Oxímetro")
 
 
 async def wait_for_oximeter(
@@ -106,82 +83,19 @@ async def wait_for_oximeter(
     on_waiting=None,
 ) -> BLEDevice | None:
     """Fica varrendo até o oxímetro aparecer (PC-60NW liga com o dedo; OX500 pelo botão)."""
-    loop = asyncio.get_running_loop()
-    found: asyncio.Future[BLEDevice] = loop.create_future()
-    preferred = (preferred_address or "").strip().upper() or None
-
-    def _on_detect(device: BLEDevice, advertisement: AdvertisementData) -> None:
-        name = device.name or advertisement.local_name
-        address = (device.address or "").upper()
-        mac_hit = bool(preferred and address == preferred)
-        if not mac_hit and not name_looks_like_oximeter(name):
-            return
-
-        def _accept() -> None:
-            if not found.done():
-                found.set_result(device)
-
-        loop.call_soon_threadsafe(_accept)
-
-    scanner = BleakScanner(detection_callback=_on_detect)
-    try:
-        await scanner.start()
-    except Exception:
-        logger.exception("scanner.start oxímetro")
-        raise
-    try:
-        while not cancelled():
-            try:
-                return await asyncio.wait_for(asyncio.shield(found), timeout=3.0)
-            except asyncio.TimeoutError:
-                if on_waiting is not None:
-                    await on_waiting("Procurando o oxímetro. Encaixe o dedo no clipe e, se ele não ligar, aperte o botão.")
-                continue
-        return None
-    finally:
-        try:
-            await scanner.stop()
-        except Exception:
-            logger.debug("Falha ao parar o scanner do oxímetro.", exc_info=True)
-
-
-def _service_count(client: BleakClient) -> int:
-    try:
-        return len(list(client.services))
-    except Exception:
-        return 0
+    return await wait_for_device(
+        _matches,
+        preferred_address,
+        cancelled=cancelled,
+        label=DEVICE_LABEL,
+        on_waiting=on_waiting,
+        waiting_message=WAITING_MESSAGE,
+        poll_seconds=3.0,
+    )
 
 
 async def connect_oximeter(device: BLEDevice) -> BleakClient:
-    attempts: list[dict] = []
-    if sys.platform == "win32":
-        attempts = [
-            {"winrt": {"use_cached_services": True}},
-            {"winrt": {"use_cached_services": False}},
-            {},
-        ]
-    else:
-        attempts = [{}]
-
-    errors: list[str] = []
-    for kwargs in attempts:
-        client = BleakClient(device, timeout=30.0, **kwargs)
-        try:
-            await client.connect()
-            if _service_count(client) == 0:
-                raise BleakError("Nenhum serviço GATT encontrado.")
-            return client
-        except Exception as exc:
-            errors.append(f"{kwargs or 'default'}: {exc}")
-            logger.warning("Tentativa oximetro GATT falhou (%s): %s", kwargs or "default", exc)
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
-    raise BleakError(
-        "Não foi possível conectar ao oxímetro. "
-        + (errors[-1] if errors else "erro desconhecido")
-    )
+    return await connect_with_fallback(device, label=DEVICE_LABEL, timeout=30.0)
 
 
 def is_yk81(client: BleakClient) -> bool:

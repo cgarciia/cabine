@@ -4,23 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import (
-    ensure_person_scope,
-    get_current_user,
-    oauth2_optional,
-    require_access,
-    resolve_user_from_token,
-)
+from app.core.deps import get_current_user, get_scoped_person, oauth2_optional, resolve_user_from_token
+from app.crud import blood_pressure_reading as bp_crud
 from app.crud import form_submission as form_crud
 from app.crud import measurement as measurement_crud
-from app.crud import blood_pressure_reading as bp_crud
 from app.crud import oximeter_reading as oximeter_crud
 from app.crud import person as person_crud
 from app.models.person import ScalePerson
 from app.models.user import User
+from app.schemas.blood_pressure import BloodPressureReadingResponse
 from app.schemas.form_submission import FormSubmissionResponse
 from app.schemas.measurement import MeasurementResponse, as_measurement_response
-from app.schemas.blood_pressure import BloodPressureReadingResponse
 from app.schemas.oximeter import OximeterReadingResponse
 from app.schemas.person import PersonCreate, PersonResponse, PersonUpdate
 
@@ -51,83 +45,44 @@ async def list_people(
     return await person_crud.list_all(db)
 
 
-@router.get("/registration/{registration}", response_model=PersonResponse)
-async def get_person_by_registration(
-    registration: str,
-    db: AsyncSession = Depends(get_db),
-    actor: ScalePerson | User = Depends(require_access),
-):
-    if isinstance(actor, ScalePerson) and actor.registration != registration:
-        raise HTTPException(status_code=404, detail="Matrícula não encontrada.")
-    person = await person_crud.get_by_registration(db, registration)
-    if not person:
-        raise HTTPException(status_code=404, detail="Matrícula não encontrada.")
-    return person
-
-
 @router.get("/{person_id}/forms", response_model=list[FormSubmissionResponse])
 async def list_person_forms(
-    person_id: UUID,
+    person: ScalePerson = Depends(get_scoped_person),
     db: AsyncSession = Depends(get_db),
-    actor: ScalePerson | User = Depends(require_access),
 ):
-    ensure_person_scope(actor, person_id)
-    person = await person_crud.get_by_id(db, person_id)
-    if not person:
-        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
-    return await form_crud.list_by_person(db, person_id)
+    return await form_crud.list_by_person(db, person.id)
 
 
 @router.get("/{person_id}/measurements", response_model=list[MeasurementResponse])
 async def list_person_measurements(
-    person_id: UUID,
+    person: ScalePerson = Depends(get_scoped_person),
     db: AsyncSession = Depends(get_db),
-    actor: ScalePerson | User = Depends(require_access),
 ):
-    ensure_person_scope(actor, person_id)
-    person = await person_crud.get_by_id(db, person_id)
-    if not person:
-        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
-    return [as_measurement_response(item) for item in await measurement_crud.list_by_person(db, person_id)]
+    return [as_measurement_response(item) for item in await measurement_crud.list_by_person(db, person.id)]
 
 
 @router.get("/{person_id}/oximeter", response_model=list[OximeterReadingResponse])
 async def list_person_oximeter(
-    person_id: UUID,
+    person: ScalePerson = Depends(get_scoped_person),
     db: AsyncSession = Depends(get_db),
-    actor: ScalePerson | User = Depends(require_access),
 ):
-    ensure_person_scope(actor, person_id)
-    person = await person_crud.get_by_id(db, person_id)
-    if not person:
-        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
-    return await oximeter_crud.list_by_person(db, person_id)
+    return await oximeter_crud.list_by_person(db, person.id)
 
 
 @router.get("/{person_id}/blood-pressure", response_model=list[BloodPressureReadingResponse])
 async def list_person_blood_pressure(
-    person_id: UUID,
+    person: ScalePerson = Depends(get_scoped_person),
     db: AsyncSession = Depends(get_db),
-    actor: ScalePerson | User = Depends(require_access),
 ):
-    ensure_person_scope(actor, person_id)
-    person = await person_crud.get_by_id(db, person_id)
-    if not person:
-        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
-    return await bp_crud.list_by_person(db, person_id)
+    return await bp_crud.list_by_person(db, person.id)
 
 
 @router.patch("/{person_id}", response_model=PersonResponse)
 async def update_person(
-    person_id: UUID,
     payload: PersonUpdate,
+    person: ScalePerson = Depends(get_scoped_person),
     db: AsyncSession = Depends(get_db),
-    actor: ScalePerson | User = Depends(require_access),
 ):
-    ensure_person_scope(actor, person_id)
-    person = await person_crud.get_by_id(db, person_id)
-    if not person:
-        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
     try:
         return await person_crud.update_person(db, person, payload)
     except ValueError as exc:

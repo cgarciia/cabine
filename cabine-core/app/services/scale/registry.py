@@ -27,6 +27,13 @@ def normalize_address(adapter_key: str, address: str) -> str:
     return get_adapter(adapter_key).validate_address(address)
 
 
+def resolve_transport(adapter_key: str, parser_key: str, address: str) -> tuple[str, str, str]:
+    """Validate an adapter/parser/address combo; returns (adapter, normalized address, parser)."""
+    if not adapter_accepts_parser(adapter_key, parser_key):
+        raise ValueError(f"Parser '{parser_key}' não é compatível com o adapter '{adapter_key}'.")
+    return adapter_key, normalize_address(adapter_key, address), parser_key
+
+
 def resolve_parser(spec: ScaleSpec):
     from app.services.scale.parsers import resolve_parser as _resolve
 

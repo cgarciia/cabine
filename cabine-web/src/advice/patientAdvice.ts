@@ -1,5 +1,20 @@
 import type { MentalResult } from '../types/mental';
-import type { ScaleMetrics } from '../types/measurement';
+
+export function oximeterAdvice(spo2: number | null, pulse: number | null, waiting: boolean): string {
+    if (waiting || spo2 == null || pulse == null) {
+        return 'Coloque o dedo até o fundo do oxímetro, sem apertar, e permaneça parado. A oxigenação e o pulso aparecem sozinhos.';
+    }
+    if (spo2 < 90) {
+        return 'A saturação está baixa nesta leitura. Avise o profissional da cabine e não force exercício agora.';
+    }
+    if (spo2 < 95) {
+        return 'A saturação está um pouco abaixo do usual. Sente-se, respire com calma e avise o profissional se continuar assim.';
+    }
+    if (pulse < 50 || pulse > 120) {
+        return 'O pulso saiu da faixa comum de repouso. Vale repetir a leitura parado e conversar com o profissional.';
+    }
+    return 'Leitura dentro de uma faixa comum em repouso. Este número não substitui avaliação clínica.';
+}
 
 export function mentalAdvice(results: MentalResult[] | undefined, refused?: boolean): string[] {
     if (refused) {
@@ -28,27 +43,4 @@ export function mentalAdvice(results: MentalResult[] | undefined, refused?: bool
         'Siga cuidando do sono, da atividade física e das suas relações.',
         'Se em algum momento quiser conversar, o RH pode indicar os canais de apoio sem você precisar explicar o questionário.',
     ];
-}
-
-export function biaAdvice(metrics: ScaleMetrics | null | undefined, weightKg: number | null): string[] {
-    const recs: string[] = [];
-    if (metrics?.agua_status === 'baixo') {
-        recs.push('Distribuir água ao longo do dia costuma ajudar na disposição.');
-    }
-    if (metrics?.gordura_pct_status === 'alto' || metrics?.imc_status === 'alto' || (metrics?.gordura_visceral != null && metrics.gordura_visceral >= 10)) {
-        recs.push('Incluir movimento na semana e uma alimentação mais regular são cuidados úteis. Um profissional pode montar o plano com você.');
-    }
-    if (metrics?.gordura_pct_status === 'baixo' || metrics?.imc_status === 'baixo') {
-        recs.push('Manter refeições consistentes e, se possível, algum fortalecimento ajuda o corpo a se organizar.');
-    }
-    if (metrics?.equilibrio && ((metrics.equilibrio.bracos_diff_pct ?? 0) >= 10 || (metrics.equilibrio.pernas_diff_pct ?? 0) >= 10)) {
-        recs.push('Variar o movimento dos dois lados do corpo na rotina de exercícios pode ser interessante.');
-    }
-    if (!recs.length) {
-        recs.push(weightKg != null
-            ? 'A medição foi registrada. Manter rotina de movimento, alimentação e descanso já é um bom cuidado.'
-            : 'Quando a medição terminar, um profissional poderá olhar os detalhes com você.');
-    }
-    recs.push('Os números completos e qualquer classificação ficam com o profissional de saúde.');
-    return recs.slice(0, 3);
 }

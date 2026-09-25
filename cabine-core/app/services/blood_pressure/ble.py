@@ -1,20 +1,19 @@
 from __future__ import annotations
 
-import asyncio
 import logging
-import sys
 
-from bleak import BleakClient, BleakError, BleakScanner
+from bleak import BleakClient
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 
-from app.services.ble import apply_winrt_descriptor_tolerance
+from app.schemas.ble import BleDevice
+from app.services.ble.connect import connect_with_fallback
+from app.services.ble.scanner import advertised_name, as_ble_devices, scan_devices, wait_for_device
 
 logger = logging.getLogger(__name__)
 
-apply_winrt_descriptor_tolerance()
-
-DEVICE_MODEL = "HEM-7530T"
+DEVICE_LABEL = "HEM-7530T"
+WAITING_MESSAGE = "Pareado. Coloque o manguito, toque nos sensores e meça — o totem espera sozinho."
 
 # Strings the peripheral firmware puts on the radio (local name / BLESmart).
 # They are match keys for scan, not product names in our domain.
@@ -57,37 +56,12 @@ def advertisement_looks_like_hem7530(
     return False
 
 
-def _rssi_of(advertisement: AdvertisementData | None) -> int | None:
-    if advertisement is None:
-        return None
-    rssi = getattr(advertisement, "rssi", None)
-    return int(rssi) if rssi is not None else None
+def _matches(device: BLEDevice, advertisement: AdvertisementData) -> bool:
+    return advertisement_looks_like_hem7530(advertisement, advertised_name(device, advertisement))
 
 
-async def scan_hem7530(timeout: float = 12.0) -> list[tuple[BLEDevice, AdvertisementData | None]]:
-    found: dict[str, tuple[BLEDevice, AdvertisementData | None]] = {}
-
-    def _on_detect(device: BLEDevice, advertisement: AdvertisementData) -> None:
-        name = device.name or advertisement.local_name
-        if not advertisement_looks_like_hem7530(advertisement, name):
-            return
-        address = (device.address or "").upper()
-        if not address:
-            return
-        found[address] = (device, advertisement)
-
-    scanner = BleakScanner(detection_callback=_on_detect)
-    await scanner.start()
-    try:
-        await asyncio.sleep(timeout)
-    finally:
-        await scanner.stop()
-    ranked = sorted(
-        found.values(),
-        key=lambda item: _rssi_of(item[1]) or -999,
-        reverse=True,
-    )
-    return ranked
+async def scan_hem7530(timeout: float = 12.0) -> list[BleDevice]:
+    return as_ble_devices(await scan_devices(_matches, timeout), DEVICE_LABEL)
 
 
 async def wait_for_hem7530(
@@ -96,80 +70,19 @@ async def wait_for_hem7530(
     cancelled,
     on_waiting=None,
 ) -> BLEDevice | None:
-    loop = asyncio.get_running_loop()
-    found: asyncio.Future[BLEDevice] = loop.create_future()
-    preferred = (preferred_address or "").strip().upper() or None
-    notified = False
-
-    def _on_detect(device: BLEDevice, advertisement: AdvertisementData) -> None:
-        name = device.name or advertisement.local_name
-        address = (device.address or "").upper()
-        mac_hit = bool(preferred and address == preferred)
-        name_hit = advertisement_looks_like_hem7530(advertisement, name)
-        if preferred and not mac_hit:
-            return
-        if not mac_hit and not name_hit:
-            return
-
-        def _accept() -> None:
-            if not found.done():
-                found.set_result(device)
-
-        loop.call_soon_threadsafe(_accept)
-
-    scanner = BleakScanner(detection_callback=_on_detect)
-    await scanner.start()
-    try:
-        while not cancelled():
-            try:
-                return await asyncio.wait_for(asyncio.shield(found), timeout=4.0)
-            except TimeoutError:
-                if on_waiting is not None and not notified:
-                    notified = True
-                    await on_waiting(
-                        "Pareado. Coloque o manguito, toque nos sensores e meça — o totem espera sozinho."
-                    )
-                continue
-        return None
-    finally:
-        try:
-            await scanner.stop()
-        except Exception:
-            logger.debug("Failed to stop HEM-7530T scanner.", exc_info=True)
-
-
-def _service_count(client: BleakClient) -> int:
-    try:
-        return len(list(client.services))
-    except Exception:
-        return 0
+    """With a known MAC, only that monitor is accepted."""
+    return await wait_for_device(
+        _matches,
+        preferred_address,
+        cancelled=cancelled,
+        label=DEVICE_LABEL,
+        on_waiting=on_waiting,
+        waiting_message=WAITING_MESSAGE,
+        poll_seconds=4.0,
+        repeat_waiting=False,
+        preferred_only=True,
+    )
 
 
 async def connect_hem7530(device: BLEDevice | str) -> BleakClient:
-    attempts: list[dict] = [{}]
-    if sys.platform == "win32":
-        attempts = [
-            {"winrt": {"use_cached_services": True}},
-            {"winrt": {"use_cached_services": False}},
-            {},
-        ]
-    errors: list[str] = []
-    for kwargs in attempts:
-        client = BleakClient(device, timeout=20.0, **kwargs)
-        try:
-            await client.connect()
-            if _service_count(client) == 0:
-                raise BleakError("No GATT services found.")
-            try:
-                await client.pair()
-            except Exception:
-                logger.debug("Windows bond already existed or pair() was not needed.", exc_info=True)
-            return client
-        except Exception as exc:
-            errors.append(str(exc))
-            logger.warning("HEM-7530T GATT attempt failed (%s): %s", kwargs or "default", exc)
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
-    raise BleakError("Could not connect to HEM-7530T. " + (errors[-1] if errors else ""))
+    return await connect_with_fallback(device, label=DEVICE_LABEL, timeout=20.0, pair=True)

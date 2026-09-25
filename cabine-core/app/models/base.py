@@ -15,7 +15,6 @@ class Base(DeclarativeBase):
         Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        index=True
     )
 
     # Preenche sozinho com a data/hora do momento em que foi salvo

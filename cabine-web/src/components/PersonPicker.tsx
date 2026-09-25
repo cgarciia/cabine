@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
-import { api, apiErrorMessage } from '../api';
+import { apiErrorMessage, createPerson, fetchPeople } from '../api';
 import { emptyPersonForm, PersonForm, personFormToPayload, type PersonFormValues } from './PersonForm';
 import { saveCurrentPersonId } from '../session/currentPerson';
 import type { ScalePerson } from '../types/person';
@@ -19,8 +19,8 @@ export function PersonPicker({ selectedId, onSelect, allowCreate = true }: Props
     const [error, setError] = useState('');
 
     useEffect(() => {
-        api.get<ScalePerson[]>('/people')
-            .then(({ data }) => {
+        fetchPeople()
+            .then((data) => {
                 setPeople(data);
                 const remembered = data.find((item) => item.id === selectedId);
                 if (remembered) onSelect(remembered);
@@ -32,7 +32,7 @@ export function PersonPicker({ selectedId, onSelect, allowCreate = true }: Props
     async function handleAdd(event: FormEvent) {
         event.preventDefault();
         try {
-            const { data } = await api.post<ScalePerson>('/people', personFormToPayload(form));
+            const data = await createPerson(personFormToPayload(form));
             setPeople((current) => [...current, data].sort((a, b) => a.name.localeCompare(b.name)));
             choose(data);
             setForm(emptyPersonForm);

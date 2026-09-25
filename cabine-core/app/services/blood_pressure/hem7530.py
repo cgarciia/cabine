@@ -43,7 +43,6 @@ def parse_hem7530_record(payload: bytes) -> dict[str, Any] | None:
         "movement": bool(movement),
         "irregular_heartbeat": bool(ihb),
         "measured_at": measured_at,
-        "raw_hex": payload.hex(),
     }
 
 

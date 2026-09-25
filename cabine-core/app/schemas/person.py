@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-def _age_from_birth(birth: date) -> int:
+def age_from_birth(birth: date) -> int:
     today = date.today()
     return today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
 
@@ -64,7 +64,7 @@ class PersonBase(BaseModel):
     @model_validator(mode="after")
     def resolve_age(self):
         if self.birth_date is not None:
-            self.age = _age_from_birth(self.birth_date)
+            self.age = age_from_birth(self.birth_date)
         if self.age is None or self.age <= 0:
             raise ValueError("Informe a data de nascimento ou a idade.")
         return self

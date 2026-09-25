@@ -133,6 +133,17 @@ export interface ScaleLiveMessage {
     segments?: BiaSegment[];
 }
 
+/** Last `WEIGHT` frame kept by the scale pages until it is saved. */
+export interface ScaleLiveReading {
+    weight_kg: number;
+    stable: boolean;
+    complete: boolean;
+    metrics?: ScaleMetrics | null;
+    impedances_ohm?: number[];
+    segments?: BiaSegment[];
+    scale_name?: string;
+}
+
 export function hasBiaImpedances(values?: number[] | null): boolean {
     if (!values || values.length < 8) return false;
     return values.filter((z) => z >= 5).length >= 4;

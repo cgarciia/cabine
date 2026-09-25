@@ -1,7 +1,14 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
-import { api, apiErrorMessage, fetchPersonMeasurements } from '../../api';
+import {
+    apiErrorMessage,
+    createPerson,
+    deletePerson,
+    fetchPeople,
+    fetchPersonMeasurements,
+    updatePerson,
+} from '../../api';
 import { AppLayout } from '../../components/AppLayout';
 import { HistoryDialog } from '../../components/HistoryDialog';
 import {
@@ -28,8 +35,7 @@ export function PeoplePage() {
     const [selectedReport, setSelectedReport] = useState<MeasurementRecord | null>(null);
 
     async function load() {
-        const { data } = await api.get<ScalePerson[]>('/people');
-        setPeople(data);
+        setPeople(await fetchPeople());
     }
 
     useEffect(() => {
@@ -49,9 +55,9 @@ export function PeoplePage() {
         try {
             const payload = personFormToPayload(form);
             if (editingId) {
-                await api.patch(`/people/${editingId}`, payload);
+                await updatePerson(editingId, payload);
             } else {
-                await api.post('/people', payload);
+                await createPerson(payload);
             }
             resetForm();
             await load();
@@ -65,7 +71,7 @@ export function PeoplePage() {
     async function handleDelete(person: ScalePerson) {
         if (!window.confirm(`Excluir "${person.name}" e o histórico de avaliações?`)) return;
         try {
-            await api.delete(`/people/${person.id}`);
+            await deletePerson(person.id);
             if (editingId === person.id) resetForm();
             if (historyPerson?.id === person.id) setHistoryPerson(null);
             await load();

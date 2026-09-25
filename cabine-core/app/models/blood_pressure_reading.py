@@ -22,7 +22,7 @@ class BloodPressureReading(Base):
     pulse_bpm: Mapped[int] = mapped_column(Integer, nullable=False)
     movement: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     irregular_heartbeat: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    measured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    measured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     visit_id: Mapped[UUID | None] = mapped_column(index=True, nullable=True)
 
     person = relationship("ScalePerson", back_populates="blood_pressure_readings")

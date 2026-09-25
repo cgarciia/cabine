@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
-import { api, apiErrorMessage, deviceSocket } from '../../api';
+import { apiErrorMessage, fetchScales, pickPreferredScale, saveMeasurement, WS_PATHS } from '../../api';
 import { AfterStepScreen } from '../../components/AfterStepScreen';
 import { BiaGuideIllustration } from '../../components/BiaGuideIllustration';
-import { KioskBackButton } from '../../components/KioskIcon';
+import { KioskBackButton } from '../../components/KioskBackButton';
+import { useDeviceSocket } from '../../hooks/useDeviceSocket';
 import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
-import { hasBiaImpedances, type MeasurementPayload, type MeasurementRecord, type ScaleLiveMessage, type ScaleMetrics, type BiaSegment } from '../../types/measurement';
+import { hasBiaImpedances, type MeasurementPayload, type ScaleLiveMessage, type ScaleLiveReading } from '../../types/measurement';
 import type { Scale } from '../../types/scale';
 import { friendlyScaleStatus } from '../../utils/friendlyScaleStatus';
 
@@ -57,29 +58,12 @@ export function KioskScalePage() {
     const [view, setView] = useState<'ready' | 'live' | 'done'>('ready');
     const [error, setError] = useState('');
 
-    const wsRef = useRef<WebSocket | null>(null);
     const finishedRef = useRef(false);
     const savingRef = useRef(false);
     const persistedRef = useRef(false);
-    const lastReadingRef = useRef<{
-        weight_kg: number;
-        stable: boolean;
-        complete: boolean;
-        metrics?: ScaleMetrics | null;
-        impedances_ohm?: number[];
-        segments?: BiaSegment[];
-        scale_name?: string;
-    } | null>(null);
+    const lastReadingRef = useRef<ScaleLiveReading | null>(null);
 
-    const persistAndContinue = useCallback(async (reading: {
-        weight_kg: number;
-        stable: boolean;
-        complete: boolean;
-        metrics?: ScaleMetrics | null;
-        impedances_ohm?: number[];
-        segments?: BiaSegment[];
-        scale_name?: string;
-    }) => {
+    const persistAndContinue = useCallback(async (reading: ScaleLiveReading) => {
         if (!person || reading.weight_kg <= 0) return;
         if (persistedRef.current) return;
         const hasBia = hasBiaImpedances(reading.impedances_ohm);
@@ -105,10 +89,7 @@ export function KioskScalePage() {
             visit_id: session.visitId,
         };
         try {
-            const { data } = await api.post<MeasurementRecord>(
-                '/measurements',
-                JSON.parse(JSON.stringify(payload)),
-            );
+            const data = await saveMeasurement(payload);
             persistedRef.current = true;
             setLastMeasurement(data);
             setView('done');
@@ -122,88 +103,22 @@ export function KioskScalePage() {
     const persistRef = useRef(persistAndContinue);
     persistRef.current = persistAndContinue;
 
-    const stopScaleStream = useCallback(() => {
+    const completeReading = (reading: ScaleLiveReading) => {
+        if (finishedRef.current) return;
         finishedRef.current = true;
-        const ws = wsRef.current;
-        wsRef.current = null;
-        if (!ws) return;
-        ws.onmessage = null;
-        ws.onerror = null;
-        ws.onclose = null;
-        try {
-            if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-                ws.close();
-            }
-        } catch {
-            /* já fechado */
-        }
-    }, []);
+        setCurrentWeight(reading.weight_kg);
+        setGuideStep('done');
+        setStatus('Medição concluída. Desça da balança.');
+        setView('done');
+        close();
+        void persistRef.current({ ...reading, complete: true });
+    };
 
-    useEffect(() => {
-        api.get<Scale[]>('/scales')
-            .then(({ data }) => {
-                const preferred = data.find((item) => item.is_default && item.is_active)
-                    ?? data.find((item) => item.is_active)
-                    ?? data[0]
-                    ?? null;
-                setScale(preferred);
-                if (!preferred) setError('Nenhuma balança cadastrada.');
-            })
-            .catch(() => setError('Não foi possível carregar as balanças.'));
-    }, []);
-
-    useEffect(() => {
-        if (!person || !scale || finishedRef.current) return;
-
-        finishedRef.current = false;
-        savingRef.current = false;
-        persistedRef.current = false;
-        lastReadingRef.current = null;
-        setCurrentWeight(null);
-        setGuideStep('step_on');
-        setView('ready');
-        setStatus('Preparando a balança...');
-
-        const params = new URLSearchParams({
-            scale_id: scale.id,
-            height_cm: String(person.height_cm),
-            age: String(person.age),
-            sex: person.sex,
-            people_type: person.people_type || 'normal',
-            person_id: person.id,
-            display_name: person.name,
-        });
-        if (person.birth_date) params.set('birth_date', person.birth_date);
-        if (person.expected_weight_kg != null) {
-            params.set('expected_weight_kg', String(person.expected_weight_kg));
-        }
-        if (session.visitId) params.set('visit_id', session.visitId);
-
-        const ws = deviceSocket('/ws/scale', params);
-        wsRef.current = ws;
-
-        const completeReading = (reading: {
-            weight_kg: number;
-            stable: boolean;
-            complete: boolean;
-            metrics?: ScaleMetrics | null;
-            impedances_ohm?: number[];
-            segments?: BiaSegment[];
-            scale_name?: string;
-        }) => {
-            if (finishedRef.current) return;
-            finishedRef.current = true;
-            setCurrentWeight(reading.weight_kg);
-            setGuideStep('done');
-            setStatus('Medição concluída. Desça da balança.');
-            setView('done');
-            stopScaleStream();
-            void persistRef.current({ ...reading, complete: true });
-        };
-
-        ws.onopen = () => {
+    const { connect, close } = useDeviceSocket<ScaleLiveMessage>(WS_PATHS.scale, {
+        onOpen: (socket) => {
             setStatus('Balança pronta. Pode subir.');
-            ws.send(JSON.stringify({
+            if (!person) return;
+            socket.send(JSON.stringify({
                 type: 'PROFILE',
                 apply: true,
                 person_id: person.id,
@@ -216,13 +131,11 @@ export function KioskScalePage() {
                 display_name: person.name,
                 visit_id: session.visitId ?? undefined,
             }));
-        };
-        ws.onerror = () => setStatus('Não foi possível conectar à balança.');
-        ws.onclose = () => setStatus((prev) => (finishedRef.current ? prev : 'Reconectando…'));
-
-        ws.onmessage = (event) => {
+        },
+        onError: () => setStatus('Não foi possível conectar à balança.'),
+        onDrop: () => setStatus((prev) => (finishedRef.current ? prev : 'Reconectando…')),
+        onMessage: (data) => {
             if (finishedRef.current) return;
-            const data: ScaleLiveMessage = JSON.parse(event.data);
 
             if (data.type === 'STATUS' && data.msg) {
                 const next = friendlyScaleStatus(data.msg);
@@ -267,16 +180,48 @@ export function KioskScalePage() {
                     setStatus(data.stable ? 'Peso confirmado' : 'Medindo…');
                 }
             }
-        };
+        },
+    });
 
-        return () => {
-            if (wsRef.current === ws) wsRef.current = null;
-            ws.onmessage = null;
-            ws.onerror = null;
-            ws.onclose = null;
-            ws.close();
-        };
-    }, [person, scale, session.visitId, stopScaleStream]);
+    useEffect(() => {
+        fetchScales()
+            .then((data) => {
+                const preferred = pickPreferredScale(data);
+                setScale(preferred);
+                if (!preferred) setError('Nenhuma balança cadastrada.');
+            })
+            .catch(() => setError('Não foi possível carregar as balanças.'));
+    }, []);
+
+    useEffect(() => {
+        if (!person || !scale || finishedRef.current) return;
+
+        savingRef.current = false;
+        persistedRef.current = false;
+        lastReadingRef.current = null;
+        setCurrentWeight(null);
+        setGuideStep('step_on');
+        setView('ready');
+        setStatus('Preparando a balança...');
+
+        const params = new URLSearchParams({
+            scale_id: scale.id,
+            height_cm: String(person.height_cm),
+            age: String(person.age),
+            sex: person.sex,
+            people_type: person.people_type || 'normal',
+            person_id: person.id,
+            display_name: person.name,
+        });
+        if (person.birth_date) params.set('birth_date', person.birth_date);
+        if (person.expected_weight_kg != null) {
+            params.set('expected_weight_kg', String(person.expected_weight_kg));
+        }
+        if (session.visitId) params.set('visit_id', session.visitId);
+
+        connect(params, true);
+        return close;
+    }, [person, scale, session.visitId, connect, close]);
 
     if (!person) return <Navigate to="/matricula" replace />;
 

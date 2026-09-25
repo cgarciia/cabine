@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 import { apiErrorMessage, loginByRegistration, lookupRegistration } from '../../api';
-import { KioskBackButton } from '../../components/KioskIcon';
+import { KioskBackButton } from '../../components/KioskBackButton';
 import { KioskNumpad } from '../../components/KioskNumpad';
 import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
-import { isAccessSessionValid, saveAccessSession } from '../../session/authSession';
+import { getAccessTokenTyp, saveAccessSession } from '../../session/authSession';
 import { digitsToIsoDate, formatBirthDigits } from '../../utils/kioskDate';
 
 type LoginStep = 'registration' | 'birthDate' | 'firstAccess';
@@ -20,7 +20,7 @@ export function RegistrationLoginPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    if (isAccessSessionValid() && session.person) {
+    if (getAccessTokenTyp() === 'person' && session.person) {
         return <Navigate to="/menu" replace />;
     }
 

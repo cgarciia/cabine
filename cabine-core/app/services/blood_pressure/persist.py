@@ -4,12 +4,36 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.database import AsyncSessionLocal
 from app.crud import blood_pressure_reading as bp_crud
 from app.crud import person as person_crud
+from app.models.blood_pressure_reading import BloodPressureReading
 from app.schemas.blood_pressure import BloodPressureReadingCreate
 
 logger = logging.getLogger(__name__)
+
+
+async def store_blood_pressure_reading(
+    db: AsyncSession, data: BloodPressureReadingCreate
+) -> BloodPressureReading:
+    """Insert, or return the identical reading already stored for that timestamp."""
+    existing = await bp_crud.get_by_measurement(
+        db, data.person_id, data.measured_at, data.sys_mmhg, data.dia_mmhg, data.pulse_bpm
+    )
+    if existing is not None:
+        logger.info(
+            "Skipped duplicate blood pressure person=%s sys=%s dia=%s at=%s",
+            data.person_id, data.sys_mmhg, data.dia_mmhg, data.measured_at,
+        )
+        return existing
+    record = await bp_crud.create(db, data)
+    logger.info(
+        "Saved blood pressure id=%s person=%s sys=%s dia=%s pr=%s",
+        record.id, data.person_id, data.sys_mmhg, data.dia_mmhg, data.pulse_bpm,
+    )
+    return record
 
 
 async def save_blood_pressure_reading(
@@ -26,23 +50,10 @@ async def save_blood_pressure_reading(
     visit_id: UUID | None = None,
 ) -> None:
     async with AsyncSessionLocal() as db:
-        person = await person_crud.get_by_id(db, person_id)
-        if not person:
+        if not await person_crud.get_by_id(db, person_id):
             logger.warning("Skipped blood pressure save: person %s does not exist", person_id)
             return
-        existing = await bp_crud.get_by_measurement(
-            db, person_id, measured_at, sys_mmhg, dia_mmhg, pulse_bpm
-        )
-        if existing:
-            logger.info(
-                "Skipped duplicate blood pressure person=%s sys=%s dia=%s at=%s",
-                person_id,
-                sys_mmhg,
-                dia_mmhg,
-                measured_at,
-            )
-            return
-        record = await bp_crud.create(
+        await store_blood_pressure_reading(
             db,
             BloodPressureReadingCreate(
                 person_id=person_id,
@@ -56,12 +67,4 @@ async def save_blood_pressure_reading(
                 measured_at=measured_at,
                 visit_id=visit_id,
             ),
-        )
-        logger.info(
-            "Saved blood pressure id=%s person=%s sys=%s dia=%s pr=%s",
-            record.id,
-            person_id,
-            sys_mmhg,
-            dia_mmhg,
-            pulse_bpm,
         )

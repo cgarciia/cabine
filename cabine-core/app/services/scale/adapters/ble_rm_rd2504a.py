@@ -9,6 +9,7 @@ from starlette.websockets import WebSocketState
 
 from app.services.scale.adapters.base import DispatchFn, ScaleAdapter, StatusFn
 from app.services.ble import normalize_mac
+from app.services.ble.ws_session import consume_queue
 from app.services.scale.rm_rd2504a import (
     FFB1_UUID,
     FFB2_UUID,
@@ -660,7 +661,7 @@ class BleRmRd2504aAdapter(ScaleAdapter):
         # A balança desliga o rádio com a plataforma vazia (~15 s). Sem religar,
         # quando a pessoa sobe ela mede sozinha em modo offline — e aí só
         # reconhece quem já está gravado na memória dela.
-        consumer = asyncio.create_task(_consume_queue(websocket, queue))
+        consumer = asyncio.create_task(consume_queue(websocket, queue))
         try:
             while websocket.client_state == WebSocketState.CONNECTED:
                 if consumer.done():
@@ -711,14 +712,3 @@ class BleRmRd2504aAdapter(ScaleAdapter):
             except asyncio.CancelledError:
                 pass
 
-
-async def _consume_queue(websocket: WebSocket, queue: asyncio.Queue) -> None:
-    while websocket.client_state == WebSocketState.CONNECTED:
-        try:
-            data = await asyncio.wait_for(queue.get(), timeout=0.4)
-        except TimeoutError:
-            continue
-        try:
-            await websocket.send_json(data)
-        except Exception:
-            return

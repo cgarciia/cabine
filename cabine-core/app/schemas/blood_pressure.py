@@ -1,17 +1,9 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
-
-class BloodPressureDevice(BaseModel):
-    name: str
-    address: str
-    rssi: int | None = None
-
-
-class BloodPressureScanResponse(BaseModel):
-    devices: list[BloodPressureDevice]
+from app.schemas.ble import DeviceReadingResponseBase
 
 
 class BloodPressureReadingCreate(BaseModel):
@@ -27,19 +19,10 @@ class BloodPressureReadingCreate(BaseModel):
     visit_id: UUID | None = None
 
 
-class BloodPressureReadingResponse(BaseModel):
-    id: UUID
-    person_id: UUID
-    device_name: str
-    device_address: str | None
+class BloodPressureReadingResponse(DeviceReadingResponseBase):
     sys_mmhg: int
     dia_mmhg: int
     pulse_bpm: int
     movement: bool
     irregular_heartbeat: bool
     measured_at: datetime
-    visit_id: UUID | None = None
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)

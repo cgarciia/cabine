@@ -162,9 +162,3 @@ function timeOf(value: string): number {
     const t = Date.parse(value);
     return Number.isFinite(t) ? t : 0;
 }
-
-export function formatVisitWhen(value: string) {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-}

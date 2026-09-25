@@ -1,66 +1,41 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
+from fastapi import APIRouter, Depends, WebSocket, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import authenticate_websocket, ensure_person_scope, require_access
-from app.crud import oximeter_reading as oximeter_crud
-from app.crud import person as person_crud
+from app.core.deps import authenticate_websocket, get_current_user, load_scoped_person, require_access
 from app.models.person import ScalePerson
 from app.models.user import User
-from app.schemas.oximeter import OximeterReadingCreate, OximeterReadingResponse, OximeterScanResponse
-from app.services.oximeter.ble import scan_oximeters
-from app.services.oximeter.stream import stream_oximeter
+from app.schemas.ble import BleScanResponse
+from app.schemas.oximeter import OximeterReadingCreate, OximeterReadingResponse
 from app.services.ble import ble_radio_lock
+from app.services.oximeter.ble import scan_oximeters
+from app.services.oximeter.persist import store_oximeter_reading
+from app.services.oximeter.stream import stream_oximeter
 
 router = APIRouter(tags=["Oximeter"])
-protected = APIRouter(dependencies=[Depends(require_access)])
 
 
-@protected.get("/oximeters/scan", response_model=OximeterScanResponse)
+@router.get(
+    "/oximeters/scan",
+    response_model=BleScanResponse,
+    dependencies=[Depends(get_current_user)],
+)
 async def scan_nearby_oximeters():
     async with ble_radio_lock:
         devices = await scan_oximeters(timeout=10.0)
-    return OximeterScanResponse(devices=devices)
+    return BleScanResponse(devices=devices)
 
 
-@protected.get("/oximeters", response_model=list[OximeterReadingResponse])
-async def list_oximeter_readings(
-    person_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    actor: ScalePerson | User = Depends(require_access),
-):
-    ensure_person_scope(actor, person_id)
-    person = await person_crud.get_by_id(db, person_id)
-    if not person:
-        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
-    return await oximeter_crud.list_by_person(db, person_id)
-
-
-@protected.post("/oximeters", response_model=OximeterReadingResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/oximeters", response_model=OximeterReadingResponse, status_code=status.HTTP_201_CREATED)
 async def create_oximeter_reading(
     payload: OximeterReadingCreate,
     db: AsyncSession = Depends(get_db),
     actor: ScalePerson | User = Depends(require_access),
 ):
-    ensure_person_scope(actor, payload.person_id)
-    person = await person_crud.get_by_id(db, payload.person_id)
-    if not person:
-        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
-    existing = await oximeter_crud.recently_saved(
-        db, payload.person_id, payload.spo2_pct, payload.pulse_bpm
-    )
-    if existing:
-        incoming = payload.waveform or []
-        stored = existing.waveform or []
-        if incoming and len(incoming) >= len(stored):
-            return await oximeter_crud.set_waveform(db, existing, incoming)
-        return existing
-    return await oximeter_crud.create(db, payload)
-
-
-router.include_router(protected)
+    await load_scoped_person(db, actor, payload.person_id)
+    return await store_oximeter_reading(db, payload)
 
 
 @router.websocket("/ws/oximeter")

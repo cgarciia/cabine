@@ -1,9 +1,3 @@
-export interface OximeterDevice {
-    name: string;
-    address: string;
-    rssi: number | null;
-}
-
 export interface OximeterReading {
     id: string;
     person_id: string;

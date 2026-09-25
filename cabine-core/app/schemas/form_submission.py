@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class FormSubmissionCreate(BaseModel):
     person_id: UUID
-    module: str = Field(min_length=1, max_length=32)
+    module: Literal["health", "mental"]
     status: str = Field(default="completed", max_length=24)
     payload: dict[str, Any]
     visit_id: UUID | None = None

@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
-import { deviceSocket, fetchPersonBloodPressure, saveBloodPressureReading } from '../../api';
+import { fetchPersonBloodPressure, saveBloodPressureReading, WS_PATHS } from '../../api';
 import { AfterStepScreen } from '../../components/AfterStepScreen';
 import { BpGuideIllustration, type BpGuideStep } from '../../components/BpGuideIllustration';
 import { HeartbeatMonitor } from '../../components/HeartbeatMonitor';
-import { KioskBackButton } from '../../components/KioskIcon';
+import { KioskBackButton } from '../../components/KioskBackButton';
+import { useDeviceSocket } from '../../hooks/useDeviceSocket';
 import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
-import { loadBloodPressureAddress, saveBloodPressureAddress } from '../../session/bloodPressureDevice';
+import { loadDeviceAddress, saveDeviceAddress } from '../../session/deviceAddress';
 import { newVisitId } from '../../session/visitId';
 import type { BloodPressureLive, BloodPressureReading } from '../../types/bloodPressure';
 import { useHem7530EcgMic } from '../../utils/hem7530EcgMic';
@@ -77,10 +78,7 @@ export function KioskBloodPressurePage() {
     const [frozenEcg, setFrozenEcg] = useState<number[] | null>(null);
     const ecg = useHem7530EcgMic(Boolean(person) && !done);
 
-    const wsRef = useRef<WebSocket | null>(null);
     const personIdRef = useRef(person?.id ?? '');
-    const genRef = useRef(0);
-    const reconnectTimer = useRef(0);
     const mountedRef = useRef(true);
     const savedRef = useRef(false);
     const latestRef = useRef<Partial<BloodPressureReading>>({});
@@ -99,13 +97,20 @@ export function KioskBloodPressurePage() {
         mountedRef.current = true;
         return () => {
             mountedRef.current = false;
-            window.clearTimeout(reconnectTimer.current);
-            genRef.current += 1;
-            const socket = wsRef.current;
-            wsRef.current = null;
-            socket?.close();
         };
     }, []);
+
+    const { connect, close, isActive } = useDeviceSocket<BloodPressureLive>(WS_PATHS.bloodPressure, {
+        onOpen: (socket) => {
+            socket.send(JSON.stringify({
+                type: 'PERSON',
+                person_id: personIdRef.current,
+                visit_id: session.visitId,
+            }));
+        },
+        onMessage: (payload) => handleMessage(payload),
+        reconnect: { delayMs: 4000, run: () => start(true) },
+    });
 
     const persistReading = useCallback(
         async (reading: {
@@ -178,20 +183,7 @@ export function KioskBloodPressurePage() {
             if (sysMmhg == null || diaMmhg == null || pulseBpm == null || !measuredAt || !person) return;
             savedRef.current = true;
             setListening(false);
-            genRef.current += 1;
-            window.clearTimeout(reconnectTimer.current);
-            const socket = wsRef.current;
-            wsRef.current = null;
-            if (socket) {
-                socket.onmessage = null;
-                socket.onerror = null;
-                socket.onclose = null;
-                try {
-                    socket.close();
-                } catch {
-                    /* já fechado */
-                }
-            }
+            close();
             const wave = reading.ecg_mv ?? latestRef.current.ecg_mv;
             void persistReading({
                 sys_mmhg: sysMmhg,
@@ -207,7 +199,7 @@ export function KioskBloodPressurePage() {
                 if (mountedRef.current) setDone(true);
             });
         },
-        [persistReading, person],
+        [close, persistReading, person],
     );
 
     const tryFinish = useCallback(() => {
@@ -225,90 +217,48 @@ export function KioskBloodPressurePage() {
 
     tryFinishRef.current = tryFinish;
 
+    const handleMessage = (payload: BloodPressureLive) => {
+        if (payload.type !== 'BLOOD_PRESSURE') return;
+        if (payload.device_address) saveDeviceAddress('bloodPressure', payload.device_address);
+        if (payload.sys_mmhg != null) setSys(payload.sys_mmhg);
+        if (payload.dia_mmhg != null) setDia(payload.dia_mmhg);
+        if (payload.pulse_bpm != null) setPulse(payload.pulse_bpm);
+        const nextFlags: string[] = [];
+        if (payload.movement) nextFlags.push('movimento na medição');
+        if (payload.irregular_heartbeat) nextFlags.push('pulso irregular');
+        setFlags(nextFlags);
+        latestRef.current = {
+            sys_mmhg: payload.sys_mmhg ?? latestRef.current.sys_mmhg,
+            dia_mmhg: payload.dia_mmhg ?? latestRef.current.dia_mmhg,
+            pulse_bpm: payload.pulse_bpm ?? latestRef.current.pulse_bpm,
+            movement: payload.movement ?? latestRef.current.movement,
+            irregular_heartbeat: payload.irregular_heartbeat ?? latestRef.current.irregular_heartbeat,
+            measured_at: payload.measured_at ?? latestRef.current.measured_at,
+            device_name: payload.device_name ?? latestRef.current.device_name,
+            device_address: payload.device_address ?? latestRef.current.device_address,
+            ecg_mv: latestRef.current.ecg_mv,
+        };
+        if (payload.stable && payload.sys_mmhg != null && payload.dia_mmhg != null && payload.pulse_bpm != null && payload.measured_at) {
+            tryFinishRef.current();
+        }
+    };
+
     const start = useCallback(
         (force = false) => {
             const pid = personIdRef.current;
             if (!pid || savedRef.current) return;
-
-            const existing = wsRef.current;
-            if (
-                !force
-                && existing
-                && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)
-            ) {
-                return;
-            }
-
-            window.clearTimeout(reconnectTimer.current);
-            genRef.current += 1;
-            const gen = genRef.current;
-            const prev = wsRef.current;
-            wsRef.current = null;
-            prev?.close();
+            if (!force && isActive()) return;
 
             setListening(true);
             setStatus('Coloque o manguito e os dedos. Depois aperte START/STOP no aparelho.');
 
             const params = new URLSearchParams({ person_id: pid });
             if (session.visitId) params.set('visit_id', session.visitId);
-            const known = loadBloodPressureAddress();
+            const known = loadDeviceAddress('bloodPressure');
             if (known) params.set('address', known);
-            const socket = deviceSocket('/ws/blood-pressure', params);
-            wsRef.current = socket;
-
-            socket.onopen = () => {
-                socket.send(JSON.stringify({
-                    type: 'PERSON',
-                    person_id: pid,
-                    visit_id: session.visitId,
-                }));
-            };
-
-            socket.onmessage = (event) => {
-                let payload: BloodPressureLive;
-                try {
-                    payload = JSON.parse(event.data) as BloodPressureLive;
-                } catch {
-                    return;
-                }
-                if (payload.type === 'STATUS' && payload.msg) {
-                    return;
-                }
-                if (payload.type !== 'BLOOD_PRESSURE') return;
-                if (payload.device_address) saveBloodPressureAddress(payload.device_address);
-                if (payload.sys_mmhg != null) setSys(payload.sys_mmhg);
-                if (payload.dia_mmhg != null) setDia(payload.dia_mmhg);
-                if (payload.pulse_bpm != null) setPulse(payload.pulse_bpm);
-                const nextFlags: string[] = [];
-                if (payload.movement) nextFlags.push('movimento na medição');
-                if (payload.irregular_heartbeat) nextFlags.push('pulso irregular');
-                setFlags(nextFlags);
-                latestRef.current = {
-                    sys_mmhg: payload.sys_mmhg ?? latestRef.current.sys_mmhg,
-                    dia_mmhg: payload.dia_mmhg ?? latestRef.current.dia_mmhg,
-                    pulse_bpm: payload.pulse_bpm ?? latestRef.current.pulse_bpm,
-                    movement: payload.movement ?? latestRef.current.movement,
-                    irregular_heartbeat: payload.irregular_heartbeat ?? latestRef.current.irregular_heartbeat,
-                    measured_at: payload.measured_at ?? latestRef.current.measured_at,
-                    device_name: payload.device_name ?? latestRef.current.device_name,
-                    device_address: payload.device_address ?? latestRef.current.device_address,
-                    ecg_mv: latestRef.current.ecg_mv,
-                };
-                if (payload.stable && payload.sys_mmhg != null && payload.dia_mmhg != null && payload.pulse_bpm != null && payload.measured_at) {
-                    tryFinishRef.current();
-                }
-            };
-
-            socket.onclose = () => {
-                if (!mountedRef.current || gen !== genRef.current || wsRef.current !== socket) return;
-                if (savedRef.current) return;
-                wsRef.current = null;
-                reconnectTimer.current = window.setTimeout(() => {
-                    if (mountedRef.current && genRef.current === gen && !savedRef.current) start(true);
-                }, 4000);
-            };
+            connect(params, true);
         },
-        [session.visitId],
+        [connect, isActive, session.visitId],
     );
 
     useEffect(() => {

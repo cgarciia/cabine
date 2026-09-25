@@ -1,35 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { deviceSocket, fetchPersonOximeter } from '../../api';
+import { oximeterAdvice } from '../../advice/patientAdvice';
+import { fetchPersonOximeter, WS_PATHS } from '../../api';
 import { AppLayout } from '../../components/AppLayout';
 import { OximeterPulseGraph } from '../../components/OximeterPulseGraph';
 import { PersonPicker } from '../../components/PersonPicker';
+import { useDeviceSocket } from '../../hooks/useDeviceSocket';
 import { loadCurrentPersonId, saveCurrentPersonId } from '../../session/currentPerson';
-import { loadOximeterAddress, saveOximeterAddress } from '../../session/oximeterDevice';
+import { loadDeviceAddress, saveDeviceAddress } from '../../session/deviceAddress';
 import type { OximeterLive, OximeterReading } from '../../types/oximeter';
 import type { ScalePerson } from '../../types/person';
 
-function oximeterAdvice(spo2: number | null, pulse: number | null, waiting: boolean): string {
-    if (waiting || spo2 == null || pulse == null) {
-        return 'Coloque o dedo até o fundo do oxímetro, sem apertar, e permaneça parado. A oxigenação e o pulso aparecem sozinhos.';
-    }
-    if (spo2 < 90) {
-        return 'A saturação está baixa nesta leitura. Avise o profissional da cabine e não force exercício agora.';
-    }
-    if (spo2 < 95) {
-        return 'A saturação está um pouco abaixo do usual. Sente-se, respire com calma e avise o profissional se continuar assim.';
-    }
-    if (pulse < 50 || pulse > 120) {
-        return 'O pulso saiu da faixa comum de repouso. Vale repetir a leitura parado e conversar com o profissional.';
-    }
-    return 'Leitura dentro de uma faixa comum em repouso. Este número não substitui avaliação clínica.';
-}
+const SEARCHING = 'Procurando o oxímetro… coloque o dedo no sensor.';
 
 export function OximeterPage() {
     const navigate = useNavigate();
     const [person, setPerson] = useState<ScalePerson | null>(null);
-    const [status, setStatus] = useState('Procurando o oxímetro… coloque o dedo no sensor.');
+    const [status, setStatus] = useState(SEARCHING);
     const [spo2, setSpo2] = useState<number | null>(null);
     const [pulse, setPulse] = useState<number | null>(null);
     const [fingerOn, setFingerOn] = useState(false);
@@ -38,25 +26,34 @@ export function OximeterPage() {
     const [wave, setWave] = useState<number[]>([]);
     const [history, setHistory] = useState<OximeterReading[]>([]);
     const [session, setSession] = useState(0);
-    const wsRef = useRef<WebSocket | null>(null);
     const personId = person?.id || loadCurrentPersonId();
     const personIdRef = useRef(personId);
-    const genRef = useRef(0);
-    const reconnectTimer = useRef(0);
-    const mountedRef = useRef(true);
     personIdRef.current = personId;
 
-    useEffect(() => {
-        mountedRef.current = true;
-        return () => {
-            mountedRef.current = false;
-            window.clearTimeout(reconnectTimer.current);
-            genRef.current += 1;
-            const socket = wsRef.current;
-            wsRef.current = null;
-            socket?.close();
-        };
-    }, []);
+    const { connect, isActive } = useDeviceSocket<OximeterLive>(WS_PATHS.oximeter, {
+        onMessage: (payload) => {
+            if (payload.type === 'STATUS' && payload.msg) {
+                setStatus(payload.msg);
+                return;
+            }
+            if (payload.type !== 'OXIMETER') return;
+            if (payload.device_address) saveDeviceAddress('oximeter', payload.device_address);
+            if (payload.waveform?.length) setWave(payload.waveform);
+            if (payload.spo2_pct != null) setSpo2(payload.spo2_pct);
+            if (payload.pulse_bpm != null) setPulse(payload.pulse_bpm);
+            if (payload.finger_on != null) setFingerOn(Boolean(payload.finger_on));
+            if (payload.stable != null) setStable(Boolean(payload.stable));
+            if (payload.finger_on && payload.spo2_pct && payload.pulse_bpm) {
+                setStatus(payload.stable ? 'Leitura gravada. Pode manter o dedo para acompanhar o pulso.' : 'Lendo... mantenha o dedo parado.');
+            }
+        },
+        onDrop: () => {
+            setListening(false);
+            setFingerOn(false);
+            setStatus(SEARCHING);
+        },
+        reconnect: { delayMs: 2500, run: () => start(true) },
+    });
 
     useEffect(() => {
         if (!personId) {
@@ -72,21 +69,8 @@ export function OximeterPage() {
             setStatus('Escolha a pessoa cadastrada. Depois é só colocar o dedo no oxímetro.');
             return;
         }
-        const existing = wsRef.current;
-        if (
-            !force
-            && existing
-            && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)
-        ) {
-            return;
-        }
+        if (!force && isActive()) return;
         saveCurrentPersonId(pid);
-        window.clearTimeout(reconnectTimer.current);
-        genRef.current += 1;
-        const gen = genRef.current;
-        const prev = wsRef.current;
-        wsRef.current = null;
-        prev?.close();
         setSpo2(null);
         setPulse(null);
         setStable(false);
@@ -94,47 +78,13 @@ export function OximeterPage() {
         setWave([]);
         setSession((value) => value + 1);
         setListening(true);
-        setStatus('Procurando o oxímetro… coloque o dedo no sensor.');
+        setStatus(SEARCHING);
 
         const params = new URLSearchParams({ person_id: pid });
-        const known = loadOximeterAddress();
+        const known = loadDeviceAddress('oximeter');
         if (known) params.set('address', known);
-        const socket = deviceSocket('/ws/oximeter', params);
-        wsRef.current = socket;
-
-        socket.onmessage = (event) => {
-            const payload = JSON.parse(event.data) as OximeterLive;
-            if (payload.type === 'STATUS' && payload.msg) {
-                setStatus(payload.msg);
-                return;
-            }
-            if (payload.type !== 'OXIMETER') return;
-            if (payload.device_address) saveOximeterAddress(payload.device_address);
-            if (payload.waveform?.length) {
-                setWave(payload.waveform);
-            }
-            if (payload.spo2_pct != null) setSpo2(payload.spo2_pct);
-            if (payload.pulse_bpm != null) setPulse(payload.pulse_bpm);
-            if (payload.finger_on != null) setFingerOn(Boolean(payload.finger_on));
-            if (payload.stable != null) setStable(Boolean(payload.stable));
-            if (payload.finger_on && payload.spo2_pct && payload.pulse_bpm) {
-                setStatus(payload.stable ? 'Leitura gravada. Pode manter o dedo para acompanhar o pulso.' : 'Lendo... mantenha o dedo parado.');
-            }
-        };
-        socket.onerror = () => {
-            /* onclose trata a reconexão; o app oficial também fica tentando. */
-        };
-        socket.onclose = () => {
-            if (!mountedRef.current || gen !== genRef.current || wsRef.current !== socket) return;
-            wsRef.current = null;
-            setListening(false);
-            setFingerOn(false);
-            setStatus('Procurando o oxímetro… coloque o dedo no sensor.');
-            reconnectTimer.current = window.setTimeout(() => {
-                if (mountedRef.current && genRef.current === gen) start(true);
-            }, 2500);
-        };
-    }, []);
+        connect(params, true);
+    }, [connect, isActive]);
 
     useEffect(() => {
         if (!personId) return;

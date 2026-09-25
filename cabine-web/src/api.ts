@@ -3,9 +3,10 @@ import axios from 'axios';
 import { clearAccessSession, getAccessToken, isAccessSessionValid } from './session/authSession';
 import type { BloodPressureReading } from './types/bloodPressure';
 import type { FormSubmission } from './types/form';
-import type { MeasurementRecord } from './types/measurement';
+import type { MeasurementPayload, MeasurementRecord } from './types/measurement';
 import type { OximeterReading } from './types/oximeter';
-import type { ScalePerson } from './types/person';
+import type { PersonPayload, ScalePerson } from './types/person';
+import type { Scale, ScaleCatalog, ScalePayload } from './types/scale';
 
 export function apiBaseUrl() {
     const env = import.meta.env.VITE_API_URL as string | undefined;
@@ -60,10 +61,15 @@ export function withAccessToken(params: URLSearchParams): URLSearchParams {
     return params;
 }
 
-export function deviceSocket(
-    path: '/ws/scale' | '/ws/oximeter' | '/ws/blood-pressure',
-    params: URLSearchParams,
-): WebSocket {
+export const WS_PATHS = {
+    scale: '/ws/scale',
+    oximeter: '/ws/oximeter',
+    bloodPressure: '/ws/blood-pressure',
+} as const;
+
+export type WsPath = (typeof WS_PATHS)[keyof typeof WS_PATHS];
+
+export function deviceSocket(path: WsPath, params: URLSearchParams): WebSocket {
     return new WebSocket(`${wsBaseUrl()}${path}?${withAccessToken(params).toString()}`);
 }
 
@@ -116,6 +122,62 @@ export async function loginOperator(email: string, password: string): Promise<{
     body.set('username', email);
     body.set('password', password);
     const { data } = await api.post<{ access_token: string; expires_in: number }>('/login', body);
+    return data;
+}
+
+export async function fetchPeople(): Promise<ScalePerson[]> {
+    const { data } = await api.get<ScalePerson[]>('/people');
+    return Array.isArray(data) ? data : [];
+}
+
+export async function createPerson(body: PersonPayload): Promise<ScalePerson> {
+    const { data } = await api.post<ScalePerson>('/people', body);
+    return data;
+}
+
+export async function updatePerson(personId: string, body: Partial<PersonPayload>): Promise<ScalePerson> {
+    const { data } = await api.patch<ScalePerson>(`/people/${encodeURIComponent(personId)}`, body);
+    return data;
+}
+
+export async function deletePerson(personId: string): Promise<void> {
+    await api.delete(`/people/${encodeURIComponent(personId)}`);
+}
+
+export async function fetchScales(): Promise<Scale[]> {
+    const { data } = await api.get<Scale[]>('/scales');
+    return Array.isArray(data) ? data : [];
+}
+
+/** Default active scale first, then any active one, then whatever exists. */
+export function pickPreferredScale(scales: Scale[]): Scale | null {
+    return scales.find((item) => item.is_default && item.is_active)
+        ?? scales.find((item) => item.is_active)
+        ?? scales[0]
+        ?? null;
+}
+
+export async function fetchScaleCatalog(): Promise<ScaleCatalog> {
+    const { data } = await api.get<ScaleCatalog>('/scales/catalog');
+    return data;
+}
+
+export async function createScale(body: ScalePayload): Promise<Scale> {
+    const { data } = await api.post<Scale>('/scales', body);
+    return data;
+}
+
+export async function updateScale(scaleId: string, body: Partial<ScalePayload>): Promise<Scale> {
+    const { data } = await api.patch<Scale>(`/scales/${encodeURIComponent(scaleId)}`, body);
+    return data;
+}
+
+export async function deleteScale(scaleId: string): Promise<void> {
+    await api.delete(`/scales/${encodeURIComponent(scaleId)}`);
+}
+
+export async function saveMeasurement(body: MeasurementPayload): Promise<MeasurementRecord> {
+    const { data } = await api.post<MeasurementRecord>('/measurements', body);
     return data;
 }
 

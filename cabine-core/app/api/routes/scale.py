@@ -13,6 +13,7 @@ from app.schemas.scale import (
     ScaleUpdate,
     catalog_payload,
 )
+from app.services.scale.registry import resolve_transport
 from app.services.scale.stream import stream_scale
 
 router = APIRouter(tags=["Scales"])
@@ -58,7 +59,12 @@ async def update_scale(
     if not scale:
         raise HTTPException(status_code=404, detail="Balança não encontrada.")
     try:
-        return await scale_crud.update_scale(db, scale, payload)
+        transport = resolve_transport(
+            payload.adapter.value if payload.adapter else scale.adapter,
+            payload.parser.value if payload.parser else scale.parser,
+            payload.address if payload.address is not None else scale.address,
+        )
+        return await scale_crud.update_scale(db, scale, payload, transport)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

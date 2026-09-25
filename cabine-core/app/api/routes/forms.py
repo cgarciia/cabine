@@ -1,12 +1,9 @@
-from uuid import UUID
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import ensure_person_scope, require_access
+from app.core.deps import load_scoped_person, require_access
 from app.crud import form_submission as form_crud
-from app.crud import person as person_crud
 from app.models.person import ScalePerson
 from app.models.user import User
 from app.schemas.form_submission import FormSubmissionCreate, FormSubmissionResponse
@@ -20,23 +17,5 @@ async def create_form(
     db: AsyncSession = Depends(get_db),
     actor: ScalePerson | User = Depends(require_access),
 ):
-    ensure_person_scope(actor, payload.person_id)
-    person = await person_crud.get_by_id(db, payload.person_id)
-    if not person:
-        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
-    if payload.module not in {"health", "mental"}:
-        raise HTTPException(status_code=400, detail="Módulo inválido.")
+    await load_scoped_person(db, actor, payload.person_id)
     return await form_crud.create(db, payload)
-
-
-@router.get("/person/{person_id}", response_model=list[FormSubmissionResponse])
-async def list_forms_for_person(
-    person_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    actor: ScalePerson | User = Depends(require_access),
-):
-    ensure_person_scope(actor, person_id)
-    person = await person_crud.get_by_id(db, person_id)
-    if not person:
-        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
-    return await form_crud.list_by_person(db, person_id)

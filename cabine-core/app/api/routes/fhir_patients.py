@@ -12,7 +12,7 @@ from app.services.fhir import dump_fhir_resource, parse_fhir_patient
 router = APIRouter(prefix="/fhir/Patient", tags=["FHIR - Patient"])
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_fhir_patient(
     patient_data: FHIRPatientWrite,
     db: AsyncSession = Depends(get_db),

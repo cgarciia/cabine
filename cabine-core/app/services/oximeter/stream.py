@@ -6,8 +6,9 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import WebSocket, WebSocketDisconnect
-from starlette.websockets import WebSocketState
 
+from app.services.ble import ble_radio_lock
+from app.services.ble.ws_session import DeviceWsSession, cancel_and_wait, consume_queue
 from app.services.oximeter.ble import (
     YK81_DEVICE_NAME,
     connect_oximeter,
@@ -25,7 +26,6 @@ from app.services.oximeter.parsers import (
     Yk81PacketBuffer,
 )
 from app.services.oximeter.persist import save_oximeter_reading
-from app.services.ble import ble_radio_lock, parse_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -73,42 +73,17 @@ async def stream_oximeter(
     person_locked: bool = False,
 ) -> None:
     await websocket.accept()
-    person_id_box: list[UUID | None] = [person_id]
-    visit_id_box: list[UUID | None] = [visit_id]
+    session = DeviceWsSession(
+        websocket, person_id=person_id, visit_id=visit_id, person_locked=person_locked
+    )
+    send_status = session.send_status
+    cancelled = session.cancelled
     preferred = [(address or "").strip().upper() or None]
     saved = False
     hits = 0
     last_key: tuple[int, int] | None = None
 
-    async def send_status(msg: str) -> None:
-        if websocket.client_state != WebSocketState.CONNECTED:
-            return
-        try:
-            await websocket.send_json({"type": "STATUS", "msg": msg})
-        except Exception:
-            return
-
-    async def listen_client() -> None:
-        try:
-            while websocket.client_state == WebSocketState.CONNECTED:
-                raw = await websocket.receive_json()
-                if not isinstance(raw, dict):
-                    continue
-                if raw.get("type") == "PERSON":
-                    if not person_locked:
-                        pid = parse_uuid(raw.get("person_id"))
-                        if pid is not None:
-                            person_id_box[0] = pid
-                    vid = parse_uuid(raw.get("visit_id"))
-                    if vid is not None:
-                        visit_id_box[0] = vid
-        except Exception:
-            return
-
-    client_task = asyncio.create_task(listen_client())
-
-    def cancelled() -> bool:
-        return websocket.client_state != WebSocketState.CONNECTED
+    client_task = asyncio.create_task(session.listen_person_messages())
 
     try:
         await send_status("Encaixe o dedo indicador no clipe e, se o oxímetro não ligar, aperte o botão.")
@@ -172,7 +147,7 @@ async def stream_oximeter(
                                 hits = 1
                             if hits >= STABLE_HITS:
                                 stable = True
-                                pid = person_id_box[0]
+                                pid = session.person_id
                                 if pid is not None and not saved:
                                     saved = True
                                     wave_snapshot = list(wave_acc[-220:])
@@ -186,7 +161,7 @@ async def stream_oximeter(
                                                 spo2_pct=sample.spo2_pct,
                                                 pulse_bpm=sample.pulse_bpm,
                                                 pi_pct=sample.pi_pct,
-                                                visit_id=visit_id_box[0],
+                                                visit_id=session.visit_id,
                                                 waveform=wave_snapshot or None,
                                             )
                                         except Exception:
@@ -194,7 +169,7 @@ async def stream_oximeter(
                                             saved = False
                                             logger.exception("Falha ao salvar oximetria")
 
-                                    asyncio.create_task(_persist())
+                                    session.spawn(_persist())
                         elif sample.kind == "values" and not sample.finger_on:
                             hits = 0
                             last_key = None
@@ -218,7 +193,7 @@ async def stream_oximeter(
                         await send_status("Conectado. Pedindo a leitura ao oxímetro…")
                         await write_start_stream(client, all_candidates=True)
                     await send_status("Conectado. Fique parado: a cabine espera o sinal ficar estável.")
-                    consumer = asyncio.create_task(_consume_queue(websocket, queue))
+                    consumer = asyncio.create_task(consume_queue(websocket, queue))
                     keepalive: asyncio.Task | None = None
                     try:
                         silent_for = 0.0
@@ -234,16 +209,7 @@ async def stream_oximeter(
                             elif keepalive is None:
                                 keepalive = asyncio.create_task(keep_alive_stream(client, interval=3.0))
                     finally:
-                        if keepalive is not None:
-                            keepalive.cancel()
-                        consumer.cancel()
-                        for task in (keepalive, consumer):
-                            if task is None:
-                                continue
-                            try:
-                                await task
-                            except asyncio.CancelledError:
-                                pass
+                        await cancel_and_wait(keepalive, consumer)
                 finally:
                     try:
                         await client.disconnect()
@@ -255,10 +221,7 @@ async def stream_oximeter(
                 if yk81:
                     hits = 0
                     last_key = None
-                    try:
-                        await websocket.send_json(_reading_payload(device_name, device_address))
-                    except Exception:
-                        pass
+                    await session.send_json(_reading_payload(device_name, device_address))
                     await send_status("O oxímetro desligou. Encaixe o dedo e aperte o botão para ligar de novo.")
                     await asyncio.sleep(0.8)
                     continue
@@ -273,18 +236,5 @@ async def stream_oximeter(
         except Exception:
             pass
     finally:
-        client_task.cancel()
-        try:
-            await client_task
-        except asyncio.CancelledError:
-            pass
-
-
-async def _consume_queue(websocket: WebSocket, queue: asyncio.Queue) -> None:
-    while websocket.client_state == WebSocketState.CONNECTED:
-        data = await queue.get()
-        try:
-            await websocket.send_json(data)
-        except Exception:
-            logger.exception("Falha ao enviar dados do oxímetro para a tela")
-            return
+        await cancel_and_wait(client_task)
+        await session.drain()

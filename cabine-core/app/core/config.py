@@ -1,4 +1,9 @@
+import warnings
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+MIN_SECRET_KEY_LENGTH = 32
 
 
 class Settings(BaseSettings):
@@ -13,7 +18,12 @@ class Settings(BaseSettings):
 
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    PERSON_TOKEN_EXPIRE_MINUTES: int = 30
+    OPERATOR_TOKEN_EXPIRE_MINUTES: int = 480
+
+    LOGIN_MAX_FAILURES_PER_SUBJECT: int = 5
+    LOGIN_MAX_FAILURES_PER_IP: int = 30
+    LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 300
 
     BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:5173",
@@ -28,6 +38,17 @@ class Settings(BaseSettings):
         r")(:\d+)?"
     )
     SQL_ECHO: bool = False
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def _secret_key_strength(cls, value: str) -> str:
+        if len(value) < MIN_SECRET_KEY_LENGTH:
+            warnings.warn(
+                f"SECRET_KEY tem menos de {MIN_SECRET_KEY_LENGTH} caracteres; gere outra com "
+                "`python -c \"import secrets; print(secrets.token_urlsafe(48))\"`.",
+                stacklevel=2,
+            )
+        return value
 
     @property
     def ASYNC_DATABASE_URI(self) -> str:

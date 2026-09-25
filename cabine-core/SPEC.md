@@ -70,7 +70,9 @@ Rotas não montam `select()`. CRUD não importa FastAPI. Rotas não falam com Bl
 - Pressão: **HEM-7530T** — `services/blood_pressure/`. MAC só na query do WebSocket / `localStorage` (`cabine.bp-address`), nunca em `.env`.
 
 `services/scale/wla25.py` — cálculo de composição (usado por `metrics.py`).
-`services/scale/spec.py` — dataclass `ScaleSpec` (config da balança em memória). Não confundir com este `SPEC.md`.
+`services/scale/spec.py` — dataclass `ScaleSpec` (config da balança em memória; `ScaleSpec.from_record`). Não confundir com este `SPEC.md`.
+`services/scale/measurement.py` — `sanitize_measurement` (descarta BIA de balança só-peso). Validação adapter/parser/endereço: `registry.resolve_transport`.
+`crud/base.py` — `save`, `create_from_schema`, `list_by_person`. CRUD não importa `services`.
 `models/fhir_patient.py` + rotas `/fhir/Patient` — FHIR continua.
 
 Não há pasta `tests/` ainda. Quando existir, fica em `cabine-core/tests/` com pytest async.
@@ -96,8 +98,9 @@ Não existe `python main.py` na raiz.
 |---|---|
 | `config.py` | `pydantic-settings`, `.env`, `case_sensitive=True`, URI asyncpg |
 | `database.py` | engine async, `AsyncSessionLocal`, `get_db` |
-| `security.py` | bcrypt + JWT HS256 |
-| `deps.py` | `get_current_person`, `get_current_user`, `require_access`, `ensure_person_scope`, WS `authenticate_websocket` |
+| `security.py` | bcrypt + JWT HS256; `issue_person_token` / `issue_operator_token` (único lugar que emite token) |
+| `rate_limit.py` | limite de **falhas** de login em memória (por IP e por matrícula/e-mail) → 429 |
+| `deps.py` | `get_current_user`, `require_access`, `get_scoped_person` / `load_scoped_person` (escopo + 404), WS `authenticate_websocket` |
 
 ### `app/api/routes`
 
@@ -107,14 +110,17 @@ Um arquivo por recurso. `router.py` só agrega.
 |---|---|
 | `health.py` | `GET /`, `GET /health` |
 | `auth.py` | `POST /login` (operador), `POST /login/matricula` (totem + `birth_date`), `POST /login/lookup` |
-| `users.py` | `POST /users/` (primeiro usuário sem auth; depois só operador), `GET /users/me` |
-| `people.py` | CRUD pessoas + filhos (`/forms`, `/measurements`, `/oximeter`, `/blood-pressure`) |
-| `forms.py` | `POST /forms`, listagem por pessoa |
-| `measurements.py` | pesagens REST |
+| `users.py` | `POST /users` (primeiro usuário sem auth; depois só operador), `GET /users/me` |
+| `people.py` | CRUD pessoas + **única** listagem dos filhos: `GET /people/{id}/forms`, `/measurements`, `/oximeter`, `/blood-pressure` |
+| `forms.py` | `POST /forms` |
+| `measurements.py` | `POST /measurements` |
 | `scale.py` | GET catálogo/lista `/scales` (sessão kiosk ou operador); POST/PATCH/DELETE só operador; `WS /ws/scale` |
-| `oximeter.py` | scan, REST, `WS /ws/oximeter` |
-| `blood_pressure.py` | scan, REST `/blood-pressures`, `WS /ws/blood-pressure` |
-| `fhir_patients.py` | `POST/GET /fhir/Patient` (só operador) |
+| `oximeter.py` | `GET /oximeters/scan` (só operador), `POST /oximeters`, `WS /ws/oximeter` |
+| `blood_pressure.py` | `GET /blood-pressures/scan` (só operador), `POST /blood-pressures`, `WS /ws/blood-pressure` |
+| `fhir_patients.py` | `POST /fhir/Patient`, `GET /fhir/Patient/{id}` (só operador) |
+
+Listagem por pessoa fica só em `/people/{id}/*`. Não recriar `GET /measurements?person_id=` ou `/forms/person/{id}`.
+Paths sem barra final. Rota que recebe `person_id` usa `get_scoped_person` (path) ou `load_scoped_person` (body).
 
 JSON da API: **snake_case**. `detail` de erro: **português**. Paths REST: **inglês**.
 
@@ -154,9 +160,15 @@ I/O e domínio que não é “só SQL”.
 Três tipos de periférico, **um rádio**. No Windows, scan/connect simultâneos geram erro de rádio: tudo passa por `ble_radio_lock`.
 
 ```
-services/ble/          # compartilhado
+services/ble/          # compartilhado (o patch WinRT é aplicado uma vez no import do pacote)
   common.py            # lock, MAC, watch_websocket_closed
+  ids.py               # parse_uuid
   winrt_patch.py       # descritores GATT quebrados no WinRT
+  scanner.py           # scan_devices, wait_for_device (espera o periférico acordar), as_ble_devices
+  connect.py           # connect_with_fallback: tentativas WinRT cached/uncached, pareamento opcional
+  ws_session.py        # DeviceWsSession (pessoa/visita, STATUS, tasks de persistência), consume_queue, cancel_and_wait
+
+schemas/ble.py         # BleDevice/BleScanResponse (scans) e DeviceReadingResponseBase (leituras)
 
 services/scale/        # só balança
   adapters/            # ble_gatt, ble_broadcast, ble_rm_rd2504a
@@ -184,13 +196,13 @@ services/blood_pressure/  # HEM-7530T
 
 **Novo oxímetro:** parser/hints em `services/oximeter/`, não dentro de `scale/`.
 
-**Novo tipo de periférico BLE:** reutilizar `services/ble/`; pasta própria em `services/<dispositivo>/`.
+**Novo tipo de periférico BLE:** reutilizar `services/ble/` (matcher + `scan_devices`/`wait_for_device`, `connect_with_fallback`, `DeviceWsSession` no stream); pasta própria em `services/<dispositivo>/`. Persistência disparada pelo stream usa `session.spawn(...)` para ser aguardada no fechamento.
 
 Não gravar MAC de laboratório em `Settings` nem em `.env.example`. O totem e o operador escolhem o MAC na tela (igual oxímetro).
 
 ## 6. Banco e migrations
 
-Postgres 16 (`docker-compose.yml`). Engine: `postgresql+asyncpg`. Schema em inglês numa única revision `a1b2c3d4e5f6_initial_schema.py`.
+Postgres 16 (`docker-compose.yml`). Engine: `postgresql+asyncpg`. Schema em inglês: `a1b2c3d4e5f6_initial_schema.py` → `b2c3d4e5f6a7_seed_rm_rd2504a.py` → `c3d4e5f6a7b8_index_cleanup.py` (remove índices redundantes na PK, indexa `blood_pressure_readings.measured_at`). A PK já é indexada: não usar `index=True` em `id`.
 
 ```bash
 make db-up
@@ -207,10 +219,12 @@ Toda mudança de schema vira revision em `alembic/versions/`. Não alterar só o
 ## 7. Auth e FHIR
 
 - **Kiosk (produção):** `POST /login/registration` com `{ "registration": "...", "birth_date": "YYYY-MM-DD" }` → JWT + pessoa.
-- JWT HS256, validade padrão **24 horas** (`ACCESS_TOKEN_EXPIRE_MINUTES=1440`). Payload: `sub` = UUID da pessoa, `typ` = `"person"`, `registration`.
+- JWT HS256. Pessoa: `PERSON_TOKEN_EXPIRE_MINUTES` (padrão 30); payload `sub` = UUID da pessoa, `typ` = `"person"`, `registration`. Operador: `OPERATOR_TOKEN_EXPIRE_MINUTES` (padrão 480); `sub` = e-mail, `typ` = `"user"`. Token sem `typ` é rejeitado.
+- `SECRET_KEY` com menos de 32 caracteres gera aviso no boot.
+- `/login`, `/login/registration` e `/login/lookup` (matrícula inexistente) contam falhas: `LOGIN_MAX_FAILURES_PER_SUBJECT` / `LOGIN_MAX_FAILURES_PER_IP` na janela `LOGIN_RATE_LIMIT_WINDOW_SECONDS` → 429. Só falhas contam porque todo login do totem sai do mesmo IP.
 - Sem sessão válida, a SPA redireciona para `/matricula` (rótulo em português; não há login por e-mail no totem).
-- Público: `GET /`, `GET /health`, `POST /login`, `POST /login/registration`, `POST /login/lookup`, `POST /people` (primeiro cadastro com matrícula), `POST /users/` **somente se ainda não existir nenhum operador**.
-- Token `typ=person`: só lê/grava a própria pessoa. `GET /people` (lista), DELETE pessoa, CRUD de balanças e FHIR exigem `typ=user`.
+- Público: `GET /`, `GET /health`, `POST /login`, `POST /login/registration`, `POST /login/lookup`, `POST /people` (primeiro cadastro com matrícula), `POST /users` **somente se ainda não existir nenhum operador**.
+- Token `typ=person`: só lê/grava a própria pessoa. `GET /people` (lista), DELETE pessoa, CRUD de balanças, scans BLE e FHIR exigem `typ=user`.
 - WebSocket: query `token=`. Com token de pessoa, `person_id` da sessão é o `sub` — o cliente não troca de paciente.
 - `POST /login` (e-mail/senha) é o login do operador (`typ` = `"user"`). O painel `/admin/*` usa essa sessão.
 - Front: token em `cabine.token` + `cabine.token-expires-at`.

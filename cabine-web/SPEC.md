@@ -28,7 +28,8 @@ cabine-web/
     pages/
       kiosk/                 # fluxo do totem (uma rota = *Page.tsx)
       admin/                 # operador: Scale, Oximeter, People, Scales
-    components/              # layout, forms, gráficos, diálogos, relatório
+    components/              # layout, forms, gráficos, diálogos, relatório, AuthGuard
+    hooks/                   # useDeviceSocket (WS de periférico com reconexão)
     kiosk/                   # KioskProvider + KioskLayout (só totem)
     session/                 # JWT, pessoa atual, chaves, payload de form, sessão local
     types/                   # contratos snake_case alinhados à API
@@ -59,7 +60,12 @@ Página orquestra estado e chama `api` / helpers. Componente reutilizável não 
 | Chaves `token`, `cabine-kiosk-session`, `cabine-person-id` | `cabine.*` em `session/keys.ts` | Mesmo prefixo; migração lê a chave antiga uma vez. |
 | `fetchPersonMeasurements` tentando 3 URLs | `GET /people/{id}/measurements` | Contrato do core. |
 | `ScalePayload` local nas páginas de balança **e** no CRUD de `/scales` | `ScaleLiveMessage` em `types/measurement.ts` | Nome do WS não colide com o POST de cadastro de balança. |
-| WebSocket montado à mão em 4 páginas | `deviceSocket()` em `api.ts` | Token e base WS num só lugar. |
+| WebSocket montado à mão em 4 páginas | `deviceSocket()` + `WS_PATHS` em `api.ts` | Token e base WS num só lugar. |
+| Geração/reconexão/fechamento do WS copiados nas 6 páginas de periférico | `hooks/useDeviceSocket.ts` | Uma implementação de `connect`/`close`/`send` e da reconexão. |
+| `RequireAuth` + `RequireOperator` (+ heurística de `@` no subject) | `AuthGuard` com `typ` (`person` / `user`) | Claim `typ` do JWT decide; um guard só. |
+| `oximeterDevice.ts` / `bloodPressureDevice.ts` | `session/deviceAddress.ts` | Mesma lógica de MAC por aparelho. |
+| `api.get/post/...` direto em páginas e `PersonPicker` | helpers em `api.ts` (`fetchPeople`, `createScale`, `saveMeasurement`…) | URL e tipo de resposta num só lugar. |
+| `OximeterHistoryDialog`, `FormHistoryDialog`, `KioskIcon`, `public/icons.svg` | removidos | Sem uso. `formatWhen` virou `utils/formatWhen.ts`. |
 | Encerrar sessão no menu sem limpar JWT | `clearAccessSession()` + `clearSession()` | Próxima pessoa não herda o token. |
 | `App.css` / cálculo local de composição não usados | removidos | Métricas de BIA vêm do core. |
 
@@ -75,7 +81,7 @@ Não há pasta `src/**/*.test.ts` ainda. Quando existir, fica ao lado do módulo
 
 ### `src/main.tsx` / `App.tsx`
 
-`KioskProvider` envolve o router. Rotas públicas: `/`, `/matricula`, `/cadastro`. O restante passa por `RequireAuth` (JWT válido).
+`KioskProvider` envolve o router. Rotas públicas: `/`, `/matricula`, `/cadastro`. O restante do totem passa por `<AuthGuard typ="person" redirectTo="/matricula" />`; `/admin/*` (exceto login) por `<AuthGuard typ="user" redirectTo="/admin/login" />`. Rota desconhecida → `/menu` (ou `/admin/avaliacao` dentro de `/admin`).
 
 Subir o front (com o core em `:8000`):
 
@@ -99,9 +105,11 @@ Proxy em `vite.config.ts`. Em produção, `VITE_API_URL` aponta para a API; sen�
 | `loginByRegistration` | `POST /login/registration` (`registration` + `birth_date`) |
 | `loginOperator` | `POST /login` (e-mail/senha do operador) |
 | `saveFormSubmission` | `POST /forms` |
+| `fetchPeople` / `createPerson` / `updatePerson` / `deletePerson` | `/people` |
+| `fetchScales` / `fetchScaleCatalog` / `createScale` / `updateScale` / `deleteScale` / `pickPreferredScale` | `/scales` |
 | `fetchPersonMeasurements` / `fetchPersonForms` / `fetchPersonOximeter` / `fetchPersonBloodPressure` | filhos da pessoa |
-| `saveOximeterReading` / `saveBloodPressureReading` | POST de leitura |
-| `wsBaseUrl` / `withAccessToken` / `deviceSocket` | `/ws/scale`, `/ws/oximeter`, `/ws/blood-pressure` |
+| `saveMeasurement` / `saveOximeterReading` / `saveBloodPressureReading` | POST de leitura |
+| `wsBaseUrl` / `withAccessToken` / `deviceSocket` / `WS_PATHS` | `/ws/scale`, `/ws/oximeter`, `/ws/blood-pressure` (páginas usam `useDeviceSocket`) |
 
 Não criar segundo cliente HTTP. Não usar `fetch` para a API.
 
@@ -114,8 +122,7 @@ Não criar segundo cliente HTTP. Não usar `fetch` para a API.
 | `currentPerson.ts` | UUID da pessoa da sessão |
 | `cabineSession.ts` | Rascunho local (mental) por pessoa |
 | `formPayload.ts` | Body estruturado de `health` / `mental` |
-| `oximeterDevice.ts` | MAC do oxímetro |
-| `bloodPressureDevice.ts` | MAC do HEM-7530T (vazio até o totem ou o operador gravar um) |
+| `deviceAddress.ts` | MAC do oxímetro e do HEM-7530T (`loadDeviceAddress('oximeter' \| 'bloodPressure')`; vazio até o aparelho se anunciar) |
 
 `KioskContext` guarda o andamento **desta visita** (`sessionStorage`, chave `cabine.kiosk-session`): pessoa, scores, última pesagem, última oximetria, última pressão.
 
@@ -151,7 +158,7 @@ Não criar segundo cliente HTTP. Não usar `fetch` para a API.
 | `PeoplePage` | `/admin/pessoas` |
 | `ScalesPage` | `/admin/balancas` |
 
-`/pessoas` e `/balancas` redirecionam para `/admin/...`. `RequireOperator` envolve essas rotas e exige JWT `typ=user`.
+`/pessoas` e `/balancas` redirecionam para `/admin/...`. `AuthGuard typ="user"` envolve essas rotas e exige JWT `typ=user`.
 
 ### `src/types`
 
@@ -171,7 +178,7 @@ BIA, SpO2 e pressão **não** são questionário: WebSocket + POST de medição/
 2. Cadastro novo: `POST /people` (público, com matrícula e nascimento) e em seguida login por matrícula.
 3. Operador: `/admin/login` → `POST /login` (e-mail/senha). Sem esse JWT, `/admin/*` redireciona.
 4. HTTP autenticado: Bearer. WS: query `token=`.
-5. Sem JWT no totem: `RequireAuth` → `/matricula`.
+5. Sem JWT de pessoa no totem (ou JWT expirado): `AuthGuard` limpa a sessão → `/matricula`. Token de operador não abre o totem e vice-versa.
 6. Sair / encerrar: `clearSession()` (kiosk) **e** `clearAccessSession()` (JWT, rascunhos `cabine.session.*` e chaves).
 
 Token: `cabine.token` + `cabine.token-expires-at`. Pessoa: `cabine.current-person-id`.
@@ -211,7 +218,7 @@ IDs: string UUID.
 ## 8. Como acrescentar uma tela
 
 1. Página em `pages/kiosk/` ou `pages/admin/` com named export.
-2. Rota em `App.tsx`. Se exigir login, dentro de `RequireAuth`.
+2. Rota em `App.tsx`. Se exigir login, dentro do `AuthGuard` do `typ` certo.
 3. Tipo em `src/types/` se a API mudou.
 4. Função em `api.ts` se o fetch for reutilizado.
 5. Path HTTP novo → entrada no `proxy` de `vite.config.ts`.

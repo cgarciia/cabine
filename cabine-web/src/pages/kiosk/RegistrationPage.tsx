@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { api, apiErrorMessage, loginByRegistration } from '../../api';
-import { KioskBackButton } from '../../components/KioskIcon';
+import { apiErrorMessage, createPerson, loginByRegistration, updatePerson } from '../../api';
+import { KioskBackButton } from '../../components/KioskBackButton';
 import { KioskKeyboard } from '../../components/KioskKeyboard';
 import { KioskNumpad } from '../../components/KioskNumpad';
 import { ageFromBirth } from '../../components/PersonForm';
 import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
-import { isAccessSessionValid, saveAccessSession } from '../../session/authSession';
+import { getAccessTokenTyp, saveAccessSession } from '../../session/authSession';
 import type { PersonPayload, ScalePerson } from '../../types/person';
 import { digitsToIsoDate, formatBirthDigits, isoToBirthDigits } from '../../utils/kioskDate';
 
@@ -73,7 +73,7 @@ export function RegistrationPage() {
         }
     }, [editing, session.person, prefillRegistration]);
 
-    if (editing && (!session.person || !isAccessSessionValid())) {
+    if (editing && (!session.person || getAccessTokenTyp() !== 'person')) {
         return <Navigate to="/matricula" replace />;
     }
 
@@ -215,10 +215,9 @@ export function RegistrationPage() {
         try {
             let person: ScalePerson;
             if (editing && session.person) {
-                const { data } = await api.patch<ScalePerson>(`/people/${session.person.id}`, payload);
-                person = data;
+                person = await updatePerson(session.person.id, payload);
             } else {
-                const { data } = await api.post<ScalePerson>('/people', payload);
+                const data = await createPerson(payload);
                 const sessionRes = await loginByRegistration(
                     data.registration ?? payload.registration ?? '',
                     payload.birth_date ?? '',

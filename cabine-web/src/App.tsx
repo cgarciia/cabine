@@ -1,7 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
-import { RequireAuth } from './components/RequireAuth';
-import { RequireOperator } from './components/RequireOperator';
+import { AuthGuard } from './components/AuthGuard';
 import { GENERAL_HEALTH } from './modules/health/questionnaires';
 import { KioskProvider } from './kiosk/KioskContext';
 import { BloodPressurePage } from './pages/admin/BloodPressurePage';
@@ -32,7 +31,7 @@ export function App() {
                     <Route path="/matricula" element={<RegistrationLoginPage />} />
                     <Route path="/cadastro" element={<RegistrationPage />} />
                     <Route path="/admin/login" element={<OperatorLoginPage />} />
-                    <Route element={<RequireAuth />}>
+                    <Route element={<AuthGuard typ="person" redirectTo="/matricula" />}>
                         <Route path="/menu" element={<MenuPage />} />
                         <Route
                             path="/saude-geral"
@@ -45,9 +44,8 @@ export function App() {
                         <Route path="/conclusao" element={<CompletionPage />} />
                         <Route path="/relatorio" element={<ReportPage />} />
                         <Route path="/registros" element={<RecordsPage />} />
-                        <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
-                    <Route element={<RequireOperator />}>
+                    <Route element={<AuthGuard typ="user" redirectTo="/admin/login" />}>
                         <Route path="/admin" element={<Navigate to="/admin/avaliacao" replace />} />
                         <Route path="/admin/avaliacao" element={<ScalePage />} />
                         <Route path="/admin/oximetria" element={<OximeterPage />} />
@@ -56,7 +54,9 @@ export function App() {
                         <Route path="/admin/balancas" element={<ScalesPage />} />
                         <Route path="/pessoas" element={<Navigate to="/admin/pessoas" replace />} />
                         <Route path="/balancas" element={<Navigate to="/admin/balancas" replace />} />
+                        <Route path="/admin/*" element={<Navigate to="/admin/avaliacao" replace />} />
                     </Route>
+                    <Route path="*" element={<Navigate to="/menu" replace />} />
                 </Routes>
             </BrowserRouter>
         </KioskProvider>

@@ -3,12 +3,35 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.database import AsyncSessionLocal
 from app.crud import oximeter_reading as oximeter_crud
 from app.crud import person as person_crud
+from app.models.oximeter_reading import OximeterReading
 from app.schemas.oximeter import OximeterReadingCreate
 
 logger = logging.getLogger(__name__)
+
+
+async def store_oximeter_reading(db: AsyncSession, data: OximeterReadingCreate) -> OximeterReading:
+    """Insert, or keep the recent identical reading (upgrading its waveform if the new one is longer)."""
+    existing = await oximeter_crud.recently_saved(db, data.person_id, data.spo2_pct, data.pulse_bpm)
+    if existing is None:
+        record = await oximeter_crud.create(db, data)
+        logger.info(
+            "Oximetria salva id=%s person=%s spo2=%s pr=%s",
+            record.id, data.person_id, data.spo2_pct, data.pulse_bpm,
+        )
+        return record
+    incoming = data.waveform or []
+    if incoming and len(incoming) >= len(existing.waveform or []):
+        existing = await oximeter_crud.set_waveform(db, existing, incoming)
+    logger.info(
+        "Oximetria ignorada (já existe recente) person=%s spo2=%s pr=%s",
+        data.person_id, data.spo2_pct, data.pulse_bpm,
+    )
+    return existing
 
 
 async def save_oximeter_reading(
@@ -23,24 +46,10 @@ async def save_oximeter_reading(
     waveform: list[int] | None = None,
 ) -> None:
     async with AsyncSessionLocal() as db:
-        person = await person_crud.get_by_id(db, person_id)
-        if not person:
+        if not await person_crud.get_by_id(db, person_id):
             logger.warning("Não salvou oximetria: pessoa %s não existe", person_id)
             return
-        existing = await oximeter_crud.recently_saved(db, person_id, spo2_pct, pulse_bpm)
-        if existing:
-            if waveform:
-                stored = existing.waveform or []
-                if len(waveform) >= len(stored):
-                    await oximeter_crud.set_waveform(db, existing, waveform)
-            logger.info(
-                "Oximetria ignorada (já existe recente) person=%s spo2=%s pr=%s",
-                person_id,
-                spo2_pct,
-                pulse_bpm,
-            )
-            return
-        record = await oximeter_crud.create(
+        await store_oximeter_reading(
             db,
             OximeterReadingCreate(
                 person_id=person_id,
@@ -53,11 +62,4 @@ async def save_oximeter_reading(
                 visit_id=visit_id,
                 waveform=waveform,
             ),
-        )
-        logger.info(
-            "Oximetria salva id=%s person=%s spo2=%s pr=%s",
-            record.id,
-            person_id,
-            spo2_pct,
-            pulse_bpm,
         )

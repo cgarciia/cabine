@@ -22,7 +22,7 @@ export type Question = {
 };
 
 export type QuestionnaireDef = {
-    id: 'general_health' | 'mental_health';
+    id: 'general_health';
     title: string;
     category: string;
     estimatedSeconds: number;
@@ -163,59 +163,6 @@ export const GENERAL_HEALTH: QuestionnaireDef = {
     ],
 };
 
-export const MENTAL_HEALTH_SCREEN: QuestionnaireDef = {
-    id: 'mental_health',
-    title: 'Questionário Saúde Mental',
-    category: 'Saúde Mental',
-    estimatedSeconds: 60,
-    questions: [
-        {
-            id: 'sm1',
-            text: 'Nas últimas 2 semanas, com que frequência se sentiu nervoso?',
-            kind: 'single',
-            options: [
-                { id: 'a', label: 'Nenhuma vez', score: 0 },
-                { id: 'b', label: 'Alguns dias', score: 1 },
-                { id: 'c', label: 'Mais da metade dos dias', score: 2 },
-                { id: 'd', label: 'Quase todos os dias', score: 3 },
-            ],
-        },
-        {
-            id: 'sm2',
-            text: 'Nas últimas 2 semanas, com que frequência teve dificuldade para relaxar?',
-            kind: 'single',
-            options: [
-                { id: 'a', label: 'Nenhuma vez', score: 0 },
-                { id: 'b', label: 'Alguns dias', score: 1 },
-                { id: 'c', label: 'Mais da metade dos dias', score: 2 },
-                { id: 'd', label: 'Quase todos os dias', score: 3 },
-            ],
-        },
-        {
-            id: 'sm3',
-            text: 'Nas últimas 2 semanas, com que frequência se sentiu desanimado?',
-            kind: 'single',
-            options: [
-                { id: 'a', label: 'Nenhuma vez', score: 0 },
-                { id: 'b', label: 'Alguns dias', score: 1 },
-                { id: 'c', label: 'Mais da metade dos dias', score: 2 },
-                { id: 'd', label: 'Quase todos os dias', score: 3 },
-            ],
-        },
-        {
-            id: 'sm4',
-            text: 'Nas últimas 2 semanas, com que frequência sentiu menos interesse nas atividades?',
-            kind: 'single',
-            options: [
-                { id: 'a', label: 'Nenhuma vez', score: 0 },
-                { id: 'b', label: 'Alguns dias', score: 1 },
-                { id: 'c', label: 'Mais da metade dos dias', score: 2 },
-                { id: 'd', label: 'Quase todos os dias', score: 3 },
-            ],
-        },
-    ],
-};
-
 export type AnswerMap = Record<string, string[]>;
 export type DetailMap = Record<string, string>;
 
@@ -235,10 +182,6 @@ export type QuestionnaireScore = {
     findings: HealthFinding[];
     items: { id: string; text: string; answer: string; detail?: string }[];
 };
-
-export function questionDetailKey(questionId: string) {
-    return questionId;
-}
 
 export function followUpVisible(question: Question, selected: string[]): boolean {
     if (question.kind === 'single' && question.followUpWhenOptionId) {
@@ -283,12 +226,7 @@ export function scoreQuestionnaire(
     const percent = max > 0 ? Math.round((total / max) * 100) : 0;
 
     let label: string;
-    if (def.id === 'mental_health') {
-        if (percent <= 25) label = 'Baixo indício de desconforto';
-        else if (percent <= 50) label = 'Desconforto leve';
-        else if (percent <= 75) label = 'Desconforto moderado';
-        else label = 'Desconforto elevado';
-    } else if (percent >= 75) label = 'Saúde geral boa';
+    if (percent >= 75) label = 'Saúde geral boa';
     else if (percent >= 50) label = 'Saúde geral regular';
     else if (percent >= 25) label = 'Atenção à saúde geral';
     else label = 'Saúde geral baixa';
@@ -333,10 +271,6 @@ export function detectHealthFindings(
     label: string,
     percent: number,
 ): HealthFinding[] {
-    if (def.id !== 'general_health') {
-        return [{ code: 'overall', title: label, detail: 'Resultado da triagem.' }];
-    }
-
     const findings: HealthFinding[] = [];
     if (percent < 75) {
         findings.push({

@@ -4,6 +4,8 @@ import logging
 import math
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.database import AsyncSessionLocal
 from app.crud import measurement as measurement_crud
 from app.crud import person as person_crud
@@ -11,6 +13,9 @@ from app.schemas.measurement import MeasurementCreate
 from app.services.scale.rm_rd2504a import has_bia_impedances
 
 logger = logging.getLogger(__name__)
+
+DUPLICATE_WINDOW_SECONDS = 90
+DUPLICATE_WEIGHT_DELTA_KG = 0.15
 
 
 def jsonable(value):
@@ -26,6 +31,22 @@ def jsonable(value):
         except Exception:
             return None
     return value
+
+
+def _impedances(value) -> list | None:
+    return value if isinstance(value, list) else None
+
+
+async def _is_recent_duplicate(
+    db: AsyncSession, data: MeasurementCreate, *, seconds: int = DUPLICATE_WINDOW_SECONDS
+) -> bool:
+    """Same weight within the window is a repeat, unless it now brings BIA the previous one lacked."""
+    latest = await measurement_crud.latest_since(db, data.person_id, seconds)
+    if latest is None or abs(float(latest.weight_kg) - data.weight_kg) >= DUPLICATE_WEIGHT_DELTA_KG:
+        return False
+    if has_bia_impedances(_impedances(latest.impedances_ohm)):
+        return True
+    return not has_bia_impedances(_impedances(data.impedances_ohm))
 
 
 async def save_from_scale_event(
@@ -76,14 +97,8 @@ async def save_from_scale_event(
         if not person:
             logger.warning("Skipped measurement save: person %s does not exist", person_id)
             return
-        incoming_zs = data.impedances_ohm if isinstance(data.impedances_ohm, list) else None
-        incoming_bia = has_bia_impedances(incoming_zs)
-        if await measurement_crud.recently_saved(
-            db, person_id, weight_kg, incoming_bia=incoming_bia,
-        ):
+        if await _is_recent_duplicate(db, data):
             logger.info("Skipped duplicate measurement person=%s weight=%.2f", person_id, weight_kg)
             return
         record = await measurement_crud.create(db, data)
-        person.expected_weight_kg = data.weight_kg
-        await db.commit()
         logger.info("Saved measurement id=%s person=%s weight=%.2f", record.id, person_id, weight_kg)

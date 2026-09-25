@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
-import { deviceSocket, fetchPersonOximeter, saveOximeterReading } from '../../api';
+import { fetchPersonOximeter, saveOximeterReading, WS_PATHS } from '../../api';
 import { AfterStepScreen } from '../../components/AfterStepScreen';
-import { KioskBackButton } from '../../components/KioskIcon';
+import { KioskBackButton } from '../../components/KioskBackButton';
 import { OximeterGuideIllustration } from '../../components/OximeterGuideIllustration';
 import { OximeterPulseGraph } from '../../components/OximeterPulseGraph';
+import { useDeviceSocket } from '../../hooks/useDeviceSocket';
 import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
-import { loadOximeterAddress, saveOximeterAddress } from '../../session/oximeterDevice';
+import { loadDeviceAddress, saveDeviceAddress } from '../../session/deviceAddress';
 import { newVisitId } from '../../session/visitId';
 import type { OximeterLive, OximeterReading } from '../../types/oximeter';
 
@@ -30,11 +31,7 @@ export function KioskOximeterPage() {
     const [stableNeeded, setStableNeeded] = useState(4);
     const [elapsedSec, setElapsedSec] = useState(0);
 
-    const wsRef = useRef<WebSocket | null>(null);
     const personIdRef = useRef(person?.id ?? '');
-    const genRef = useRef(0);
-    const reconnectTimer = useRef(0);
-    const mountedRef = useRef(true);
     const savedRef = useRef(false);
     const waveRef = useRef<number[]>([]);
     const stableRef = useRef(false);
@@ -49,17 +46,23 @@ export function KioskOximeterPage() {
     personIdRef.current = person?.id ?? '';
     stableRef.current = stable;
 
-    useEffect(() => {
-        mountedRef.current = true;
-        return () => {
-            mountedRef.current = false;
-            window.clearTimeout(reconnectTimer.current);
-            genRef.current += 1;
-            const socket = wsRef.current;
-            wsRef.current = null;
-            socket?.close();
-        };
-    }, []);
+    const { connect, close, isActive } = useDeviceSocket<OximeterLive>(WS_PATHS.oximeter, {
+        onOpen: (socket) => {
+            socket.send(JSON.stringify({
+                type: 'PERSON',
+                person_id: personIdRef.current,
+                visit_id: session.visitId,
+            }));
+        },
+        onMessage: (payload) => handleMessage(payload),
+        onDrop: () => {
+            if (savedRef.current) return;
+            setListening(false);
+            setFingerOn(false);
+            setStatus('Reconectando. Mantenha o dedo no oxímetro.');
+        },
+        reconnect: { delayMs: 2500, run: () => start(true) },
+    });
 
     const persistReading = useCallback(
         async (reading: {
@@ -126,20 +129,7 @@ export function KioskOximeterPage() {
             savedRef.current = true;
             setDone(true);
             setListening(false);
-            genRef.current += 1;
-            window.clearTimeout(reconnectTimer.current);
-            const socket = wsRef.current;
-            wsRef.current = null;
-            if (socket) {
-                socket.onmessage = null;
-                socket.onerror = null;
-                socket.onclose = null;
-                try {
-                    socket.close();
-                } catch {
-                    /* já fechado */
-                }
-            }
+            close();
             void persistReading({
                 spo2_pct: spo2Pct,
                 pulse_bpm: pulseBpm,
@@ -148,29 +138,58 @@ export function KioskOximeterPage() {
                 device_address: reading?.device_address ?? latestRef.current.device_address,
             });
         },
-        [persistReading, person],
+        [close, persistReading, person],
     );
+
+    const handleMessage = (payload: OximeterLive) => {
+        if (payload.type === 'STATUS' && payload.msg) {
+            setStatus(payload.msg);
+            return;
+        }
+        if (payload.type !== 'OXIMETER') return;
+        if (payload.device_address) saveDeviceAddress('oximeter', payload.device_address);
+        if (payload.waveform?.length) {
+            setWave(payload.waveform);
+            waveRef.current = waveRef.current.concat(payload.waveform).slice(-480);
+        }
+        if (payload.spo2_pct != null) setSpo2(payload.spo2_pct);
+        if (payload.pulse_bpm != null) setPulse(payload.pulse_bpm);
+        if (payload.finger_on != null) setFingerOn(Boolean(payload.finger_on));
+        if (payload.stable != null) setStable(Boolean(payload.stable));
+        if (payload.stable_hits != null) setStableHits(payload.stable_hits);
+        if (payload.stable_needed != null) setStableNeeded(payload.stable_needed);
+        latestRef.current = {
+            spo2_pct: payload.spo2_pct ?? latestRef.current.spo2_pct,
+            pulse_bpm: payload.pulse_bpm ?? latestRef.current.pulse_bpm,
+            pi_pct: payload.pi_pct ?? latestRef.current.pi_pct,
+            device_name: payload.device_name ?? latestRef.current.device_name,
+            device_address: payload.device_address ?? latestRef.current.device_address,
+        };
+
+        if (payload.finger_on && payload.spo2_pct && payload.pulse_bpm) {
+            setStatus(
+                payload.stable
+                    ? 'Leitura confirmada…'
+                    : 'Fique parado. Confirmando a leitura…',
+            );
+        }
+
+        if (payload.stable && payload.spo2_pct != null && payload.pulse_bpm != null) {
+            finish({
+                spo2_pct: payload.spo2_pct,
+                pulse_bpm: payload.pulse_bpm,
+                pi_pct: payload.pi_pct ?? null,
+                device_name: payload.device_name,
+                device_address: payload.device_address ?? null,
+            });
+        }
+    };
 
     const start = useCallback(
         (force = false) => {
             const pid = personIdRef.current;
             if (!pid || savedRef.current) return;
-
-            const existing = wsRef.current;
-            if (
-                !force
-                && existing
-                && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)
-            ) {
-                return;
-            }
-
-            window.clearTimeout(reconnectTimer.current);
-            genRef.current += 1;
-            const gen = genRef.current;
-            const prev = wsRef.current;
-            wsRef.current = null;
-            prev?.close();
+            if (!force && isActive()) return;
 
             setSpo2(null);
             setPulse(null);
@@ -186,81 +205,11 @@ export function KioskOximeterPage() {
 
             const params = new URLSearchParams({ person_id: pid });
             if (session.visitId) params.set('visit_id', session.visitId);
-            const known = loadOximeterAddress();
+            const known = loadDeviceAddress('oximeter');
             if (known) params.set('address', known);
-            const socket = deviceSocket('/ws/oximeter', params);
-            wsRef.current = socket;
-
-            socket.onopen = () => {
-                socket.send(JSON.stringify({
-                    type: 'PERSON',
-                    person_id: pid,
-                    visit_id: session.visitId,
-                }));
-            };
-
-            socket.onmessage = (event) => {
-                const payload = JSON.parse(event.data) as OximeterLive;
-                if (payload.type === 'STATUS' && payload.msg) {
-                    setStatus(payload.msg);
-                    return;
-                }
-                if (payload.type !== 'OXIMETER') return;
-                if (payload.device_address) saveOximeterAddress(payload.device_address);
-                if (payload.waveform?.length) {
-                    setWave(payload.waveform);
-                    waveRef.current = waveRef.current.concat(payload.waveform).slice(-480);
-                }
-                if (payload.spo2_pct != null) setSpo2(payload.spo2_pct);
-                if (payload.pulse_bpm != null) setPulse(payload.pulse_bpm);
-                if (payload.finger_on != null) setFingerOn(Boolean(payload.finger_on));
-                if (payload.stable != null) setStable(Boolean(payload.stable));
-                if (payload.stable_hits != null) setStableHits(payload.stable_hits);
-                if (payload.stable_needed != null) setStableNeeded(payload.stable_needed);
-                latestRef.current = {
-                    spo2_pct: payload.spo2_pct ?? latestRef.current.spo2_pct,
-                    pulse_bpm: payload.pulse_bpm ?? latestRef.current.pulse_bpm,
-                    pi_pct: payload.pi_pct ?? latestRef.current.pi_pct,
-                    device_name: payload.device_name ?? latestRef.current.device_name,
-                    device_address: payload.device_address ?? latestRef.current.device_address,
-                };
-
-                if (payload.finger_on && payload.spo2_pct && payload.pulse_bpm) {
-                    setStatus(
-                        payload.stable
-                            ? 'Leitura confirmada…'
-                            : 'Fique parado. Confirmando a leitura…',
-                    );
-                }
-
-                if (payload.stable && payload.spo2_pct != null && payload.pulse_bpm != null) {
-                    finish({
-                        spo2_pct: payload.spo2_pct,
-                        pulse_bpm: payload.pulse_bpm,
-                        pi_pct: payload.pi_pct ?? null,
-                        device_name: payload.device_name,
-                        device_address: payload.device_address ?? null,
-                    });
-                }
-            };
-
-            socket.onerror = () => {
-                /* onclose reconecta */
-            };
-
-            socket.onclose = () => {
-                if (!mountedRef.current || gen !== genRef.current || wsRef.current !== socket) return;
-                if (savedRef.current) return;
-                wsRef.current = null;
-                setListening(false);
-                setFingerOn(false);
-                setStatus('Reconectando. Mantenha o dedo no oxímetro.');
-                reconnectTimer.current = window.setTimeout(() => {
-                    if (mountedRef.current && genRef.current === gen && !savedRef.current) start(true);
-                }, 2500);
-            };
+            connect(params, true);
         },
-        [finish, session.visitId],
+        [connect, isActive, session.visitId],
     );
 
     useEffect(() => {

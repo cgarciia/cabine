@@ -17,7 +17,6 @@ from app.services.blood_pressure.hem7530 import (
 
 logger = logging.getLogger(__name__)
 
-PARENT_SERVICE_UUID = "ecbe3980-c9a2-11e1-b1bd-0002a5d5c51b"
 RX_CHANNEL_UUIDS = (
     "49123040-aee8-11e1-a74d-0002a5d5c51b",
     "4d0bf320-aee8-11e1-a0d9-0002a5d5c51b",
@@ -55,9 +54,6 @@ class Hem7530Session:
         self._unlock_done = asyncio.Event()
         self._unlock_data = b""
         self._rx_notify_on = False
-
-    def has_legacy_service(self) -> bool:
-        return self.client.services.get_service(PARENT_SERVICE_UUID) is not None
 
     def _map_rx_handles(self) -> None:
         self._rx_by_handle = {}
@@ -183,6 +179,7 @@ class Hem7530Session:
         return bytes(data)
 
     async def pair_unlock_key(self) -> None:
+        """Program PAIRING_KEY into a monitor showing -P-; required once per new device before unlock()."""
         await self.client.start_notify(RX_CHANNEL_UUIDS[0], lambda *_: None)
         await self.client.start_notify(UNLOCK_UUID, self._on_unlock)
         last = b""

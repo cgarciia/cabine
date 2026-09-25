@@ -7,7 +7,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from app.core.database import AsyncSessionLocal
 from app.crud import scale as scale_crud
-from app.services.ble.ids import parse_uuid
+from app.services.ble.ws_session import DeviceWsSession, cancel_and_wait
 from app.services.scale.rm_rd2504a import has_bia_impedances
 from app.services.scale.metrics import PersonProfile, compute_report
 from app.services.scale.persist import save_from_scale_event
@@ -32,7 +32,7 @@ async def _load_scale_spec(scale_id: UUID | None) -> tuple[ScaleSpec | None, str
         if not record.is_active:
             return None, f"A balança '{record.name}' está inativa."
 
-        return scale_crud.to_spec(record), None
+        return ScaleSpec.from_record(record), None
 
 
 def _profile_from_payload(
@@ -91,13 +91,14 @@ async def stream_scale(
         )
     ]
     profile_sync_box: list[int] = [0]
-    person_id_box: list[UUID | None] = [person_id]
-    visit_id_box: list[UUID | None] = [visit_id]
+    session = DeviceWsSession(
+        websocket, person_id=person_id, visit_id=visit_id, person_locked=person_locked
+    )
     last_reading_box: list[dict | None] = [None]
     saved_keys: set[tuple] = set()
 
     def schedule_save(item: dict) -> None:
-        pid = person_id_box[0]
+        pid = session.person_id
         if pid is None:
             logger.warning("Medição não salva: nenhuma pessoa na sessão")
             return
@@ -118,13 +119,13 @@ async def stream_scale(
                     person_id=pid,
                     scale_id=spec.id,
                     payload=item,
-                    visit_id=visit_id_box[0],
+                    visit_id=session.visit_id,
                 )
             except Exception:
                 saved_keys.discard(key)
                 logger.exception("Falha ao salvar medição no banco")
 
-        asyncio.create_task(_run())
+        session.spawn(_run())
 
     class SaveQueue:
         def __init__(self, inner: asyncio.Queue):
@@ -247,13 +248,7 @@ async def stream_scale(
                 display_name=raw.get("display_name") or raw.get("name"),
             )
             profile_box[0] = updated
-            if not person_locked:
-                pid = parse_uuid(raw.get("person_id"))
-                if pid is not None:
-                    person_id_box[0] = pid
-            vid = parse_uuid(raw.get("visit_id"))
-            if vid is not None:
-                visit_id_box[0] = vid
+            session.apply_ids(raw)
             if updated is None:
                 await send_status("Não foi possível confirmar seus dados. Volte ao cadastro.")
                 continue
@@ -282,11 +277,7 @@ async def stream_scale(
                 profile_sync_box=profile_sync_box,
             )
         finally:
-            client_task.cancel()
-            try:
-                await client_task
-            except asyncio.CancelledError:
-                pass
+            await cancel_and_wait(client_task)
     except WebSocketDisconnect:
         logger.info("Frontend desconectou da sessão WebSocket da balança.")
     except Exception:
@@ -295,3 +286,5 @@ async def stream_scale(
             await send_status("Falha na comunicação com a balança.")
         except Exception:
             pass
+    finally:
+        await session.drain()

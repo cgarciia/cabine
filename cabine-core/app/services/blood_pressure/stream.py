@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 from fastapi import WebSocket, WebSocketDisconnect
-from starlette.websockets import WebSocketState
 
-from app.services.ble import ble_radio_lock, parse_uuid
-from app.services.blood_pressure.ble import connect_hem7530, wait_for_hem7530
+from app.services.ble import ble_radio_lock
+from app.services.ble.ws_session import DeviceWsSession, cancel_and_wait
+from app.services.blood_pressure.ble import DEVICE_LABEL, connect_hem7530, wait_for_hem7530
 from app.services.blood_pressure.gatt_bp import BP_MEASUREMENT_UUID, LIVE_NOTIFY_UUID, parse_bp_measurement
 from app.services.blood_pressure.hem7530 import pick_latest_record
 from app.services.blood_pressure.persist import save_blood_pressure_reading
@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 SESSION_SKEW = timedelta(seconds=45)
 IDLE_STATUS = "Pareado. Coloque o manguito, toque nos sensores e meça."
-DEVICE_LABEL = "HEM-7530T"
 
 
 def _aware(value: datetime) -> datetime:
@@ -42,41 +41,16 @@ async def stream_blood_pressure(
     person_locked: bool = False,
 ) -> None:
     await websocket.accept()
-    person_id_box: list[UUID | None] = [person_id]
-    visit_id_box: list[UUID | None] = [visit_id]
+    session = DeviceWsSession(
+        websocket, person_id=person_id, visit_id=visit_id, person_locked=person_locked
+    )
+    send_status = session.send_status
+    cancelled = session.cancelled
     preferred = [_resolved_address(address)]
     delivered: set[tuple] = set()
     session_started_at = datetime.now().astimezone() - SESSION_SKEW
 
-    async def send_status(msg: str) -> None:
-        if websocket.client_state != WebSocketState.CONNECTED:
-            return
-        try:
-            await websocket.send_json({"type": "STATUS", "msg": msg})
-        except Exception:
-            return
-
-    async def listen_client() -> None:
-        try:
-            while websocket.client_state == WebSocketState.CONNECTED:
-                raw = await websocket.receive_json()
-                if not isinstance(raw, dict):
-                    continue
-                if raw.get("type") == "PERSON":
-                    if not person_locked:
-                        pid = parse_uuid(raw.get("person_id"))
-                        if pid is not None:
-                            person_id_box[0] = pid
-                    vid = parse_uuid(raw.get("visit_id"))
-                    if vid is not None:
-                        visit_id_box[0] = vid
-        except Exception:
-            return
-
-    client_task = asyncio.create_task(listen_client())
-
-    def cancelled() -> bool:
-        return websocket.client_state != WebSocketState.CONNECTED
+    client_task = asyncio.create_task(session.listen_person_messages())
 
     async def emit_reading(
         *,
@@ -109,9 +83,8 @@ async def stream_blood_pressure(
             "measured_at": _aware(measured_at).isoformat(),
             "stable": True,
         }
-        if websocket.client_state == WebSocketState.CONNECTED:
-            await websocket.send_json(payload)
-        pid = person_id_box[0]
+        await session.send_json(payload)
+        pid = session.person_id
         if pid is not None:
             try:
                 await save_blood_pressure_reading(
@@ -124,7 +97,7 @@ async def stream_blood_pressure(
                     movement=movement,
                     irregular_heartbeat=irregular_heartbeat,
                     measured_at=_aware(measured_at),
-                    visit_id=visit_id_box[0],
+                    visit_id=session.visit_id,
                 )
             except Exception:
                 logger.exception("Failed to persist blood pressure")
@@ -195,11 +168,7 @@ async def stream_blood_pressure(
         except Exception:
             pass
     finally:
-        client_task.cancel()
-        try:
-            await client_task
-        except asyncio.CancelledError:
-            pass
+        await cancel_and_wait(client_task)
 
 
 async def _collect_from_session(

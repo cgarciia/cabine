@@ -10,7 +10,8 @@ import {
 } from '../../components/SessionReport';
 import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
-import { formatVisitWhen, groupSavedVisits, visitSummary, type SavedVisit } from '../../utils/sessionBundles';
+import { formatWhen } from '../../utils/formatWhen';
+import { groupSavedVisits, visitSummary, type SavedVisit } from '../../utils/sessionBundles';
 
 export function RecordsPage() {
     const navigate = useNavigate();
@@ -64,7 +65,7 @@ export function RecordsPage() {
                                 className={`kiosk-history-item${selected?.id === visit.id ? ' selected' : ''}`}
                                 onClick={() => setSelected(visit)}
                             >
-                                {formatVisitWhen(visit.at)}
+                                {formatWhen(visit.at)}
                                 <span className="kiosk-muted" style={{ display: 'block', fontWeight: 500 }}>
                                     {visitSummary(visit)}
                                 </span>
@@ -77,7 +78,7 @@ export function RecordsPage() {
             {selected ? (
                 <SessionReport
                     person={person}
-                    whenLabel={formatVisitWhen(selected.at)}
+                    whenLabel={formatWhen(selected.at)}
                     health={selected.health ? healthViewFromPayload(selected.health.payload) : null}
                     mental={selected.mental ? mentalViewFromPayload(selected.mental.payload) : null}
                     measurement={selected.measurement}

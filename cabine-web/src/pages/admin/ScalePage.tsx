@@ -1,22 +1,34 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
-import { api, apiErrorMessage, deviceSocket, fetchPersonMeasurements } from '../../api';
+import {
+    apiErrorMessage,
+    createPerson,
+    fetchPeople,
+    fetchPersonMeasurements,
+    fetchScales,
+    pickPreferredScale,
+    saveMeasurement,
+    WS_PATHS,
+} from '../../api';
 import { AppLayout } from '../../components/AppLayout';
 import { BodyReport } from '../../components/BodyReport';
 import { HistoryDialog } from '../../components/HistoryDialog';
 import { emptyPersonForm, PersonForm, personFormToPayload, type PersonFormValues } from '../../components/PersonForm';
+import { useDeviceSocket } from '../../hooks/useDeviceSocket';
 import { loadCurrentPersonId, saveCurrentPersonId } from '../../session/currentPerson';
 import type { ScalePerson } from '../../types/person';
 import {
     hasBiaImpedances,
+    type BiaSegment,
     type MeasurementPayload,
     type MeasurementRecord,
     type ScaleLiveMessage,
+    type ScaleLiveReading,
     type ScaleMetrics,
-    type BiaSegment,
 } from '../../types/measurement';
 import type { Scale } from '../../types/scale';
+import { friendlyScaleStatus } from '../../utils/friendlyScaleStatus';
 
 const BIA_GUIDE = [
     { id: 'step_on', title: 'Segure a barra e suba', detail: 'Mãos nos eletrodos antes de pisar. Pés descalços no centro.' },
@@ -44,9 +56,9 @@ function canAdvanceStep(guide: readonly { id: string }[], current: string, next:
     return stepIndex(guide, next) >= stepIndex(guide, current);
 }
 
-function friendlyStatus(raw: string, ready: boolean) {
+function statusPillLabel(raw: string, ready: boolean) {
     const text = raw.toLowerCase();
-    if (text.includes('desconectado') || text.includes('erro') || text.includes('falha')) {
+    if (/desconectado|erro|falha|não foi possível|desça/.test(text)) {
         return raw;
     }
     if (text.includes('completa')) return 'Avaliação concluída';
@@ -92,20 +104,11 @@ export function ScalePage() {
     const [historyLoading, setHistoryLoading] = useState(false);
     const [historyError, setHistoryError] = useState('');
     const [selectedHistory, setSelectedHistory] = useState<MeasurementRecord | null>(null);
-    const wsRef = useRef<WebSocket | null>(null);
     const savedKeyRef = useRef('');
     const liveStartedRef = useRef(false);
     const finishedRef = useRef(false);
     const savingRef = useRef(false);
-    const lastReadingRef = useRef<{
-        weight_kg: number;
-        stable: boolean;
-        complete: boolean;
-        metrics?: ScaleMetrics | null;
-        impedances_ohm?: number[];
-        segments?: BiaSegment[];
-        scale_name?: string;
-    } | null>(null);
+    const lastReadingRef = useRef<ScaleLiveReading | null>(null);
 
     const selected = scales.find((item) => item.id === selectedId);
     const supportsBia = selected?.adapter === 'ble_rm_rd2504a';
@@ -149,15 +152,7 @@ export function ScalePage() {
         heightCm, age, sex, birthDate, peopleType, expectedWeight, displayName: selectedPersonName,
     };
 
-    const persistMeasurement = useCallback(async (reading: {
-        weight_kg: number;
-        stable: boolean;
-        complete: boolean;
-        metrics?: ScaleMetrics | null;
-        impedances_ohm?: number[];
-        segments?: BiaSegment[];
-        scale_name?: string;
-    }) => {
+    const persistMeasurement = useCallback(async (reading: ScaleLiveReading) => {
         const session = snapshotRef.current;
         if (!session.selectedPersonId || reading.weight_kg <= 0) return;
         const years = Number(session.age);
@@ -192,13 +187,12 @@ export function ScalePage() {
             metrics: reading.metrics ?? null,
         };
         try {
-            await api.post('/measurements', JSON.parse(JSON.stringify(payload)));
+            await saveMeasurement(payload);
             savedKeyRef.current = key;
             setReportSaved(true);
             setExpectedWeight(String(reading.weight_kg));
             setSaveMsg('Relatório salvo no histórico.');
-            const { data } = await api.get<ScalePerson[]>('/people');
-            setPeople(data);
+            setPeople(await fetchPeople());
         } catch (err) {
             setSaveMsg(apiErrorMessage(err, 'Não foi possível salvar o relatório.'));
         } finally {
@@ -210,15 +204,23 @@ export function ScalePage() {
     const persistRef = useRef(persistMeasurement);
     persistRef.current = persistMeasurement;
 
+    const { connect, close, send } = useDeviceSocket<ScaleLiveMessage>(WS_PATHS.scale, {
+        onOpen: () => {
+            setStatus('Balança pronta. Pode subir.');
+            sendProfile(true);
+        },
+        onError: () => setStatus('Não foi possível falar com a balança.'),
+        onDrop: () => setStatus('Desconectado do servidor'),
+        onMessage: (data) => handleMessage(data),
+    });
+
     const sendProfile = useCallback((apply: boolean) => {
-        const ws = wsRef.current;
-        if (!ws || ws.readyState !== WebSocket.OPEN) return;
         const profile = profileRef.current;
         const height = Number(profile.heightCm);
         const years = Number(profile.age);
         const weight = Number(profile.expectedWeight);
         if (!Number.isFinite(height) || height <= 0 || !profile.sex) return;
-        ws.send(JSON.stringify({
+        send({
             type: 'PROFILE',
             apply,
             person_id: snapshotRef.current.selectedPersonId || undefined,
@@ -229,8 +231,8 @@ export function ScalePage() {
             people_type: profile.peopleType,
             expected_weight_kg: Number.isFinite(weight) && weight > 0 ? weight : undefined,
             display_name: profile.displayName || undefined,
-        }));
-    }, []);
+        });
+    }, [send]);
 
     const applyPerson = useCallback((person: ScalePerson) => {
         saveCurrentPersonId(person.id);
@@ -253,16 +255,14 @@ export function ScalePage() {
 
     useEffect(() => {
         const remembered = loadCurrentPersonId();
-        api.get<Scale[]>('/scales').then(({ data }) => {
+        fetchScales().then((data) => {
             setScales(data);
-            const preferred = data.find((item) => item.is_default && item.is_active)
-                ?? data.find((item) => item.is_active)
-                ?? data[0];
+            const preferred = pickPreferredScale(data);
             if (preferred) setSelectedId(preferred.id);
         }).catch(() => {
             setStatus('Não foi possível carregar as balanças cadastradas.');
         });
-        api.get<ScalePerson[]>('/people').then(({ data }) => {
+        fetchPeople().then((data) => {
             setPeople(data);
             const rememberedPerson = data.find((item) => item.id === remembered);
             if (rememberedPerson) applyPerson(rememberedPerson);
@@ -309,111 +309,7 @@ export function ScalePage() {
         if (profile.expectedWeight) params.set('expected_weight_kg', profile.expectedWeight);
         if (profile.displayName) params.set('display_name', profile.displayName);
         if (selectedPersonId) params.set('person_id', selectedPersonId);
-        const ws = deviceSocket('/ws/scale', params);
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-            setStatus('Balança pronta. Pode subir.');
-            sendProfile(true);
-        };
-        ws.onerror = () => setStatus('Não foi possível falar com a balança.');
-        ws.onclose = () => setStatus('Desconectado do servidor');
-
-        ws.onmessage = (event) => {
-            const data: ScaleLiveMessage = JSON.parse(event.data);
-            const bia = scalesRef.current.find((item) => item.id === selectedId)?.adapter === 'ble_rm_rd2504a';
-            const activeGuide = bia ? BIA_GUIDE : WEIGHT_GUIDE;
-
-            const biaResult = data.type === 'WEIGHT'
-                && (Boolean(data.complete) || hasBiaImpedances(data.impedances_ohm));
-            if (finishedRef.current && !biaResult) return;
-
-            if (data.type === 'STATUS' && data.msg) {
-                setStatus(data.msg);
-            } else if (data.type === 'STEP' && data.step) {
-                if (data.reset) {
-                    const last = lastReadingRef.current;
-                    const lastBia = Boolean(last && (last.complete || hasBiaImpedances(last.impedances_ohm)));
-                    if (last && last.weight_kg >= 10 && lastBia) {
-                        finishedRef.current = true;
-                        setCurrentWeight(last.weight_kg);
-                        setStable(last.stable);
-                        setComplete(true);
-                        setMetrics(last.metrics ?? null);
-                        setSegments(last.segments ?? []);
-                        setImpedancesOhm(last.impedances_ohm ?? []);
-                        setGuideStep('done');
-                        setGuideMsg(activeGuide[activeGuide.length - 1].detail);
-                        setStatus('Avaliação concluída');
-                        setView('report');
-                        void persistRef.current({
-                            ...last,
-                            complete: true,
-                        });
-                        return;
-                    }
-                    setComplete(false);
-                    setMetrics(null);
-                    setSegments([]);
-                    setImpedancesOhm([]);
-                    setStable(false);
-                    setCurrentWeight(null);
-                    setGuideStep(data.step);
-                    setGuideMsg(data.msg ?? activeGuide[0].detail);
-                    setView('ready');
-                    liveStartedRef.current = false;
-                } else {
-                    setGuideStep((prev) => (canAdvanceStep(activeGuide, prev, data.step!) ? data.step! : prev));
-                    if (data.msg) setGuideMsg(data.msg);
-                }
-            } else if (data.type === 'WEIGHT' && data.weight_kg !== undefined) {
-                if (!liveStartedRef.current) {
-                    liveStartedRef.current = true;
-                    setView('live');
-                }
-                lastReadingRef.current = {
-                    weight_kg: data.weight_kg,
-                    stable: Boolean(data.stable),
-                    complete: Boolean(data.complete),
-                    metrics: data.metrics ?? null,
-                    impedances_ohm: data.impedances_ohm,
-                    segments: data.segments,
-                    scale_name: data.scale_name,
-                };
-                const biaComplete = Boolean(data.complete) || hasBiaImpedances(data.impedances_ohm);
-                if (biaComplete) {
-                    finishedRef.current = true;
-                    setGuideStep('done');
-                    setGuideMsg(activeGuide[activeGuide.length - 1].detail);
-                    setStatus('Avaliação concluída');
-                    setCurrentWeight(data.weight_kg);
-                    setStable(true);
-                    setComplete(true);
-                    setMetrics(data.metrics ?? null);
-                    setSegments(bia ? (data.segments ?? []) : []);
-                    setImpedancesOhm(bia ? (data.impedances_ohm ?? []) : []);
-                    if (data.scale_name) setScaleName(data.scale_name);
-                    setView('report');
-                    void persistRef.current({
-                        weight_kg: data.weight_kg,
-                        stable: true,
-                        complete: true,
-                        metrics: data.metrics ?? null,
-                        impedances_ohm: data.impedances_ohm,
-                        segments: data.segments,
-                        scale_name: data.scale_name,
-                    });
-                    return;
-                }
-                setStatus('Lendo a balança');
-                setCurrentWeight(data.weight_kg);
-                setStable(Boolean(data.stable));
-                setMetrics(data.metrics ?? null);
-                if (bia && data.segments?.length) setSegments(data.segments);
-                if (bia && data.impedances_ohm?.length) setImpedancesOhm(data.impedances_ohm);
-                if (data.scale_name) setScaleName(data.scale_name);
-            }
-        };
+        connect(params, true);
 
         return () => {
             const last = lastReadingRef.current;
@@ -425,9 +321,105 @@ export function ScalePage() {
             ) {
                 void persistRef.current({ ...last, complete: true });
             }
-            ws.close();
+            close();
         };
-    }, [selectedId, selectedPersonId, reconnectKey, sendProfile]);
+    }, [selectedId, selectedPersonId, reconnectKey, connect, close]);
+
+    function handleMessage(data: ScaleLiveMessage) {
+        const bia = scalesRef.current.find((item) => item.id === selectedId)?.adapter === 'ble_rm_rd2504a';
+        const activeGuide = bia ? BIA_GUIDE : WEIGHT_GUIDE;
+
+        const biaResult = data.type === 'WEIGHT'
+            && (Boolean(data.complete) || hasBiaImpedances(data.impedances_ohm));
+        if (finishedRef.current && !biaResult) return;
+
+        if (data.type === 'STATUS' && data.msg) {
+            const next = friendlyScaleStatus(data.msg);
+            if (next) setStatus(next);
+        } else if (data.type === 'STEP' && data.step) {
+            if (data.reset) {
+                const last = lastReadingRef.current;
+                const lastBia = Boolean(last && (last.complete || hasBiaImpedances(last.impedances_ohm)));
+                if (last && last.weight_kg >= 10 && lastBia) {
+                    finishedRef.current = true;
+                    setCurrentWeight(last.weight_kg);
+                    setStable(last.stable);
+                    setComplete(true);
+                    setMetrics(last.metrics ?? null);
+                    setSegments(last.segments ?? []);
+                    setImpedancesOhm(last.impedances_ohm ?? []);
+                    setGuideStep('done');
+                    setGuideMsg(activeGuide[activeGuide.length - 1].detail);
+                    setStatus('Avaliação concluída');
+                    setView('report');
+                    void persistRef.current({
+                        ...last,
+                        complete: true,
+                    });
+                    return;
+                }
+                setComplete(false);
+                setMetrics(null);
+                setSegments([]);
+                setImpedancesOhm([]);
+                setStable(false);
+                setCurrentWeight(null);
+                setGuideStep(data.step);
+                setGuideMsg(data.msg ?? activeGuide[0].detail);
+                setView('ready');
+                liveStartedRef.current = false;
+            } else {
+                setGuideStep((prev) => (canAdvanceStep(activeGuide, prev, data.step!) ? data.step! : prev));
+                if (data.msg) setGuideMsg(data.msg);
+            }
+        } else if (data.type === 'WEIGHT' && data.weight_kg !== undefined) {
+            if (!liveStartedRef.current) {
+                liveStartedRef.current = true;
+                setView('live');
+            }
+            lastReadingRef.current = {
+                weight_kg: data.weight_kg,
+                stable: Boolean(data.stable),
+                complete: Boolean(data.complete),
+                metrics: data.metrics ?? null,
+                impedances_ohm: data.impedances_ohm,
+                segments: data.segments,
+                scale_name: data.scale_name,
+            };
+            const biaComplete = Boolean(data.complete) || hasBiaImpedances(data.impedances_ohm);
+            if (biaComplete) {
+                finishedRef.current = true;
+                setGuideStep('done');
+                setGuideMsg(activeGuide[activeGuide.length - 1].detail);
+                setStatus('Avaliação concluída');
+                setCurrentWeight(data.weight_kg);
+                setStable(true);
+                setComplete(true);
+                setMetrics(data.metrics ?? null);
+                setSegments(bia ? (data.segments ?? []) : []);
+                setImpedancesOhm(bia ? (data.impedances_ohm ?? []) : []);
+                if (data.scale_name) setScaleName(data.scale_name);
+                setView('report');
+                void persistRef.current({
+                    weight_kg: data.weight_kg,
+                    stable: true,
+                    complete: true,
+                    metrics: data.metrics ?? null,
+                    impedances_ohm: data.impedances_ohm,
+                    segments: data.segments,
+                    scale_name: data.scale_name,
+                });
+                return;
+            }
+            setStatus('Lendo a balança');
+            setCurrentWeight(data.weight_kg);
+            setStable(Boolean(data.stable));
+            setMetrics(data.metrics ?? null);
+            if (bia && data.segments?.length) setSegments(data.segments);
+            if (bia && data.impedances_ohm?.length) setImpedancesOhm(data.impedances_ohm);
+            if (data.scale_name) setScaleName(data.scale_name);
+        }
+    }
 
     const activeGuide = stepIndex(guide, guideStep);
     const currentGuide = guide[activeGuide] ?? guide[0];
@@ -435,12 +427,12 @@ export function ScalePage() {
         && !hasBiaImpedances(impedancesOhm)
         && metrics?.metodo !== 'wla25'
         && metrics?.agua_pct == null;
-    const readyLabel = friendlyStatus(status, view === 'ready');
+    const readyLabel = statusPillLabel(status, view === 'ready');
 
     async function handleAddPerson(event: FormEvent) {
         event.preventDefault();
         try {
-            const { data } = await api.post<ScalePerson>('/people', personFormToPayload(newPerson));
+            const data = await createPerson(personFormToPayload(newPerson));
             setPeople((current) => [...current, data].sort((a, b) => a.name.localeCompare(b.name)));
             applyPerson(data);
             setNewPerson(emptyPersonForm);

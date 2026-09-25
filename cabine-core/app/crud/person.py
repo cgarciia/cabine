@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.person import ScalePerson
-from app.schemas.person import PersonCreate, PersonUpdate, _age_from_birth
+from app.schemas.person import PersonCreate, PersonUpdate, age_from_birth
 
 
 async def list_all(db: AsyncSession) -> list[ScalePerson]:
@@ -13,8 +13,7 @@ async def list_all(db: AsyncSession) -> list[ScalePerson]:
 
 
 async def get_by_id(db: AsyncSession, person_id: UUID) -> ScalePerson | None:
-    result = await db.execute(select(ScalePerson).where(ScalePerson.id == person_id))
-    return result.scalars().first()
+    return await db.get(ScalePerson, person_id)
 
 
 async def get_by_registration(db: AsyncSession, registration: str) -> ScalePerson | None:
@@ -65,7 +64,7 @@ async def update_person(db: AsyncSession, person: ScalePerson, data: PersonUpdat
         person.expected_weight_kg = data.expected_weight_kg
     if data.birth_date is not None:
         person.birth_date = data.birth_date
-        person.age = _age_from_birth(data.birth_date)
+        person.age = age_from_birth(data.birth_date)
     elif data.age is not None:
         person.age = data.age
     await db.commit()

@@ -14,17 +14,13 @@ from app.crud import user as user_crud
 from app.models.person import ScalePerson
 from app.models.user import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login/registration")
-oauth2_optional = OAuth2PasswordBearer(tokenUrl="login/registration", auto_error=False)
+# tokenUrl drives Swagger's password flow (operator). The kiosk uses POST /login/registration.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_optional = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)
 
 _UNAUTHORIZED = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
     detail="Sessão inválida ou expirada.",
-    headers={"WWW-Authenticate": "Bearer"},
-)
-_UNAUTHORIZED_KIOSK = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Sessão inválida ou expirada. Entre com a matrícula novamente.",
     headers={"WWW-Authenticate": "Bearer"},
 )
 _UNAUTHORIZED_OPERATOR = HTTPException(
@@ -35,6 +31,10 @@ _UNAUTHORIZED_OPERATOR = HTTPException(
 _FORBIDDEN_PERSON = HTTPException(
     status_code=status.HTTP_403_FORBIDDEN,
     detail="Esta sessão não pode acessar dados de outra pessoa.",
+)
+_PERSON_NOT_FOUND = HTTPException(
+    status_code=status.HTTP_404_NOT_FOUND,
+    detail="Pessoa não encontrada.",
 )
 
 
@@ -83,26 +83,15 @@ async def resolve_user_from_token(token: str, db: AsyncSession) -> User | None:
     payload = _decode_payload(token)
     if payload is None:
         return None
-    typ = payload.get("typ")
+    if payload.get("typ") != "user":
+        return None
     email = payload.get("sub")
     if not isinstance(email, str):
-        return None
-    if typ is not None and typ != "user":
         return None
     user = await user_crud.get_by_email(db, email)
     if user is None or not user.is_active:
         return None
     return user
-
-
-async def get_current_person(
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
-) -> ScalePerson:
-    person = await resolve_person_from_token(token, db)
-    if person is None:
-        raise _UNAUTHORIZED_KIOSK
-    return person
 
 
 async def get_current_user(
@@ -129,11 +118,24 @@ async def require_access(
     raise _UNAUTHORIZED
 
 
-def ensure_person_scope(actor: ScalePerson | User, person_id: UUID) -> None:
-    if isinstance(actor, User):
-        return
-    if actor.id != person_id:
+async def load_scoped_person(
+    db: AsyncSession, actor: ScalePerson | User, person_id: UUID
+) -> ScalePerson:
+    """Person sessions only reach their own record; operators reach anyone."""
+    if isinstance(actor, ScalePerson) and actor.id != person_id:
         raise _FORBIDDEN_PERSON
+    person = await person_crud.get_by_id(db, person_id)
+    if person is None:
+        raise _PERSON_NOT_FOUND
+    return person
+
+
+async def get_scoped_person(
+    person_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    actor: ScalePerson | User = Depends(require_access),
+) -> ScalePerson:
+    return await load_scoped_person(db, actor, person_id)
 
 
 async def authenticate_websocket(websocket: WebSocket, token: str | None) -> AccessPrincipal | None:

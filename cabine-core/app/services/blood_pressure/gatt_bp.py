@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import Any
 
 BP_MEASUREMENT_UUID = "00002a35-0000-1000-8000-00805f9b34fb"
-BP_FEATURE_UUID = "00002a49-0000-1000-8000-00805f9b34fb"
 LIVE_NOTIFY_UUID = "8858eb40-aee8-11e1-bb67-0002a5d5c51b"
 
 

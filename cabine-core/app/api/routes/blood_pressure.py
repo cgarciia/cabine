@@ -1,58 +1,34 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
+from fastapi import APIRouter, Depends, WebSocket, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import authenticate_websocket, ensure_person_scope, require_access
-from app.crud import blood_pressure_reading as bp_crud
-from app.crud import person as person_crud
+from app.core.deps import authenticate_websocket, get_current_user, load_scoped_person, require_access
 from app.models.person import ScalePerson
 from app.models.user import User
-from app.schemas.blood_pressure import (
-    BloodPressureDevice,
-    BloodPressureReadingCreate,
-    BloodPressureReadingResponse,
-    BloodPressureScanResponse,
-)
+from app.schemas.ble import BleScanResponse
+from app.schemas.blood_pressure import BloodPressureReadingCreate, BloodPressureReadingResponse
 from app.services.ble import ble_radio_lock
 from app.services.blood_pressure.ble import scan_hem7530
+from app.services.blood_pressure.persist import store_blood_pressure_reading
 from app.services.blood_pressure.stream import stream_blood_pressure
 
 router = APIRouter(tags=["BloodPressure"])
-protected = APIRouter(dependencies=[Depends(require_access)])
 
 
-@protected.get("/blood-pressures/scan", response_model=BloodPressureScanResponse)
+@router.get(
+    "/blood-pressures/scan",
+    response_model=BleScanResponse,
+    dependencies=[Depends(get_current_user)],
+)
 async def scan_nearby_monitors():
     async with ble_radio_lock:
-        found = await scan_hem7530(timeout=10.0)
-    devices = [
-        BloodPressureDevice(
-            name=device.name or "HEM-7530T",
-            address=(device.address or "").upper(),
-            rssi=getattr(advertisement, "rssi", None) if advertisement else None,
-        )
-        for device, advertisement in found
-        if device.address
-    ]
-    return BloodPressureScanResponse(devices=devices)
+        devices = await scan_hem7530(timeout=10.0)
+    return BleScanResponse(devices=devices)
 
 
-@protected.get("/blood-pressures", response_model=list[BloodPressureReadingResponse])
-async def list_blood_pressure_readings(
-    person_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    actor: ScalePerson | User = Depends(require_access),
-):
-    ensure_person_scope(actor, person_id)
-    person = await person_crud.get_by_id(db, person_id)
-    if not person:
-        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
-    return await bp_crud.list_by_person(db, person_id)
-
-
-@protected.post(
+@router.post(
     "/blood-pressures",
     response_model=BloodPressureReadingResponse,
     status_code=status.HTTP_201_CREATED,
@@ -62,24 +38,8 @@ async def create_blood_pressure_reading(
     db: AsyncSession = Depends(get_db),
     actor: ScalePerson | User = Depends(require_access),
 ):
-    ensure_person_scope(actor, payload.person_id)
-    person = await person_crud.get_by_id(db, payload.person_id)
-    if not person:
-        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
-    existing = await bp_crud.get_by_measurement(
-        db,
-        payload.person_id,
-        payload.measured_at,
-        payload.sys_mmhg,
-        payload.dia_mmhg,
-        payload.pulse_bpm,
-    )
-    if existing:
-        return existing
-    return await bp_crud.create(db, payload)
-
-
-router.include_router(protected)
+    await load_scoped_person(db, actor, payload.person_id)
+    return await store_blood_pressure_reading(db, payload)
 
 
 @router.websocket("/ws/blood-pressure")

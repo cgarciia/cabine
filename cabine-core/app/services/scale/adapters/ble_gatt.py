@@ -5,19 +5,14 @@ import sys
 from bleak import BleakClient, BleakError, BleakScanner
 from fastapi import WebSocket
 
-from app.services.ble import (
-    apply_winrt_descriptor_tolerance,
-    ble_radio_lock,
-    normalize_mac,
-    watch_websocket_closed,
-)
+from app.services.ble import ble_radio_lock, normalize_mac, watch_websocket_closed
+from app.services.ble.connect import connect_with_fallback
+from app.services.ble.ws_session import cancel_and_wait, consume_queue
 from app.services.scale.adapters.base import DispatchFn, ScaleAdapter, StatusFn
 from app.services.scale.parsers import ParserFn
 from app.services.scale.spec import ScaleSpec
 
 logger = logging.getLogger(__name__)
-
-apply_winrt_descriptor_tolerance()
 
 PRIMARY_SERVICE_UUIDS = (
     "0000fff0-0000-1000-8000-00805f9b34fb",
@@ -29,11 +24,19 @@ PREFERRED_NOTIFY_UUIDS = (
     "00002a9d-0000-1000-8000-00805f9b34fb",
 )
 
-def _service_count(client: BleakClient) -> int:
-    try:
-        return len(list(client.services))
-    except Exception:
-        return 0
+
+def _connect_attempts() -> list[dict]:
+    services = {"services": list(PRIMARY_SERVICE_UUIDS)}
+    if sys.platform == "win32":
+        return [
+            {**services, "winrt": {"use_cached_services": True}},
+            {**services, "winrt": {"use_cached_services": False}},
+            services,
+            {"winrt": {"use_cached_services": True}},
+            {},
+        ]
+    return [services, {}]
+
 
 class BleGattAdapter(ScaleAdapter):
     key = "ble_gatt"
@@ -84,20 +87,13 @@ class BleGattAdapter(ScaleAdapter):
                     return
 
                 await send_status("Subscrição concluída. Aguardando peso.")
-                consumer = asyncio.create_task(_consume_queue(websocket, queue))
+                consumer = asyncio.create_task(consume_queue(websocket, queue))
                 closed = asyncio.create_task(watch_websocket_closed(websocket))
                 try:
                     while client.is_connected and not closed.done():
                         await asyncio.sleep(0.5)
                 finally:
-                    if not closed.done():
-                        closed.cancel()
-                    consumer.cancel()
-                    for task in (closed, consumer):
-                        try:
-                            await task
-                        except asyncio.CancelledError:
-                            pass
+                    await cancel_and_wait(closed, consumer)
             finally:
                 try:
                     await client.disconnect()
@@ -105,48 +101,13 @@ class BleGattAdapter(ScaleAdapter):
                     logger.debug("Falha ao desconectar GATT (ignorada).", exc_info=True)
 
     async def _connect(self, device) -> BleakClient:
-        attempts: list[dict] = []
-        if sys.platform == "win32":
-            attempts = [
-                {
-                    "services": list(PRIMARY_SERVICE_UUIDS),
-                    "winrt": {"use_cached_services": True},
-                },
-                {
-                    "services": list(PRIMARY_SERVICE_UUIDS),
-                    "winrt": {"use_cached_services": False},
-                },
-                {"services": list(PRIMARY_SERVICE_UUIDS)},
-                {"winrt": {"use_cached_services": True}},
-                {},
-            ]
-        else:
-            attempts = [
-                {"services": list(PRIMARY_SERVICE_UUIDS)},
-                {},
-            ]
-
-        errors: list[str] = []
-        for kwargs in attempts:
-            client = BleakClient(device, timeout=30.0, **kwargs)
-            try:
-                await client.connect()
-                if kwargs.get("services") and _service_count(client) == 0:
-                    raise BleakError("Nenhum dos serviços GATT esperados foi encontrado.")
-                logger.info("GATT conectado com opções %s", kwargs or "default")
-                return client
-            except Exception as exc:
-                errors.append(f"{kwargs or 'default'}: {exc}")
-                logger.warning("Tentativa GATT falhou (%s): %s", kwargs or "default", exc)
-                try:
-                    await client.disconnect()
-                except Exception:
-                    pass
-                await asyncio.sleep(0.4)
-
-        raise BleakError(
-            "Não foi possível completar a conexão GATT. "
-            + (errors[-1] if errors else "erro desconhecido")
+        return await connect_with_fallback(
+            device,
+            label="balança GATT",
+            timeout=30.0,
+            attempts=_connect_attempts(),
+            require_services=lambda kwargs: bool(kwargs.get("services")),
+            retry_delay=0.4,
         )
 
     async def _subscribe_notifications(self, client: BleakClient, notify_handler) -> int:
@@ -197,8 +158,3 @@ class BleGattAdapter(ScaleAdapter):
 
         return subscribed
 
-
-async def _consume_queue(websocket: WebSocket, queue: asyncio.Queue) -> None:
-    while True:
-        data = await queue.get()
-        await websocket.send_json(data)
