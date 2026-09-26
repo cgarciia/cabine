@@ -8,10 +8,12 @@ import {
     HeartPulse,
     Menu,
     Scale,
+    Thermometer,
     type LucideIcon,
 } from 'lucide-react';
 
 import { ConfirmDialog, END_SESSION_CONFIRM } from '../../components/ConfirmDialog';
+import { isMVP1 } from '../../config/mvp';
 import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
 import { clearAccessSession } from '../../session/authSession';
@@ -25,6 +27,7 @@ type MenuItem = {
     path: string;
     done: boolean;
     icon: LucideIcon;
+    disabled?: boolean;
 };
 
 export function MenuPage() {
@@ -36,7 +39,8 @@ export function MenuPage() {
 
     if (!session.person) return <Navigate to="/matricula" replace />;
 
-    const items: MenuItem[] = [
+    // MVP 1: Questionários + Bioimpedância + Oximetria
+    const mvp1Items: MenuItem[] = [
         {
             id: 'general',
             title: 'Saúde Geral',
@@ -69,6 +73,19 @@ export function MenuPage() {
             done: Boolean(session.lastOximeter),
             icon: Activity,
         },
+    ];
+
+    // MVP 2: Temperatura (placeholder) + Pressão + Oximetria
+    const mvp2Items: MenuItem[] = [
+        {
+            id: 'temperatura',
+            title: 'Temperatura',
+            subtitle: 'Módulo em breve. Não disponível nesta versão.',
+            path: '',
+            done: false,
+            icon: Thermometer,
+            disabled: true,
+        },
         {
             id: 'bloodPressure',
             title: 'Pressão e pulso',
@@ -77,8 +94,18 @@ export function MenuPage() {
             done: Boolean(session.lastBloodPressure),
             icon: HeartPulse,
         },
+        {
+            id: 'oximeter',
+            title: 'Oxigenação',
+            subtitle: 'Coloque o dedo no oxímetro para medir oxigênio e pulso.',
+            path: '/oximetro',
+            done: Boolean(session.lastOximeter),
+            icon: Activity,
+        },
     ];
 
+    const items: MenuItem[] = isMVP1 ? mvp1Items : mvp2Items;
+    
     function endVisit() {
         clearSession();
         clearAccessSession();
@@ -112,7 +139,8 @@ export function MenuPage() {
                             <button
                                 key={item.id}
                                 type="button"
-                                className={`kiosk-menu-tile${item.done ? ' is-done' : ''}`}
+                                disabled={Boolean(item.disabled)}
+                                className={`kiosk-menu-tile${item.done ? ' is-done' : ''}${item.disabled ? ' is-disabled' : ''}`}
                                 onClick={() => {
                                     if (item.id === 'bloodPressure') {
                                         void requestHem7530MicPermission().finally(() => navigate(item.path));
