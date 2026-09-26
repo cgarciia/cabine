@@ -1,15 +1,11 @@
-import warnings
-
-from pydantic import field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-MIN_SECRET_KEY_LENGTH = 32
 
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Cabine API"
     PROJECT_VERSION: str = "1.0.0"
-
+    MVP_VERSION: int = Field(default=1, ge=1, le=2)
     POSTGRES_SERVER: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
@@ -38,17 +34,6 @@ class Settings(BaseSettings):
         r")(:\d+)?"
     )
     SQL_ECHO: bool = False
-
-    @field_validator("SECRET_KEY")
-    @classmethod
-    def _secret_key_strength(cls, value: str) -> str:
-        if len(value) < MIN_SECRET_KEY_LENGTH:
-            warnings.warn(
-                f"SECRET_KEY tem menos de {MIN_SECRET_KEY_LENGTH} caracteres; gere outra com "
-                "`python -c \"import secrets; print(secrets.token_urlsafe(48))\"`.",
-                stacklevel=2,
-            )
-        return value
 
     @property
     def ASYNC_DATABASE_URI(self) -> str:
