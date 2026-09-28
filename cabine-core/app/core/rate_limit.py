@@ -18,16 +18,18 @@ def _keys(request: Request, scope: str, subject: str) -> list[tuple[str, int]]:
     return keys
 
 
-def _prune(hits: deque[float], now: float) -> None:
+def _prune(hits: deque[float], key: str, now: float) -> None:
     while hits and now - hits[0] > settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS:
         hits.popleft()
+    if not hits:
+        _failures.pop(key, None)
 
 
 def check_login_rate_limit(request: Request, scope: str, subject: str = "") -> None:
     now = time.monotonic()
     for key, limit in _keys(request, scope, subject):
         hits = _failures[key]
-        _prune(hits, now)
+        _prune(hits, key, now)
         if len(hits) >= limit:
             retry = settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS - (now - hits[0])
             raise HTTPException(

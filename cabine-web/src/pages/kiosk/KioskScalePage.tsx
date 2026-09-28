@@ -103,16 +103,7 @@ export function KioskScalePage() {
     const persistRef = useRef(persistAndContinue);
     persistRef.current = persistAndContinue;
 
-    const completeReading = (reading: ScaleLiveReading) => {
-        if (finishedRef.current) return;
-        finishedRef.current = true;
-        setCurrentWeight(reading.weight_kg);
-        setGuideStep('done');
-        setStatus('Medição concluída. Desça da balança.');
-        setView('done');
-        close();
-        void persistRef.current({ ...reading, complete: true });
-    };
+    const completeRef = useRef<(reading: ScaleLiveReading) => void>(() => {});
 
     const { connect, close } = useDeviceSocket<ScaleLiveMessage>(WS_PATHS.scale, {
         onOpen: (socket) => {
@@ -145,7 +136,7 @@ export function KioskScalePage() {
                     const last = lastReadingRef.current;
                     const lastBia = Boolean(last && (last.complete || hasBiaImpedances(last.impedances_ohm)));
                     if (last && last.weight_kg >= 10 && lastBia) {
-                        completeReading(last);
+                        completeRef.current(last);
                         return;
                     }
                     setCurrentWeight(null);
@@ -175,13 +166,25 @@ export function KioskScalePage() {
                 };
                 setCurrentWeight(data.weight_kg);
                 if (data.complete || hasBiaImpedances(data.impedances_ohm)) {
-                    completeReading(lastReadingRef.current);
+                    completeRef.current(lastReadingRef.current);
                 } else {
                     setStatus(data.stable ? 'Peso confirmado' : 'Medindo…');
                 }
             }
         },
     });
+
+    const completeReading = (reading: ScaleLiveReading) => {
+        if (finishedRef.current) return;
+        finishedRef.current = true;
+        setCurrentWeight(reading.weight_kg);
+        setGuideStep('done');
+        setStatus('Medição concluída. Desça da balança.');
+        setView('done');
+        close();
+        void persistRef.current({ ...reading, complete: true });
+    };
+    completeRef.current = completeReading;
 
     useEffect(() => {
         fetchScales()

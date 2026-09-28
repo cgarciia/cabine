@@ -1,3 +1,5 @@
+import { MVP_VERSION } from '../config/mvp';
+
 export type KioskStepId = 'generalHealth' | 'mentalHealth' | 'bia' | 'oximeter' | 'bloodPressure';
 
 /** Kiosk session fields used to know which steps are already done. */
@@ -15,13 +17,22 @@ export type NextKioskStep = {
     label: string;
 };
 
-const STEPS: NextKioskStep[] = [
-    { id: 'generalHealth', path: '/saude-geral', label: 'Ir para saúde geral' },
-    { id: 'mentalHealth', path: '/saude-mental', label: 'Ir para saúde mental' },
-    { id: 'bia', path: '/bioimpedancia', label: 'Ir para peso e bioimpedância' },
-    { id: 'oximeter', path: '/oximetro', label: 'Ir para oxigenação' },
-    { id: 'bloodPressure', path: '/pressao', label: 'Ir para pressão' },
+/** Etapas obrigatórias do MVP 1. */
+const MVP1_STEPS: NextKioskStep[] = [
+    { id: 'generalHealth', path: '/saude-geral',   label: 'Ir para saúde geral' },
+    { id: 'mentalHealth',  path: '/saude-mental',  label: 'Ir para saúde mental' },
+    { id: 'bia',           path: '/bioimpedancia', label: 'Ir para peso e bioimpedância' },
+    { id: 'oximeter',      path: '/oximetro',      label: 'Ir para oxigenação' },
 ];
+
+/** Etapas obrigatórias do MVP 2. */
+const MVP2_STEPS: NextKioskStep[] = [
+    { id: 'oximeter',      path: '/oximetro', label: 'Ir para oxigenação' },
+    { id: 'bloodPressure', path: '/pressao',  label: 'Ir para pressão' },
+];
+
+/** Etapas ativas no MVP atual. */
+const STEPS: NextKioskStep[] = MVP_VERSION === 1 ? MVP1_STEPS : MVP2_STEPS;
 
 export function isMentalDone(session: VisitProgressInput): boolean {
     return Boolean(session.mentalHealth?.completedAt || session.mentalHealth?.refused);

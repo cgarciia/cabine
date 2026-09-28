@@ -7,8 +7,7 @@ from jose import jwt
 from app.core.config import settings
 from app.schemas.token import Token
 
-# Compared when the e-mail does not exist so both branches cost one bcrypt check.
-_DUMMY_HASH = bcrypt.hashpw(b"cabine-timing-guard", bcrypt.gensalt()).decode("utf-8")
+_DUMMY_HASH = "$2b$12$OE8VxcqsImSWbQOmFy09F.nCHTpKDG06EDSqoQM79XdpQuNBFpXAG"
 
 
 def get_password_hash(password: str) -> str:

@@ -150,7 +150,8 @@ export function KioskOximeterPage() {
         if (payload.device_address) saveDeviceAddress('oximeter', payload.device_address);
         if (payload.waveform?.length) {
             setWave(payload.waveform);
-            waveRef.current = waveRef.current.concat(payload.waveform).slice(-480);
+            waveRef.current.push(...payload.waveform);
+            if (waveRef.current.length > 480) waveRef.current.splice(0, waveRef.current.length - 480);
         }
         if (payload.spo2_pct != null) setSpo2(payload.spo2_pct);
         if (payload.pulse_bpm != null) setPulse(payload.pulse_bpm);
