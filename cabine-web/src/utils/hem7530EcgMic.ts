@@ -5,38 +5,28 @@ import { HEM7530_ECG_WORKLET } from './hem7530EcgWorklet';
 const TRACE_MAX = 3600;
 const RECORD_MAX = 12000;
 
-const AUDIO_CONSTRAINTS = {
-    channelCount: 1,
-    echoCancellation: false,
-    noiseSuppression: false,
-    autoGainControl: false,
-    voiceIsolation: false,
-} as MediaTrackConstraints;
+const AUDIO_CONSTRAINTS: MediaTrackConstraints = Object.assign(
+    {
+        channelCount: 1,
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        sampleRate: { ideal: 48000 },
+    },
+    { voiceIsolation: false },
+);
 
-/** HEM-7530T ultrasonic band: 19 kHz ± ~1 kHz. Cuts voice, air and tap without ringing QRS. */
-function wireUltrasonic(ctx: AudioContext, source: AudioNode, dest: AudioNode): () => void {
-    const nyquist = ctx.sampleRate / 2 - 300;
-    const filters: BiquadFilterNode[] = [];
-    const add = (type: BiquadFilterType, hz: number, q: number) => {
-        const node = ctx.createBiquadFilter();
-        node.type = type;
-        node.frequency.value = Math.min(hz, nyquist);
-        node.Q.value = q;
-        filters.push(node);
-        return node;
-    };
-    const hp1 = add('highpass', 17500, 0.707);
-    const hp2 = add('highpass', 17500, 0.707);
-    const lp1 = add('lowpass', 20500, 0.707);
-    const lp2 = add('lowpass', 20500, 0.707);
-    source.connect(hp1);
-    hp1.connect(hp2);
-    hp2.connect(lp1);
-    lp1.connect(lp2);
-    lp2.connect(dest);
+type WorkletMsg = {
+    samples: number[];
+    locked: boolean;
+    snr: number;
+};
+
+/** The worklet owns the 17–21 kHz FIR. A biquad in front bends the FM and breaks the trace. */
+function wireUltrasonic(source: AudioNode, dest: AudioNode): () => void {
+    source.connect(dest);
     return () => {
         source.disconnect();
-        for (const node of filters) node.disconnect();
     };
 }
 
@@ -71,6 +61,8 @@ export async function requestHem7530MicPermission(): Promise<void> {
 
 export function useHem7530EcgMic(enabled: boolean) {
     const [samples, setSamples] = useState<number[]>([]);
+    const [sampleCount, setSampleCount] = useState(0);
+    const sampleCountRef = useRef(0);
     const [toneLocked, setToneLocked] = useState(false);
     const [toneLevel, setToneLevel] = useState(0);
     const [error, setError] = useState<string | null>(() => (enabled ? micBlockedReason() : null));
@@ -78,7 +70,9 @@ export function useHem7530EcgMic(enabled: boolean) {
     const samplesRef = useRef<number[]>([]);
     const recordingRef = useRef(false);
     const recordedRef = useRef<number[]>([]);
+    const genRef = useRef(0);
     const stopRef = useRef<() => void>(() => undefined);
+    const toneAtRef = useRef(0);
 
     const stop = useCallback(() => {
         stopRef.current();
@@ -90,10 +84,16 @@ export function useHem7530EcgMic(enabled: boolean) {
         setToneLevel(0);
         samplesRef.current = [];
         setSamples([]);
+        sampleCountRef.current = 0;
+        setSampleCount(0);
     }, []);
 
     const beginRecord = useCallback(() => {
         recordedRef.current = [];
+        samplesRef.current = [];
+        setSamples([]);
+        sampleCountRef.current = 0;
+        setSampleCount(0);
         recordingRef.current = true;
     }, []);
 
@@ -104,12 +104,15 @@ export function useHem7530EcgMic(enabled: boolean) {
 
     const unlock = useCallback(async () => {
         if (!enabled) return;
+        const gen = genRef.current + 1;
+        genRef.current = gen;
         const blocked = micBlockedReason();
         if (blocked) {
             setError(blocked);
             return;
         }
         stop();
+        const stale = () => gen !== genRef.current;
         let stream: MediaStream | null = null;
         let ctx: AudioContext | null = null;
         let source: MediaStreamAudioSourceNode | null = null;
@@ -120,22 +123,54 @@ export function useHem7530EcgMic(enabled: boolean) {
                 audio: AUDIO_CONSTRAINTS,
                 video: false,
             });
-            ctx = new AudioContext({ latencyHint: 'interactive' });
+            if (stale()) {
+                stream.getTracks().forEach((track) => track.stop());
+                return;
+            }
+            try {
+                ctx = new AudioContext({ latencyHint: 'interactive', sampleRate: 48000 });
+            } catch {
+                ctx = new AudioContext({ latencyHint: 'interactive' });
+            }
             if (ctx.state === 'suspended') await ctx.resume();
+            if (stale()) {
+                stream.getTracks().forEach((track) => track.stop());
+                void ctx.close();
+                return;
+            }
             if (ctx.sampleRate < 40000) {
                 stream.getTracks().forEach((track) => track.stop());
                 void ctx.close();
                 setError('Este tablet não consegue captar o sinal do aparelho. Use o Chrome atualizado.');
                 return;
             }
+            const track = stream.getAudioTracks()[0];
+            if (track) {
+                try {
+                    await track.applyConstraints(AUDIO_CONSTRAINTS);
+                } catch {
+                    /* the browser kept its own processing */
+                }
+            }
             workletUrl = URL.createObjectURL(new Blob([HEM7530_ECG_WORKLET], { type: 'text/javascript' }));
             await ctx.audioWorklet.addModule(workletUrl);
+            if (stale()) {
+                stream.getTracks().forEach((track) => track.stop());
+                void ctx.close();
+                URL.revokeObjectURL(workletUrl);
+                return;
+            }
             source = ctx.createMediaStreamSource(stream);
             node = new AudioWorkletNode(ctx, 'hem7530-ecg');
-            node.port.onmessage = (event: MessageEvent<{ samples: number[]; locked: boolean; snr: number }>) => {
-                setToneLevel(event.data.snr);
-                setToneLocked(event.data.locked);
-                const chunk = event.data.samples;
+            node.port.onmessage = (event: MessageEvent<WorkletMsg>) => {
+                if (gen !== genRef.current) return;
+                const data = event.data;
+                if (performance.now() - toneAtRef.current > 100) {
+                    toneAtRef.current = performance.now();
+                    setToneLevel(data.snr);
+                    setToneLocked(data.locked);
+                }
+                const chunk = data.samples;
                 if (!chunk.length) return;
                 if (recordingRef.current) {
                     const rec = recordedRef.current.concat(chunk);
@@ -143,11 +178,13 @@ export function useHem7530EcgMic(enabled: boolean) {
                 }
                 const next = samplesRef.current.concat(chunk);
                 samplesRef.current = next.length > TRACE_MAX ? next.slice(next.length - TRACE_MAX) : next;
+                sampleCountRef.current += chunk.length;
                 setSamples(samplesRef.current);
+                setSampleCount(sampleCountRef.current);
             };
             const mute = ctx.createGain();
             mute.gain.value = 0;
-            const unwire = wireUltrasonic(ctx, source, node);
+            const unwire = wireUltrasonic(source, node);
             node.connect(mute);
             mute.connect(ctx.destination);
             stopRef.current = () => {
@@ -159,6 +196,10 @@ export function useHem7530EcgMic(enabled: boolean) {
                 stream?.getTracks().forEach((track) => track.stop());
                 if (workletUrl) URL.revokeObjectURL(workletUrl);
             };
+            if (stale()) {
+                stopRef.current();
+                return;
+            }
             setArmed(true);
             setError(null);
         } catch (caught) {
@@ -178,13 +219,17 @@ export function useHem7530EcgMic(enabled: boolean) {
 
     useEffect(() => {
         if (!enabled) {
+            genRef.current += 1;
             stop();
             setError(null);
             return;
         }
         void unlock();
-        return () => stop();
+        return () => {
+            genRef.current += 1;
+            stop();
+        };
     }, [enabled, stop, unlock]);
 
-    return { samples, toneLocked, toneLevel, error, armed, unlock, beginRecord, takeRecord };
+    return { samples, sampleCount, toneLocked, toneLevel, error, armed, unlock, beginRecord, takeRecord };
 }

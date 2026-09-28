@@ -115,6 +115,7 @@ export function BloodPressurePage() {
                         bpm={pulse}
                         active={listening || pulse != null || ecg.armed}
                         trace={ecg.samples}
+                        traceSeq={ecg.sampleCount}
                         toneLocked={ecg.toneLocked}
                     />
                     {history.length ? (
