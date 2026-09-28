@@ -360,7 +360,7 @@ export function SessionReport({
                     />
                     {bloodPressure.ecg_mv?.length ? (
                         <p className="kiosk-muted">
-                            Gráfico dos batimentos. Arraste para ver o registro completo.
+                            Gráfico dos batimentos. Role para o lado para ver o registro completo. O ícone no canto suaviza o desenho; desligado, mostra o traço original.
                         </p>
                     ) : null}
                 </section>

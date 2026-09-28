@@ -498,12 +498,28 @@ export function KioskBloodPressurePage() {
                     </article>
                 </div>
 
-                <HeartbeatMonitor
-                    bpm={pulse}
-                    active={listening || pulse != null || ecg.armed}
-                    trace={frozenEcg ?? ecg.samples}
-                    toneLocked={Boolean(frozenEcg?.length) || ecg.toneLocked}
-                />
+                {phase === 'stabilize' ? (
+                    <div className="kiosk-ecg-countdown" role="timer" aria-live="polite">
+                        <strong>{stableLeft}</strong>
+                        <span>Estabilizando o ECG</span>
+                    </div>
+                ) : (
+                    <HeartbeatMonitor
+                        bpm={pulse}
+                        active={listening || pulse != null || ecg.armed}
+                        trace={
+                            phase === 'record' || phase === 'pause' || phase === 'wait_bp'
+                                ? (frozenEcg ?? ecg.samples)
+                                : []
+                        }
+                        traceSeq={frozenEcg ? undefined : ecg.sampleCount}
+                        toneLocked={
+                            phase === 'record' || phase === 'pause' || phase === 'wait_bp'
+                                ? Boolean(frozenEcg?.length) || ecg.toneLocked
+                                : false
+                        }
+                    />
+                )}
                 {flags.length ? (
                     <p className="kiosk-bp-flags">{flags.join(' · ')}</p>
                 ) : null}
