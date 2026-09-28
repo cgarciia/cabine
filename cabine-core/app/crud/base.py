@@ -31,4 +31,4 @@ async def list_by_person(
     result = await db.execute(
         select(model).where(model.person_id == person_id).order_by(column.desc())
     )
-    return list(result.scalars().all())
+    return result.scalars().all()
