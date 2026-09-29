@@ -9,6 +9,7 @@ from bleak.backends.scanner import AdvertisementData
 from app.schemas.ble import BleDevice
 from app.services.ble.connect import connect_with_fallback
 from app.services.ble.scanner import advertised_name, as_ble_devices, scan_devices, wait_for_device
+from app.services.blood_pressure.hem6161 import name_looks_like_hem6161
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ PAIRING_KEY = bytes.fromhex("deadbeaf12341234deadbeaf12341234")
 
 
 def name_looks_like_hem7530(name: str | None) -> bool:
-    if not name:
+    if not name or name_looks_like_hem6161(name):
         return False
     lowered = name.lower().replace(" ", "")
     return any(hint.replace("-", "") in lowered.replace("-", "") for hint in NAME_HINTS)
@@ -43,6 +44,8 @@ def advertisement_looks_like_hem7530(
     advertisement: AdvertisementData | None,
     name: str | None,
 ) -> bool:
+    if name_looks_like_hem6161(name):
+        return False
     if name_looks_like_hem7530(name):
         return True
     if advertisement is None:

@@ -11,8 +11,11 @@ from app.schemas.ble import BleScanResponse
 from app.schemas.blood_pressure import BloodPressureReadingCreate, BloodPressureReadingResponse
 from app.services.ble import ble_radio_lock
 from app.services.blood_pressure.ble import scan_hem7530
+from app.services.blood_pressure.hem6161 import scan_hem6161
 from app.services.blood_pressure.persist import store_blood_pressure_reading
 from app.services.blood_pressure.stream import stream_blood_pressure
+from app.services.blood_pressure.wrist_stream import stream_blood_pressure_wrist
+from app.services.devices import resolve_paired_address
 
 router = APIRouter(tags=["BloodPressure"])
 
@@ -25,6 +28,17 @@ router = APIRouter(tags=["BloodPressure"])
 async def scan_nearby_monitors():
     async with ble_radio_lock:
         devices = await scan_hem7530(timeout=10.0)
+    return BleScanResponse(devices=devices)
+
+
+@router.get(
+    "/blood-pressures/wrist/scan",
+    response_model=BleScanResponse,
+    dependencies=[Depends(get_current_user)],
+)
+async def scan_nearby_wrist_monitors():
+    async with ble_radio_lock:
+        devices = await scan_hem6161(timeout=10.0)
     return BleScanResponse(devices=devices)
 
 
@@ -53,10 +67,32 @@ async def blood_pressure_endpoint(
     principal = await authenticate_websocket(websocket, token)
     if principal is None:
         return
+    resolved = (address or "").strip() or await resolve_paired_address("blood_pressure_ecg")
     await stream_blood_pressure(
         websocket,
         person_id=principal.bound_person_id(person_id),
-        address=address,
+        address=resolved,
+        visit_id=visit_id,
+        person_locked=principal.person_locked,
+    )
+
+
+@router.websocket("/ws/blood-pressure-wrist")
+async def wrist_blood_pressure_endpoint(
+    websocket: WebSocket,
+    person_id: UUID | None = None,
+    address: str | None = None,
+    visit_id: UUID | None = None,
+    token: str | None = None,
+):
+    principal = await authenticate_websocket(websocket, token)
+    if principal is None:
+        return
+    resolved = (address or "").strip() or await resolve_paired_address("blood_pressure_wrist")
+    await stream_blood_pressure_wrist(
+        websocket,
+        person_id=principal.bound_person_id(person_id),
+        address=resolved,
         visit_id=visit_id,
         person_locked=principal.person_locked,
     )

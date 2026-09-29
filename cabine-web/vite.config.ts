@@ -20,6 +20,7 @@ export default defineConfig({
       '/oximeters': { target: backend, changeOrigin: true },
       '/blood-pressures': { target: backend, changeOrigin: true },
       '/users': { target: backend, changeOrigin: true },
+      '/devices': { target: backend, changeOrigin: true },
       '/login': { target: backend, changeOrigin: true },
       '/health': { target: backend, changeOrigin: true },
       '/fhir': { target: backend, changeOrigin: true },

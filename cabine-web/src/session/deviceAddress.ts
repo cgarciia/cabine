@@ -4,6 +4,7 @@ import { STORAGE_KEYS } from './keys';
 const ADDRESS_KEYS = {
     oximeter: STORAGE_KEYS.oximeterAddress,
     bloodPressure: STORAGE_KEYS.bpAddress,
+    wristBloodPressure: STORAGE_KEYS.bpWristAddress,
 } as const;
 
 export type AddressedDevice = keyof typeof ADDRESS_KEYS;

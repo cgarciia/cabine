@@ -12,6 +12,7 @@ from app.schemas.oximeter import OximeterReadingCreate, OximeterReadingResponse
 from app.services.ble import ble_radio_lock
 from app.services.oximeter.ble import scan_oximeters
 from app.services.oximeter.persist import store_oximeter_reading
+from app.services.devices import resolve_paired_address
 from app.services.oximeter.stream import stream_oximeter
 
 router = APIRouter(tags=["Oximeter"])
@@ -49,10 +50,11 @@ async def oximeter_endpoint(
     principal = await authenticate_websocket(websocket, token)
     if principal is None:
         return
+    resolved = (address or "").strip() or await resolve_paired_address("oximeter")
     await stream_oximeter(
         websocket,
         person_id=principal.bound_person_id(person_id),
-        address=address,
+        address=resolved,
         visit_id=visit_id,
         person_locked=principal.person_locked,
     )

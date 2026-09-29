@@ -7,6 +7,8 @@ import { GENERAL_HEALTH } from './modules/health/questionnaires';
 
 // Admin pages
 import { BloodPressurePage } from './pages/admin/BloodPressurePage';
+import { EquipmentPage } from './pages/admin/EquipmentPage';
+import { WristBloodPressurePage } from './pages/admin/WristBloodPressurePage';
 import { OperatorLoginPage } from './pages/admin/OperatorLoginPage';
 import { OximeterPage } from './pages/admin/OximeterPage';
 import { PeoplePage } from './pages/admin/PeoplePage';
@@ -16,6 +18,7 @@ import { ScalesPage } from './pages/admin/ScalesPage';
 // Kiosk pages
 import { CompletionPage } from './pages/kiosk/CompletionPage';
 import { KioskBloodPressurePage } from './pages/kiosk/KioskBloodPressurePage';
+import { KioskWristBloodPressurePage } from './pages/kiosk/KioskWristBloodPressurePage';
 import { KioskOximeterPage } from './pages/kiosk/KioskOximeterPage';
 import { KioskScalePage } from './pages/kiosk/KioskScalePage';
 import { MenuPage } from './pages/kiosk/MenuPage';
@@ -61,6 +64,7 @@ export function App() {
 
                         {/* MVP 2 — Pressão arterial */}
                         {isMVP2 && <Route path="/pressao" element={<KioskBloodPressurePage />} />}
+                        {isMVP2 && <Route path="/pressao-pulso" element={<KioskWristBloodPressurePage />} />}
 
                         <Route path="/conclusao" element={<CompletionPage />} />
                         <Route path="/relatorio" element={<ReportPage />} />
@@ -83,9 +87,11 @@ export function App() {
 
                         {/* MVP 2 — Pressão admin */}
                         {isMVP2 && <Route path="/admin/pressao" element={<BloodPressurePage />} />}
+                        {isMVP2 && <Route path="/admin/pressao-pulso" element={<WristBloodPressurePage />} />}
 
-                        {/* Sempre — Pessoas */}
+                        {/* Sempre — Pessoas e pareamento */}
                         <Route path="/admin/pessoas" element={<PeoplePage />} />
+                        <Route path="/admin/equipamentos" element={<EquipmentPage />} />
                         <Route path="/pessoas" element={<Navigate to="/admin/pessoas" replace />} />
 
                         {/* Fallback admin */}

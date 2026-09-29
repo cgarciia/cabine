@@ -1,6 +1,12 @@
 import { MVP_VERSION } from '../config/mvp';
 
-export type KioskStepId = 'generalHealth' | 'mentalHealth' | 'bia' | 'oximeter' | 'bloodPressure';
+export type KioskStepId =
+    | 'generalHealth'
+    | 'mentalHealth'
+    | 'bia'
+    | 'oximeter'
+    | 'bloodPressure'
+    | 'wristBloodPressure';
 
 /** Kiosk session fields used to know which steps are already done. */
 export type VisitProgressInput = {
@@ -9,26 +15,28 @@ export type VisitProgressInput = {
     lastMeasurement: unknown;
     lastOximeter: unknown;
     lastBloodPressure: unknown;
+    lastWristBloodPressure: unknown;
 };
 
 export type NextKioskStep = {
     id: KioskStepId;
-    path: '/saude-geral' | '/saude-mental' | '/bioimpedancia' | '/oximetro' | '/pressao';
+    path: '/saude-geral' | '/saude-mental' | '/bioimpedancia' | '/oximetro' | '/pressao' | '/pressao-pulso';
     label: string;
 };
 
 /** Etapas obrigatórias do MVP 1. */
 const MVP1_STEPS: NextKioskStep[] = [
-    { id: 'generalHealth', path: '/saude-geral',   label: 'Ir para saúde geral' },
-    { id: 'mentalHealth',  path: '/saude-mental',  label: 'Ir para saúde mental' },
-    { id: 'bia',           path: '/bioimpedancia', label: 'Ir para peso e bioimpedância' },
-    { id: 'oximeter',      path: '/oximetro',      label: 'Ir para oxigenação' },
+    { id: 'generalHealth', path: '/saude-geral', label: 'Ir para saúde geral' },
+    { id: 'mentalHealth', path: '/saude-mental', label: 'Ir para saúde mental' },
+    { id: 'bia', path: '/bioimpedancia', label: 'Ir para peso e bioimpedância' },
+    { id: 'oximeter', path: '/oximetro', label: 'Ir para oxigenação' },
 ];
 
 /** Etapas obrigatórias do MVP 2. */
 const MVP2_STEPS: NextKioskStep[] = [
-    { id: 'oximeter',      path: '/oximetro', label: 'Ir para oxigenação' },
-    { id: 'bloodPressure', path: '/pressao',  label: 'Ir para pressão' },
+    { id: 'oximeter', path: '/oximetro', label: 'Ir para oxigenação' },
+    { id: 'bloodPressure', path: '/pressao', label: 'Ir para pressão com ECG' },
+    { id: 'wristBloodPressure', path: '/pressao-pulso', label: 'Ir para pressão e pulso' },
 ];
 
 /** Etapas ativas no MVP atual. */
@@ -44,7 +52,8 @@ function isStepDone(session: VisitProgressInput, id: KioskStepId, justFinished?:
     if (id === 'mentalHealth') return isMentalDone(session);
     if (id === 'bia') return Boolean(session.lastMeasurement);
     if (id === 'oximeter') return Boolean(session.lastOximeter);
-    return Boolean(session.lastBloodPressure);
+    if (id === 'bloodPressure') return Boolean(session.lastBloodPressure);
+    return Boolean(session.lastWristBloodPressure);
 }
 
 export function isVisitComplete(session: VisitProgressInput, justFinished?: KioskStepId): boolean {

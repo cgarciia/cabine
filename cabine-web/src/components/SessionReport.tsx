@@ -42,6 +42,7 @@ type Props = {
     measurement?: MeasurementRecord | null;
     oximeter?: OximeterReading | null;
     bloodPressure?: BloodPressureReading | null;
+    wristBloodPressure?: BloodPressureReading | null;
 };
 
 export function oximeterFindings(reading: OximeterReading): { title: string; detail: string }[] {
@@ -132,6 +133,7 @@ export function SessionReport({
     measurement,
     oximeter,
     bloodPressure,
+    wristBloodPressure,
 }: Props) {
     const mentalShown = mental?.results?.length ? pickPatientResult(mental.results) : undefined;
     const hasHealth = Boolean(health && (health.items?.length || health.label || health.percent != null));
@@ -336,7 +338,7 @@ export function SessionReport({
 
             {bloodPressure ? (
                 <section className="kiosk-report-card kiosk-print-wide">
-                    <h2>Pressão arterial</h2>
+                    <h2>Pressão com ECG</h2>
                     <div className="kiosk-oxi-vitals kiosk-bp-vitals">
                         <div>
                             <span className="kiosk-muted">Sistólica</span>
@@ -362,6 +364,29 @@ export function SessionReport({
                         <p className="kiosk-muted">
                             Gráfico dos batimentos. Role para o lado para ver o registro completo. O ícone no canto suaviza o desenho; desligado, mostra o traço original.
                         </p>
+                    ) : null}
+                </section>
+            ) : null}
+
+            {wristBloodPressure ? (
+                <section className="kiosk-report-card kiosk-print-wide">
+                    <h2>Pressão e pulso</h2>
+                    <div className="kiosk-oxi-vitals kiosk-bp-vitals">
+                        <div>
+                            <span className="kiosk-muted">Sistólica</span>
+                            <strong>{wristBloodPressure.sys_mmhg}</strong>
+                        </div>
+                        <div>
+                            <span className="kiosk-muted">Diastólica</span>
+                            <strong>{wristBloodPressure.dia_mmhg}</strong>
+                        </div>
+                        <div>
+                            <span className="kiosk-muted">Pulso</span>
+                            <strong>{wristBloodPressure.pulse_bpm} bpm</strong>
+                        </div>
+                    </div>
+                    {wristBloodPressure.irregular_heartbeat ? (
+                        <p className="kiosk-muted">Batimento irregular detectado nesta medição.</p>
                     ) : null}
                 </section>
             ) : null}

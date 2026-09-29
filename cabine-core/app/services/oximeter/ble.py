@@ -81,6 +81,7 @@ async def wait_for_oximeter(
     *,
     cancelled,
     on_waiting=None,
+    preferred_only: bool = False,
 ) -> BLEDevice | None:
     """Fica varrendo até o oxímetro aparecer (PC-60NW liga com o dedo; OX500 pelo botão)."""
     return await wait_for_device(
@@ -91,6 +92,7 @@ async def wait_for_oximeter(
         on_waiting=on_waiting,
         waiting_message=WAITING_MESSAGE,
         poll_seconds=3.0,
+        preferred_only=preferred_only,
     )
 
 

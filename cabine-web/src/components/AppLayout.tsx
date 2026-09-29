@@ -1,4 +1,4 @@
-import { Activity, HeartPulse, LogOut, Scale, Stethoscope, Users } from 'lucide-react';
+import { Activity, Bluetooth, HeartPulse, LogOut, Scale, Stethoscope, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
@@ -46,14 +46,24 @@ export function AppLayout({ children, bare }: { children: ReactNode; bare?: bool
                         {isMVP2 && (
                             <NavLink to="/admin/pressao">
                                 <HeartPulse size={16} strokeWidth={2} aria-hidden />
-                                Pressão
+                                Pressão com ECG
+                            </NavLink>
+                        )}
+                        {isMVP2 && (
+                            <NavLink to="/admin/pressao-pulso">
+                                <HeartPulse size={16} strokeWidth={2} aria-hidden />
+                                Pressão e pulso
                             </NavLink>
                         )}
 
-                        {/* Sempre — Pessoas */}
+                        {/* Sempre — Pessoas e pareamento */}
                         <NavLink to="/admin/pessoas">
                             <Users size={16} strokeWidth={2} aria-hidden />
                             Pessoas
+                        </NavLink>
+                        <NavLink to="/admin/equipamentos">
+                            <Bluetooth size={16} strokeWidth={2} aria-hidden />
+                            Equipamentos
                         </NavLink>
 
                         {/* MVP 1 — Gestão de balanças */}

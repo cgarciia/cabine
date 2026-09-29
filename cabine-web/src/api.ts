@@ -65,6 +65,7 @@ export const WS_PATHS = {
     scale: '/ws/scale',
     oximeter: '/ws/oximeter',
     bloodPressure: '/ws/blood-pressure',
+    wristBloodPressure: '/ws/blood-pressure-wrist',
 } as const;
 
 export type WsPath = (typeof WS_PATHS)[keyof typeof WS_PATHS];
@@ -174,6 +175,50 @@ export async function updateScale(scaleId: string, body: Partial<ScalePayload>):
 
 export async function deleteScale(scaleId: string): Promise<void> {
     await api.delete(`/scales/${encodeURIComponent(scaleId)}`);
+}
+
+export type DeviceKind = 'scale' | 'oximeter' | 'blood_pressure_ecg' | 'blood_pressure_wrist';
+
+export type FoundBleDevice = {
+    name: string;
+    address: string;
+    rssi: number | null;
+};
+
+export type PairedDevice = {
+    id: string;
+    kind: DeviceKind;
+    name: string;
+    address: string;
+    paired_at: string;
+    is_active: boolean;
+};
+
+export type DeviceInventory = {
+    devices: PairedDevice[];
+    scale: { id: string; name: string; address: string } | null;
+};
+
+export async function fetchDevices(): Promise<DeviceInventory> {
+    const { data } = await api.get<DeviceInventory>('/devices');
+    return {
+        devices: Array.isArray(data?.devices) ? data.devices : [],
+        scale: data?.scale ?? null,
+    };
+}
+
+export async function scanDevices(kind: DeviceKind): Promise<FoundBleDevice[]> {
+    const { data } = await api.post<{ devices: FoundBleDevice[] }>('/devices/scan', { kind }, { timeout: 30000 });
+    return Array.isArray(data.devices) ? data.devices : [];
+}
+
+export async function pairDevice(kind: DeviceKind, address: string, name?: string): Promise<DeviceInventory> {
+    const { data } = await api.post<DeviceInventory>(
+        '/devices/pair',
+        { kind, address, name },
+        { timeout: 120000 },
+    );
+    return data;
 }
 
 export async function saveMeasurement(body: MeasurementPayload): Promise<MeasurementRecord> {
