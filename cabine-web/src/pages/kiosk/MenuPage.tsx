@@ -88,10 +88,18 @@ export function MenuPage() {
         },
         {
             id: 'bloodPressure',
-            title: 'Pressão e pulso',
-            subtitle: 'Coloque o manguito e aperte START/STOP no aparelho.',
+            title: 'Pressão com ECG',
+            subtitle: 'Manguito no braço e dedos nos sensores.',
             path: '/pressao',
             done: Boolean(session.lastBloodPressure),
+            icon: HeartPulse,
+        },
+        {
+            id: 'wristBloodPressure',
+            title: 'Pressão e pulso',
+            subtitle: 'Coloque o monitor no pulso e aperte o botão.',
+            path: '/pressao-pulso',
+            done: Boolean(session.lastWristBloodPressure),
             icon: HeartPulse,
         },
         {

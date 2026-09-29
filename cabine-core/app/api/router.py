@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     auth,
     blood_pressure,
+    devices,
     fhir_patients,
     forms,
     health,
@@ -21,6 +22,7 @@ api_router.include_router(users.router)
 api_router.include_router(fhir_patients.router)
 api_router.include_router(people.router)
 api_router.include_router(oximeter.router)
+api_router.include_router(devices.router)
 
 if settings.MVP_VERSION == 1:
     api_router.include_router(forms.router)

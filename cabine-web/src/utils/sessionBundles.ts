@@ -2,6 +2,7 @@ import type { BloodPressureReading } from '../types/bloodPressure';
 import type { FormSubmission } from '../types/form';
 import { hasBiaImpedances, type MeasurementRecord } from '../types/measurement';
 import type { OximeterReading } from '../types/oximeter';
+import { isWristMonitor } from './bloodPressureKind';
 
 const WINDOW_MS = 45 * 60 * 1000;
 
@@ -13,6 +14,7 @@ export type SavedVisit = {
     measurement: MeasurementRecord | null;
     oximeter: OximeterReading | null;
     bloodPressure: BloodPressureReading | null;
+    wristBloodPressure: BloodPressureReading | null;
     health: FormSubmission | null;
     mental: FormSubmission | null;
 };
@@ -112,7 +114,10 @@ export function visitSummary(visit: SavedVisit): string {
     if (visit.measurement) parts.push(`${visit.measurement.weight_kg.toFixed(1)} kg`);
     if (visit.oximeter) parts.push(`Oxigenação ${visit.oximeter.spo2_pct}%`);
     if (visit.bloodPressure) {
-        parts.push(`${visit.bloodPressure.sys_mmhg}/${visit.bloodPressure.dia_mmhg} mmHg`);
+        parts.push(`ECG ${visit.bloodPressure.sys_mmhg}/${visit.bloodPressure.dia_mmhg} mmHg`);
+    }
+    if (visit.wristBloodPressure) {
+        parts.push(`Pulso ${visit.wristBloodPressure.sys_mmhg}/${visit.wristBloodPressure.dia_mmhg} mmHg`);
     }
     return parts.join(' · ') || 'Relatório';
 }
@@ -126,6 +131,7 @@ function emptyVisit(piece: Piece): SavedVisit {
         measurement: null,
         oximeter: null,
         bloodPressure: null,
+        wristBloodPressure: null,
         health: null,
         mental: null,
     };
@@ -140,8 +146,12 @@ function assignPiece(visit: SavedVisit, piece: Piece) {
         visit.measurement = preferMeasurement(visit.measurement, piece.measurement);
     } else if (piece.kind === 'oximeter' && piece.oximeter && !visit.oximeter) {
         visit.oximeter = piece.oximeter;
-    } else if (piece.kind === 'bloodPressure' && piece.bloodPressure && !visit.bloodPressure) {
-        visit.bloodPressure = piece.bloodPressure;
+    } else if (piece.kind === 'bloodPressure' && piece.bloodPressure) {
+        if (isWristMonitor(piece.bloodPressure.device_name)) {
+            if (!visit.wristBloodPressure) visit.wristBloodPressure = piece.bloodPressure;
+        } else if (!visit.bloodPressure) {
+            visit.bloodPressure = piece.bloodPressure;
+        }
     } else if (piece.kind === 'health' && piece.form && !visit.health) {
         visit.health = piece.form;
     } else if (piece.kind === 'mental' && piece.form && !visit.mental) {

@@ -37,6 +37,7 @@ export type KioskSession = {
     lastMeasurement: MeasurementRecord | null;
     lastOximeter: OximeterReading | null;
     lastBloodPressure: BloodPressureReading | null;
+    lastWristBloodPressure: BloodPressureReading | null;
 };
 
 type KioskContextValue = {
@@ -48,6 +49,7 @@ type KioskContextValue = {
     setLastMeasurement: (record: MeasurementRecord | null) => void;
     setLastOximeter: (reading: OximeterReading | null) => void;
     setLastBloodPressure: (reading: BloodPressureReading | null) => void;
+    setLastWristBloodPressure: (reading: BloodPressureReading | null) => void;
     clearSession: () => void;
     hasReportData: boolean;
 };
@@ -60,6 +62,7 @@ const empty: KioskSession = {
     lastMeasurement: null,
     lastOximeter: null,
     lastBloodPressure: null,
+    lastWristBloodPressure: null,
 };
 
 function loadSession(): KioskSession {
@@ -152,12 +155,14 @@ export function KioskProvider({ children }: { children: ReactNode }) {
         setLastMeasurement: (lastMeasurement) => update({ lastMeasurement }),
         setLastOximeter: (lastOximeter) => update({ lastOximeter }),
         setLastBloodPressure: (lastBloodPressure) => update({ lastBloodPressure }),
+        setLastWristBloodPressure: (lastWristBloodPressure) => update({ lastWristBloodPressure }),
         clearSession,
         hasReportData: Boolean(
             session.generalHealth
             || session.lastMeasurement
             || session.lastOximeter
             || session.lastBloodPressure
+            || session.lastWristBloodPressure
             || mentalDone,
         ),
     }), [session, setPerson, beginVisit, update, clearSession, mentalDone]);

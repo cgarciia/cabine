@@ -10,13 +10,14 @@ import type { OximeterReading } from '../../types/oximeter';
 
 export function ReportPage() {
     const navigate = useNavigate();
-    const { session, setLastMeasurement, setLastOximeter, setLastBloodPressure, hasReportData } = useKiosk();
+    const { session, setLastMeasurement, setLastOximeter, setLastBloodPressure, setLastWristBloodPressure, hasReportData } = useKiosk();
     const personId = session.person?.id;
     const measurementId = session.lastMeasurement?.id;
     const oximeterId = session.lastOximeter?.id;
     const oximeterWave = session.lastOximeter?.waveform;
     const bloodPressureId = session.lastBloodPressure?.id;
     const bloodPressureEcg = session.lastBloodPressure?.ecg_mv;
+    const wristBloodPressureId = session.lastWristBloodPressure?.id;
 
     useEffect(() => {
         if (!personId || !measurementId) return;
@@ -66,6 +67,21 @@ export function ReportPage() {
         };
     }, [personId, bloodPressureId, bloodPressureEcg, setLastBloodPressure]);
 
+    useEffect(() => {
+        if (!personId || !wristBloodPressureId) return;
+        let cancelled = false;
+        fetchPersonBloodPressure(personId)
+            .then((rows) => {
+                if (cancelled || !rows[0]) return;
+                const match = rows.find((row) => row.id === wristBloodPressureId);
+                if (match) setLastWristBloodPressure(match);
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, [personId, wristBloodPressureId, setLastWristBloodPressure]);
+
     if (!session.person) return <Navigate to="/matricula" replace />;
     if (!hasReportData) return <Navigate to="/menu" replace />;
 
@@ -90,6 +106,7 @@ export function ReportPage() {
                 measurement={session.lastMeasurement}
                 oximeter={session.lastOximeter}
                 bloodPressure={session.lastBloodPressure}
+                wristBloodPressure={session.lastWristBloodPressure}
             />
             <div className="kiosk-report-actions no-print" style={{ padding: '0 0 1.5rem' }}>
                 <button type="button" className="kiosk-btn kiosk-btn-primary" onClick={() => window.print()}>

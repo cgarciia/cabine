@@ -6,6 +6,7 @@ export const STORAGE_KEYS = {
     currentPersonId: 'cabine.current-person-id',
     oximeterAddress: 'cabine.oximeter-address',
     bpAddress: 'cabine.bp-address',
+    bpWristAddress: 'cabine.bp-wrist-address',
     kioskSession: 'cabine.kiosk-session',
 } as const;
 

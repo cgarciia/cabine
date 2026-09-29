@@ -350,7 +350,7 @@ export function KioskBloodPressurePage() {
             <KioskLayout>
                 <AfterStepScreen
                     justFinished="bloodPressure"
-                    title="Pressão registrada"
+                    title="Pressão com ECG registrada"
                     description={
                         frozenEcg && frozenEcg.length
                             ? 'Pressão, pulso e batimentos foram registrados.'
@@ -378,7 +378,7 @@ export function KioskBloodPressurePage() {
     return (
         <KioskLayout>
             <div className="kiosk-center-card kiosk-oximeter-card kiosk-bp-card">
-                <p className="kiosk-step-label">5 · Passo</p>
+                <p className="kiosk-step-label">5 · Pressão com ECG</p>
                 <h1 className="kiosk-title">{current.title}</h1>
                 <p className="kiosk-oximeter-status" role="status" aria-live="polite">
                     {status}

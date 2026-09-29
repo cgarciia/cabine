@@ -84,6 +84,7 @@ export function RecordsPage() {
                     measurement={selected.measurement}
                     oximeter={selected.oximeter}
                     bloodPressure={selected.bloodPressure}
+                    wristBloodPressure={selected.wristBloodPressure}
                 />
             ) : null}
 
