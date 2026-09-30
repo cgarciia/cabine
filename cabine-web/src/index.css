@@ -2256,52 +2256,375 @@ code {
 
 .kiosk-report-card {
   background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
-  padding: 1.1rem;
+  border: 1px solid #cecece;
+  border-radius: 18px;
+  padding: 18px 22px;
 }
 
 .kiosk-report-card h2 {
-  margin: 0 0 0.75rem;
-  font-size: 1.2rem;
-  color: #0f172a;
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #141414;
 }
 
-.kiosk-report-sub {
-  margin: 1.1rem 0 0.45rem;
-  font-size: 0.95rem;
-  color: #0f766e;
-}
+/* ——— Report (rpt-*) — design tokens ——— */
+/* --accent: #2678c1  --text-primary: #141414  --text-secondary: #505050
+   --text-tertiary: #717171  --stroke: #cecece  --divider: #e4e4e4
+   --icon-warning: #eaa34d  --icon-success: #5fc19f
+   --stat-success: #67c1a3  --stat-info: #81badd                       */
 
-.kiosk-finding-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.print-only { display: none; }
+
+/* Header */
+.rpt-header {
+  border: 1px solid #cecece;
+  border-top: 4px solid #2678c1;
+  border-radius: 18px;
+  padding: 18px 22px;
+  background: #fff;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
 }
 
-.kiosk-finding-list li {
-  background: #f0fdfa;
-  border: 1px solid #ccfbf1;
-  border-radius: 12px;
-  padding: 0.7rem 0.85rem;
+.rpt-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rpt-logo-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #2678c1;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rpt-brand-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.kiosk-finding-list strong {
-  color: #134e4a;
+.rpt-brand-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #141414;
+  line-height: 1.1;
 }
 
-.kiosk-qa-list {
-  margin: 0;
-  padding-left: 1.15rem;
+.rpt-brand-ia {
+  color: #2678c1;
+}
+
+.rpt-brand-sub {
+  font-size: 11px;
+  color: #717171;
+}
+
+.rpt-patient-meta {
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.rpt-patient-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #141414;
+}
+
+.rpt-patient-detail {
+  font-size: 11px;
+  color: #505050;
+}
+
+/* Score */
+.rpt-score-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.rpt-score-pct {
+  font-size: 30px;
+  font-weight: 700;
+  color: #2678c1;
+  line-height: 1;
+}
+
+.rpt-score-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rpt-score-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #141414;
+}
+
+.rpt-score-sub {
+  font-size: 12px;
+  color: #717171;
+}
+
+/* Progress bar */
+.rpt-progress-bar {
+  height: 6px;
+  border-radius: 99px;
+  background: #eaeaea;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.rpt-progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: #2678c1;
+  transition: width 0.3s;
+}
+
+/* Dividers */
+.rpt-divider {
+  border: none;
+  border-top: 1px solid #e4e4e4;
+  margin: 14px 0;
+}
+
+.rpt-divider--sm {
+  margin: 10px 0;
+}
+
+/* Labels */
+.rpt-accent-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #2678c1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+}
+
+.rpt-block-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #505050;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 14px 0 6px;
+}
+
+/* Callout stack */
+.rpt-callout-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.rpt-callout {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  column-gap: 10px;
+  align-items: start;
+  font-size: 13px;
+  line-height: 18px;
+  color: #141414;
+}
+
+.rpt-callout svg { margin-top: 2px; }
+.rpt-callout--warning svg { color: #eaa34d; }
+.rpt-callout--success svg { color: #5fc19f; }
+
+.rpt-c-title { font-weight: 600; }
+
+.rpt-c-body {
+  grid-column: 2;
+  margin-top: 2px;
+}
+
+/* Details / collapsible */
+.rpt-details {
+  margin-top: 10px;
+}
+
+.rpt-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #141414;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.rpt-summary::-webkit-details-marker { display: none; }
+
+.rpt-chevron {
+  color: #717171;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.rpt-details[open] .rpt-chevron {
+  transform: rotate(90deg);
+}
+
+/* Q&A */
+.rpt-qa {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.rpt-qa > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid #cecece;
+}
+
+.rpt-qa > div:last-child {
+  border-bottom: none;
+}
+
+.rpt-qa small {
+  font-size: 12px;
+  color: #717171;
+}
+
+.rpt-qa b {
+  color: #141414;
+  font-weight: 600;
+}
+
+/* Mental */
+.rpt-mental-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rpt-mental-band {
+  font-size: 16px;
+  font-weight: 700;
+  color: #141414;
+}
+
+.rpt-badge {
+  font-size: 12px;
+  background: #eeeeee;
+  border-radius: 99px;
+  padding: 3px 10px;
+  color: #505050;
+}
+
+/* Vital cards */
+.rpt-vital-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+  margin-bottom: 14px;
+}
+
+.rpt-vital-cards--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rpt-vital-card {
+  padding: 12px 14px;
+  border: 1px solid #cecece;
+  border-radius: 12px;
+  background: #fcfcfc;
+}
+
+.rpt-vital-card small {
+  display: block;
+  font-size: 11px;
+  color: #717171;
+}
+
+.rpt-vital-value {
+  display: block;
+  margin: 10px 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+  text-align: center;
+  color: #141414;
+}
+
+.rpt-vital-value--success { color: #67c1a3; }
+.rpt-vital-value--info    { color: #81badd; }
+
+/* BP note */
+.rpt-bp-note {
+  font-size: 12px;
+  color: #717171;
+  margin: 0 0 10px;
+}
+
+/* ECG */
+.rpt-ecg-label {
+  margin-top: 14px;
+}
+
+.rpt-ecg-note {
+  font-size: 12px;
+  color: #717171;
+  margin-top: 6px;
+}
+
+/* Footer */
+.rpt-footer {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.rpt-footer p {
+  margin: 0;
+  font-size: 12px;
+  color: #717171;
+}
+
+.rpt-footer-date {
+  font-size: 10px;
+  color: #717171;
+}
+
+/* Print summary layout */
+.rpt-print-summary {
+  display: none;
+}
+
+.rpt-print-waves {
+  display: none;
+}
+
+.rpt-print-qa {
+  display: none;
 }
 
 .kiosk-qa-list li p {
@@ -2529,6 +2852,169 @@ code {
 
   .no-print {
     display: none !important;
+  }
+
+  /* rpt-*: mostrar seções print-only, ocultar seções screen-only */
+  .print-only {
+    display: block !important;
+  }
+
+  .rpt-screen-section {
+    display: none !important;
+  }
+
+  .rpt-print-summary {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0 10px;
+    border: 1px solid #cecece;
+    border-top: 3px solid #2678c1;
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: #fff;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .rpt-print-col {
+    padding: 0 6px;
+    border-right: 1px solid #e4e4e4;
+  }
+
+  .rpt-print-col:last-child {
+    border-right: none;
+  }
+
+  .rpt-print-score {
+    margin: 0 0 4px;
+    font-size: 9pt;
+  }
+
+  .rpt-print-score-pct {
+    font-size: 13pt;
+    font-weight: 700;
+    color: #2678c1;
+  }
+
+  .rpt-print-score-pts {
+    font-size: 8pt;
+    color: #717171;
+  }
+
+  .rpt-print-finding {
+    font-size: 8pt;
+    margin-bottom: 3px;
+    color: #505050;
+  }
+
+  .rpt-print-mental-band {
+    margin: 0 0 2px;
+    font-size: 10pt;
+    font-weight: 700;
+    color: #141414;
+  }
+
+  .rpt-print-mental-sub {
+    font-size: 8pt;
+    color: #717171;
+    margin: 0 0 3px;
+  }
+
+  .rpt-print-vitals {
+    font-size: 8pt;
+  }
+
+  .rpt-print-vitals > div {
+    display: flex;
+    justify-content: space-between;
+    padding: 1px 0;
+  }
+
+  .rpt-print-vital-main {
+    font-weight: 700;
+  }
+
+.rpt-print-note {
+  font-size: 8pt;
+  color: #717171;
+  margin: 0;
+}
+
+.rpt-callout-offset {
+  margin-top: 10px;
+}
+
+  .rpt-print-waves {
+    display: flex !important;
+    gap: 10px;
+    margin: 4px 0;
+  }
+
+  .rpt-print-wave-col {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .rpt-print-qa {
+    display: block !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    font-size: 8pt;
+  }
+
+  .rpt-print-qa-section {
+    margin-bottom: 6px;
+  }
+
+  .rpt-print-qa-list {
+    margin: 0;
+    padding-left: 1rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 12px;
+    row-gap: 2px;
+  }
+
+  .rpt-print-qa-list li {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Header compacto na impressão */
+  .rpt-header {
+    padding: 8px 12px !important;
+    border-radius: 6px !important;
+  }
+
+  .rpt-logo-mark {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 11px !important;
+  }
+
+  .rpt-brand-name {
+    font-size: 12pt !important;
+  }
+
+  .rpt-brand-sub,
+  .rpt-patient-detail {
+    font-size: 8pt !important;
+  }
+
+  .rpt-patient-name {
+    font-size: 11pt !important;
+  }
+
+  /* Accent title compacto */
+  .rpt-accent-title {
+    font-size: 7pt !important;
+    margin-bottom: 4px !important;
+  }
+
+  /* Footer */
+  .rpt-footer p,
+  .rpt-footer-date {
+    font-size: 7pt !important;
   }
 
   .kiosk-print-root {
