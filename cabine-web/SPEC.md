@@ -16,6 +16,27 @@ O `cabine-web` é a interface da cabine no chão de fábrica (totem) e a tela de
 
 Não é API, não fala com rádio BLE, não persiste Postgres. Isso é `cabine-core`.
 
+## 1.1 Dois MVPs ao mesmo tempo
+
+Um processo de API (`:8000`) atende questionário, balança, oxímetro e pressão. O recorte do MVP fica só na tela: cada porta do Vite carrega um modo e mostra o cardápio daquele modo.
+
+| | MVP 1 | MVP 2 |
+|---|---|---|
+| Modo Vite | `mvp1` (`.env.mvp1`) | `mvp2` (`.env.mvp2`) |
+| Porta | `https://127.0.0.1:5173` | `https://127.0.0.1:5174` |
+| Módulos | questionário, bioimpedância, oximetria | temperatura (ainda sem tela), pressão, oximetria |
+| API | `http://127.0.0.1:8000` | a mesma |
+
+A lista mora em `src/config/mvp.ts` (`activeModules` / `hasModule`). Menu, rotas e etapas da visita usam essa lista. Módulo novo entra na lista do MVP e nos mapas de menu/rota. A API não ganha `MVP_VERSION`.
+
+As duas portas são origens diferentes. O token (`cabine.token` no `localStorage`) de uma não apaga o da outra, então os dois totens podem ficar abertos no mesmo navegador, cada um com o seu login. Os dois gravam no mesmo Postgres.
+
+Subir os dois de uma vez, a partir da raiz do repositório ou de `cabine-core`:
+
+```bash
+make dev
+```
+
 ## 2. Árvore (padrão)
 
 ```
@@ -83,13 +104,14 @@ Não há pasta `src/**/*.test.ts` ainda. Quando existir, fica ao lado do módulo
 
 `KioskProvider` envolve o router. Rotas públicas: `/`, `/matricula`, `/cadastro`. O restante do totem passa por `<AuthGuard typ="person" redirectTo="/matricula" />`; `/admin/*` (exceto login) por `<AuthGuard typ="user" redirectTo="/admin/login" />`. Rota desconhecida → `/menu` (ou `/admin/avaliacao` dentro de `/admin`).
 
-Subir o front (com o core em `:8000`):
+Subir os dois MVPs (API inclusa): `make dev` na raiz. Só esta SPA, com o core já em `:8000`:
 
 ```bash
 cd cabine-web
 npm install
-npm run dev
-# https://127.0.0.1:5173  (certificado autoassinado; necessário para o microfone)
+npm run dev -- --host 127.0.0.1 --port 5173 --mode mvp1
+npm run dev -- --host 127.0.0.1 --port 5174 --mode mvp2
+# HTTPS, certificado autoassinado; necessário para o microfone
 ```
 
 Proxy em `vite.config.ts`. Em produção, `VITE_API_URL` aponta para a API; senão a origem do Vite + proxy.
@@ -239,9 +261,10 @@ IDs: string UUID.
 ## 10. Comandos locais
 
 ```bash
+make dev         # na raiz: API :8000, MVP 1 :5173, MVP 2 :5174
 cd cabine-web
 npm install
-npm run dev      # Vite :5173
+npm run dev -- --host 127.0.0.1 --port 5173 --mode mvp1
 npm run build    # tsc -b && vite build
 npm run lint
 ```

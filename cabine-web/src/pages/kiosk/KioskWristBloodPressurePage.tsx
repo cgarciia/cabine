@@ -9,6 +9,7 @@ import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
 import { loadDeviceAddress, saveDeviceAddress } from '../../session/deviceAddress';
 import { newVisitId } from '../../session/visitId';
+import { findVisitMatch } from '../../session/visitScope';
 import type { BloodPressureLive, BloodPressureReading } from '../../types/bloodPressure';
 
 const GUIDE = [
@@ -61,6 +62,7 @@ export function KioskWristBloodPressurePage() {
                 movement: Boolean(reading.movement),
                 irregular_heartbeat: Boolean(reading.irregular_heartbeat),
                 measured_at: reading.measured_at,
+                visit_id: session.visitId,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
             };
@@ -83,7 +85,13 @@ export function KioskWristBloodPressurePage() {
             } catch {
                 try {
                     const rows = await fetchPersonBloodPressure(person.id);
-                    const match = rows.find((row) => row.device_name === local.device_name) ?? rows[0];
+                    const match = findVisitMatch(
+                        rows,
+                        session.visitId,
+                        (row) => row.sys_mmhg === local.sys_mmhg
+                            && row.dia_mmhg === local.dia_mmhg
+                            && row.pulse_bpm === local.pulse_bpm,
+                    );
                     if (match) setLastWristBloodPressure(match);
                 } catch {
                     /* sessão local já gravada */

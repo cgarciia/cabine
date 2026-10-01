@@ -1,11 +1,9 @@
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Cabine API"
     PROJECT_VERSION: str = "1.0.0"
-    MVP_VERSION: int = Field(default=1, ge=1, le=2)
     POSTGRES_SERVER: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str

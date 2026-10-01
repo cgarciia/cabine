@@ -13,7 +13,6 @@ from app.api.routes import (
     scale,
     users,
 )
-from app.core.config import settings
 
 api_router = APIRouter()
 api_router.include_router(health.router)
@@ -23,11 +22,7 @@ api_router.include_router(fhir_patients.router)
 api_router.include_router(people.router)
 api_router.include_router(oximeter.router)
 api_router.include_router(devices.router)
-
-if settings.MVP_VERSION == 1:
-    api_router.include_router(forms.router)
-    api_router.include_router(scale.router)
-    api_router.include_router(measurements.router)
-
-if settings.MVP_VERSION == 2:
-    api_router.include_router(blood_pressure.router)
+api_router.include_router(forms.router)
+api_router.include_router(scale.router)
+api_router.include_router(measurements.router)
+api_router.include_router(blood_pressure.router)

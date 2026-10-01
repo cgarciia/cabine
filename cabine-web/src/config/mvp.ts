@@ -1,22 +1,20 @@
 /**
- * Configuração do MVP ativo.
+ * Cardápio do totem e do painel. A API não tem versão de MVP: um processo
+ * atende questionário, balança, oxímetro e pressão.
  *
- * Definido em tempo de build pela variável de ambiente VITE_MVP_VERSION.
- *   MVP 1 — Questionários + Bioimpedância + Oximetria
- *   MVP 2 — Temperatura (placeholder) + Pressão + Oximetria
+ * A lista ativa vem de VITE_MVP_VERSION, lida pelo Vite no modo de dev:
+ *   npm run dev -- --mode mvp1   → .env.mvp1 → porta 5173
+ *   npm run dev -- --mode mvp2   → .env.mvp2 → porta 5174
  *
- * Para iniciar:
- *   npm run dev -- --mode mvp1   → carrega .env.mvp1
- *   npm run dev -- --mode mvp2   → carrega .env.mvp2
+ * Os dois podem ficar abertos no mesmo navegador. Cada porta tem o próprio
+ * localStorage (cabine.token), então o login de uma não derruba a outra.
+ * As duas falam com a API em :8000.
  */
 
 export const MVP_VERSION: 1 | 2 =
     (import.meta.env.VITE_MVP_VERSION === '2' ? 2 : 1) as 1 | 2;
 
-export const isMVP1 = MVP_VERSION === 1;
-export const isMVP2 = MVP_VERSION === 2;
-
-/** Módulos funcionais do sistema. */
+/** Módulos que o menu desta porta pode mostrar. */
 export type MvpModule =
     | 'questionario'
     | 'bioimpedancia'
@@ -27,9 +25,21 @@ export type MvpModule =
 const MVP1_MODULES: MvpModule[] = ['questionario', 'bioimpedancia', 'oximetria'];
 const MVP2_MODULES: MvpModule[] = ['temperatura', 'pressao', 'oximetria'];
 
-const ACTIVE_MODULES: MvpModule[] = MVP_VERSION === 1 ? MVP1_MODULES : MVP2_MODULES;
+const ACTIVE_MODULES: readonly MvpModule[] = MVP_VERSION === 1 ? MVP1_MODULES : MVP2_MODULES;
 
-/** Retorna true se o módulo está ativo no MVP atual. */
+export function activeModules(): readonly MvpModule[] {
+    return ACTIVE_MODULES;
+}
+
+/** Retorna true se o módulo está no cardápio desta porta. */
 export function hasModule(module: MvpModule): boolean {
     return ACTIVE_MODULES.includes(module);
+}
+
+/** Primeira tela do painel quando o operador abre /admin. */
+export function adminHomePath(): string {
+    if (hasModule('bioimpedancia')) return '/admin/avaliacao';
+    if (hasModule('pressao')) return '/admin/pressao';
+    if (hasModule('oximetria')) return '/admin/oximetria';
+    return '/admin/pessoas';
 }

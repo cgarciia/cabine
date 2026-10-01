@@ -19,6 +19,8 @@ O `cabine-core` é a API e o hardware da cabine:
 
 Não é SPA, não calcula tela, não guarda sessão de kiosk. Isso é `cabine-web`.
 
+O core não escolhe MVP. `api/router.py` registra questionário, balança, oxímetro e pressão no mesmo processo (`:8000`). Qual cardápio aparece é decisão do Vite (`cabine-web/src/config/mvp.ts`): a porta 5173 mostra o MVP 1 e a 5174 mostra o MVP 2. As duas falam com esta API. `make dev` (na raiz ou aqui) sobe esse conjunto. Não criar um segundo uvicorn só para separar módulo: o rádio BLE é um só (`ble_radio_lock`).
+
 ## 2. Árvore (padrão)
 
 ```
@@ -269,12 +271,13 @@ IDs: `UUID` no FastAPI; string UUID no front.
 ## 11. Comandos locais
 
 ```bash
+make dev           # na raiz ou aqui: API :8000 + MVP 1 :5173 + MVP 2 :5174
 cd cabine-core
 cp .env.example .env   # ajustar SECRET_KEY e Postgres
 uv sync
 make db-up
 make migrate
-make run
+make run           # só a API, todas as rotas
 ```
 
 Health check: `GET http://127.0.0.1:8000/health` → `{"status":"ok"}`.

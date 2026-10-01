@@ -19,7 +19,8 @@ from app.services.blood_pressure.persist import save_blood_pressure_reading
 
 logger = logging.getLogger(__name__)
 
-SESSION_SKEW = timedelta(hours=12)
+# The monitor keeps old results in memory. Only a reading from this sitting counts.
+SESSION_SKEW = timedelta(seconds=45)
 IDLE_STATUS = "Faça a medição no pulso. Quando o visor mostrar o valor, o totem busca a leitura salva."
 MISSING_PROFILE_STATUS = "O monitor conectou, mas não entregou uma medição nova."
 
@@ -51,6 +52,8 @@ async def stream_blood_pressure_wrist(
     cancelled = session.cancelled
     preferred = [_resolved_address(address)]
     delivered: set[tuple] = set()
+    seen_in_memory: set[tuple] = set()
+    memory_ready = False
     session_started_at = datetime.now().astimezone() - SESSION_SKEW
 
     client_task = asyncio.create_task(session.listen_person_messages())
@@ -66,9 +69,9 @@ async def stream_blood_pressure_wrist(
         measured_at: datetime,
     ) -> bool:
         when = _aware(measured_at)
-        if when < session_started_at:
+        key = _reading_key(sys_mmhg, dia_mmhg, pulse_bpm, when)
+        if when < session_started_at and key in seen_in_memory:
             return False
-        key = (sys_mmhg, dia_mmhg, pulse_bpm, when.replace(microsecond=0).isoformat())
         if key in delivered:
             return False
         if pulse_bpm < 40 or pulse_bpm > 180:
@@ -145,7 +148,11 @@ async def stream_blood_pressure_wrist(
                             **kwargs,
                         ),
                         send_status=send_status,
+                        not_before=session_started_at,
+                        seen_in_memory=seen_in_memory,
+                        memory_ready=memory_ready,
                     )
+                    memory_ready = True
                 except WristProtocolError as exc:
                     logger.warning("HEM-6161T2 sync refused: %s", exc)
                     await send_status(str(exc))
@@ -175,9 +182,36 @@ async def stream_blood_pressure_wrist(
         await cancel_and_wait(client_task)
 
 
-async def _collect_stored_reading(client, *, emit_reading, send_status) -> bool:
+def _reading_key(sys_mmhg: int, dia_mmhg: int, pulse_bpm: int | None, measured_at: datetime) -> tuple:
+    when = _aware(measured_at).replace(microsecond=0).isoformat()
+    return (sys_mmhg, dia_mmhg, pulse_bpm, when)
+
+
+def _memory_key(item: dict) -> tuple:
+    pulse = item.get("pulse_bpm")
+    return _reading_key(
+        item["sys_mmhg"],
+        item["dia_mmhg"],
+        None if pulse is None else int(pulse),
+        item["measured_at"],
+    )
+
+
+async def _collect_stored_reading(
+    client,
+    *,
+    emit_reading,
+    send_status,
+    not_before: datetime,
+    seen_in_memory: set[tuple],
+    memory_ready: bool,
+) -> bool:
     records = await pull_wrist_records(client)
-    fresh = [item for item in records if _aware(item["measured_at"]) >= session_floor()]
+    if not memory_ready:
+        seen_in_memory.update(_memory_key(item) for item in records)
+        fresh = [item for item in records if _aware(item["measured_at"]) >= not_before]
+    else:
+        fresh = [item for item in records if _memory_key(item) not in seen_in_memory]
     if not fresh:
         await send_status(MISSING_PROFILE_STATUS)
         return False
@@ -185,8 +219,9 @@ async def _collect_stored_reading(client, *, emit_reading, send_status) -> bool:
     pulse = latest.get("pulse_bpm")
     if pulse is None:
         await send_status(MISSING_PROFILE_STATUS)
+        seen_in_memory.update(_memory_key(item) for item in records)
         return False
-    return await emit_reading(
+    sent = await emit_reading(
         sys_mmhg=latest["sys_mmhg"],
         dia_mmhg=latest["dia_mmhg"],
         pulse_bpm=int(pulse),
@@ -194,7 +229,5 @@ async def _collect_stored_reading(client, *, emit_reading, send_status) -> bool:
         irregular_heartbeat=bool(latest.get("irregular_heartbeat")),
         measured_at=latest["measured_at"],
     )
-
-
-def session_floor():
-    return datetime.now().astimezone() - SESSION_SKEW
+    seen_in_memory.update(_memory_key(item) for item in records)
+    return sent

@@ -11,6 +11,7 @@ import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
 import { loadDeviceAddress, saveDeviceAddress } from '../../session/deviceAddress';
 import { newVisitId } from '../../session/visitId';
+import { findVisitMatch } from '../../session/visitScope';
 import type { OximeterLive, OximeterReading } from '../../types/oximeter';
 
 export function KioskOximeterPage() {
@@ -83,6 +84,7 @@ export function KioskOximeterPage() {
                 pulse_bpm: reading.pulse_bpm,
                 pi_pct: reading.pi_pct ?? null,
                 stable: true,
+                visit_id: session.visitId,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 waveform,
@@ -106,8 +108,13 @@ export function KioskOximeterPage() {
             } catch {
                 try {
                     const rows = await fetchPersonOximeter(person.id);
-                    if (rows[0]) {
-                        const withWave = { ...rows[0], waveform };
+                    const match = findVisitMatch(
+                        rows,
+                        session.visitId,
+                        (row) => row.spo2_pct === local.spo2_pct && row.pulse_bpm === local.pulse_bpm,
+                    );
+                    if (match) {
+                        const withWave = { ...match, waveform };
                         setLastOximeter(withWave);
                         return withWave;
                     }

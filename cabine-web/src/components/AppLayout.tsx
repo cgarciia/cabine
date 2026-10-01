@@ -2,7 +2,7 @@ import { Activity, Bluetooth, HeartPulse, LogOut, Scale, Stethoscope, Users } fr
 import type { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
-import { isMVP1, isMVP2 } from '../config/mvp';
+import { hasModule } from '../config/mvp';
 import { useKiosk } from '../kiosk/KioskContext';
 import { clearAccessSession } from '../session/authSession';
 
@@ -28,28 +28,25 @@ export function AppLayout({ children, bare }: { children: ReactNode; bare?: bool
                 </div>
                 {!bare ? (
                     <nav className="cabine-nav">
-                        {/* MVP 1 — Bioimpedância */}
-                        {isMVP1 && (
+                        {hasModule('bioimpedancia') && (
                             <NavLink to="/admin/avaliacao" end>
                                 <Stethoscope size={16} strokeWidth={2} aria-hidden />
                                 Avaliação
                             </NavLink>
                         )}
-
-                        {/* Compartilhado — Oximetria */}
-                        <NavLink to="/admin/oximetria">
-                            <Activity size={16} strokeWidth={2} aria-hidden />
-                            Oximetria
-                        </NavLink>
-
-                        {/* MVP 2 — Pressão */}
-                        {isMVP2 && (
+                        {hasModule('oximetria') && (
+                            <NavLink to="/admin/oximetria">
+                                <Activity size={16} strokeWidth={2} aria-hidden />
+                                Oximetria
+                            </NavLink>
+                        )}
+                        {hasModule('pressao') && (
                             <NavLink to="/admin/pressao">
                                 <HeartPulse size={16} strokeWidth={2} aria-hidden />
                                 Pressão com ECG
                             </NavLink>
                         )}
-                        {isMVP2 && (
+                        {hasModule('pressao') && (
                             <NavLink to="/admin/pressao-pulso">
                                 <HeartPulse size={16} strokeWidth={2} aria-hidden />
                                 Pressão e pulso
@@ -66,8 +63,7 @@ export function AppLayout({ children, bare }: { children: ReactNode; bare?: bool
                             Equipamentos
                         </NavLink>
 
-                        {/* MVP 1 — Gestão de balanças */}
-                        {isMVP1 && (
+                        {hasModule('bioimpedancia') && (
                             <NavLink to="/admin/balancas">
                                 <Scale size={16} strokeWidth={2} aria-hidden />
                                 Balanças
