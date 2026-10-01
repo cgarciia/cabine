@@ -149,6 +149,22 @@ export function hasBiaImpedances(values?: number[] | null): boolean {
     return values.filter((z) => z >= 5).length >= 4;
 }
 
+export function hasBodyCompositionMetrics(metrics?: ScaleMetrics | null): boolean {
+    if (!metrics) return false;
+    return [
+        metrics.gordura_pct,
+        metrics.gordura_kg,
+        metrics.massa_magra_kg,
+        metrics.agua_pct,
+        metrics.agua_kg,
+        metrics.musculo_esqueletico_kg,
+        metrics.musculo_esqueletico_pct,
+        metrics.musculo_kg,
+        metrics.gordura_visceral,
+        metrics.osso_kg,
+    ].some((value) => value != null);
+}
+
 export function isWeightOnlyReport(record: {
     adapter?: string | null;
     complete?: boolean;
@@ -156,6 +172,6 @@ export function isWeightOnlyReport(record: {
     metrics?: ScaleMetrics | null;
 }): boolean {
     if (hasBiaImpedances(record.impedances_ohm)) return false;
-    if (record.metrics?.metodo === 'wla25' || record.metrics?.agua_pct != null) return false;
+    if (record.metrics?.metodo === 'wla25' || hasBodyCompositionMetrics(record.metrics)) return false;
     return record.adapter === 'ble_rm_rd2504a' || !record.complete;
 }

@@ -38,8 +38,8 @@ function mentalFindingDetail(result: MentalResult): string {
 
 function formatSex(sex: string): string {
     const s = sex.toLowerCase();
-    if (s === 'f' || s === 'feminino') return 'Feminino';
-    if (s === 'm' || s === 'masculino') return 'Masculino';
+    if (s === 'f' || s === 'female' || s === 'feminino') return 'Feminino';
+    if (s === 'm' || s === 'male' || s === 'masculino') return 'Masculino';
     return sex;
 }
 
@@ -427,7 +427,7 @@ export function SessionReport({
 
             {/* ── Bioimpedância — screen + print ── */}
             {measurement ? (
-                <section className="kiosk-report-card kiosk-print-wide">
+                <section className="kiosk-report-card kiosk-print-wide rpt-bia-section">
                     <h2>Bioimpedância</h2>
                     <BodyReport
                         personName={person.name}
@@ -441,6 +441,7 @@ export function SessionReport({
                         supportsBia={measurement.adapter === 'ble_rm_rd2504a' || Boolean(measurement.metrics)}
                         weightOnly={isWeightOnlyReport(measurement)}
                         saved
+                        embedded
                         segments={measurement.segments ?? []}
                         measuredAt={whenLabel}
                     />
