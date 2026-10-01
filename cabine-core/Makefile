@@ -13,6 +13,9 @@ db-reset:
 run:
 	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
+dev:
+	powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/dev.ps1
+
 m ?= "autogenerate"
 makemigrations:
 	uv run alembic revision --autogenerate -m "$(m)"

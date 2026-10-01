@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 
 import { ConfirmDialog, END_SESSION_CONFIRM } from '../../components/ConfirmDialog';
-import { isMVP1 } from '../../config/mvp';
+import { activeModules, type MvpModule } from '../../config/mvp';
+import { sameVisit } from '../../session/visitScope';
 import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
 import { clearAccessSession } from '../../session/authSession';
@@ -39,80 +40,88 @@ export function MenuPage() {
 
     if (!session.person) return <Navigate to="/matricula" replace />;
 
-    // MVP 1: Questionários + Bioimpedância + Oximetria
-    const mvp1Items: MenuItem[] = [
-        {
-            id: 'general',
-            title: 'Saúde Geral',
-            subtitle: 'Perguntas rápidas sobre como você está hoje.',
-            path: '/saude-geral',
-            done: Boolean(session.generalHealth),
-            icon: ClipboardList,
-        },
-        {
-            id: 'mental',
-            title: 'Saúde Mental',
-            subtitle: 'Perguntas opcionais sobre bem-estar e humor.',
-            path: '/saude-mental',
-            done: Boolean(session.mentalHealth?.completedAt || session.mentalHealth?.refused),
-            icon: Brain,
-        },
-        {
-            id: 'bia',
-            title: 'Bioimpedância',
-            subtitle: 'Suba na balança. A tela orienta cada passo.',
-            path: '/bioimpedancia',
-            done: Boolean(session.lastMeasurement),
-            icon: Scale,
-        },
-        {
-            id: 'oximeter',
-            title: 'Oxigenação',
-            subtitle: 'Coloque o dedo no oxímetro para medir oxigênio e pulso.',
-            path: '/oximetro',
-            done: Boolean(session.lastOximeter),
-            icon: Activity,
-        },
-    ];
+    function itemsFor(module: MvpModule): MenuItem[] {
+        if (module === 'questionario') {
+            return [
+                {
+                    id: 'general',
+                    title: 'Saúde Geral',
+                    subtitle: 'Perguntas rápidas sobre como você está hoje.',
+                    path: '/saude-geral',
+                    done: Boolean(session.generalHealth),
+                    icon: ClipboardList,
+                },
+                {
+                    id: 'mental',
+                    title: 'Saúde Mental',
+                    subtitle: 'Perguntas opcionais sobre bem-estar e humor.',
+                    path: '/saude-mental',
+                    done: Boolean(session.mentalHealth?.completedAt || session.mentalHealth?.refused),
+                    icon: Brain,
+                },
+            ];
+        }
+        if (module === 'bioimpedancia') {
+            return [
+                {
+                    id: 'bia',
+                    title: 'Bioimpedância',
+                    subtitle: 'Suba na balança. A tela orienta cada passo.',
+                    path: '/bioimpedancia',
+                    done: sameVisit(session.lastMeasurement, session.visitId),
+                    icon: Scale,
+                },
+            ];
+        }
+        if (module === 'oximetria') {
+            return [
+                {
+                    id: 'oximeter',
+                    title: 'Oxigenação',
+                    subtitle: 'Coloque o dedo no oxímetro para medir oxigênio e pulso.',
+                    path: '/oximetro',
+                    done: sameVisit(session.lastOximeter, session.visitId),
+                    icon: Activity,
+                },
+            ];
+        }
+        if (module === 'temperatura') {
+            return [
+                {
+                    id: 'temperatura',
+                    title: 'Temperatura',
+                    subtitle: 'Módulo em breve. Não disponível nesta versão.',
+                    path: '',
+                    done: false,
+                    icon: Thermometer,
+                    disabled: true,
+                },
+            ];
+        }
+        if (module === 'pressao') {
+            return [
+                {
+                    id: 'bloodPressure',
+                    title: 'Pressão com ECG',
+                    subtitle: 'Manguito no braço e dedos nos sensores.',
+                    path: '/pressao',
+                    done: sameVisit(session.lastBloodPressure, session.visitId),
+                    icon: HeartPulse,
+                },
+                {
+                    id: 'wristBloodPressure',
+                    title: 'Pressão e pulso',
+                    subtitle: 'Coloque o monitor no pulso e aperte o botão.',
+                    path: '/pressao-pulso',
+                    done: sameVisit(session.lastWristBloodPressure, session.visitId),
+                    icon: HeartPulse,
+                },
+            ];
+        }
+        return [];
+    }
 
-    // MVP 2: Temperatura (placeholder) + Pressão + Oximetria
-    const mvp2Items: MenuItem[] = [
-        {
-            id: 'temperatura',
-            title: 'Temperatura',
-            subtitle: 'Módulo em breve. Não disponível nesta versão.',
-            path: '',
-            done: false,
-            icon: Thermometer,
-            disabled: true,
-        },
-        {
-            id: 'bloodPressure',
-            title: 'Pressão com ECG',
-            subtitle: 'Manguito no braço e dedos nos sensores.',
-            path: '/pressao',
-            done: Boolean(session.lastBloodPressure),
-            icon: HeartPulse,
-        },
-        {
-            id: 'wristBloodPressure',
-            title: 'Pressão e pulso',
-            subtitle: 'Coloque o monitor no pulso e aperte o botão.',
-            path: '/pressao-pulso',
-            done: Boolean(session.lastWristBloodPressure),
-            icon: HeartPulse,
-        },
-        {
-            id: 'oximeter',
-            title: 'Oxigenação',
-            subtitle: 'Coloque o dedo no oxímetro para medir oxigênio e pulso.',
-            path: '/oximetro',
-            done: Boolean(session.lastOximeter),
-            icon: Activity,
-        },
-    ];
-
-    const items: MenuItem[] = isMVP1 ? mvp1Items : mvp2Items;
+    const items: MenuItem[] = activeModules().flatMap(itemsFor);
     
     function endVisit() {
         clearSession();

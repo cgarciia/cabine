@@ -10,30 +10,23 @@ Mapas de pasta e regras: `cabine-core/SPEC.md` e `cabine-web/SPEC.md`.
 - Node.js LTS
 - Postgres 16 (`cabine-core/docker-compose.yml`)
 
-## Backend
+## Os dois MVPs
+
+Uma API atende os dois. Cada porta do Vite mostra um cardápio. Na raiz do repositório (ou em `cabine-core`):
 
 ```bash
-cd cabine-core
-cp .env.example .env   # SECRET_KEY e Postgres
-uv sync
-make db-up
-make migrate
-make run
+make dev
 ```
 
-Health: `GET http://127.0.0.1:8000/health` ? `{"status":"ok"}`.
+- MVP 1 (questionário, bioimpedância, oximetria): `https://127.0.0.1:5173`
+- MVP 2 (temperatura, pressão, oximetria): `https://127.0.0.1:5174`
+- API: `http://127.0.0.1:8000/health` ? `{"status":"ok"}`
+
+O certificado do Vite é autoassinado. O login de uma porta não apaga o da outra.
+
+Antes da primeira vez: `cabine-core/.env` a partir de `.env.example`, `uv sync` em `cabine-core` e `npm install` em `cabine-web`. O `make dev` sobe o Postgres.
 
 Sondas de laboratório ficam em `cabine-core/scripts/` e **não** sobem no servidor.
-
-## Frontend
-
-```bash
-cd cabine-web
-npm install
-npm run dev
-```
-
-O Vite escuta em `https://127.0.0.1:5173` (certificado autoassinado) e faz proxy HTTP/WS para a API em `:8000`.
 
 - Totem: `/` ? matrícula ? menu
 - Painel: `/admin/login` (e-mail/senha do operador)

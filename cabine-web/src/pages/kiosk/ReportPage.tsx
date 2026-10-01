@@ -6,81 +6,103 @@ import { fetchPersonBloodPressure, fetchPersonMeasurements, fetchPersonOximeter 
 import { gateItemsFromScores, SessionReport } from '../../components/SessionReport';
 import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
-import type { OximeterReading } from '../../types/oximeter';
+import { findVisitRow, sameVisit } from '../../session/visitScope';
 
 export function ReportPage() {
     const navigate = useNavigate();
     const { session, setLastMeasurement, setLastOximeter, setLastBloodPressure, setLastWristBloodPressure, hasReportData } = useKiosk();
     const personId = session.person?.id;
-    const measurementId = session.lastMeasurement?.id;
-    const oximeterId = session.lastOximeter?.id;
-    const oximeterWave = session.lastOximeter?.waveform;
-    const bloodPressureId = session.lastBloodPressure?.id;
-    const bloodPressureEcg = session.lastBloodPressure?.ecg_mv;
-    const wristBloodPressureId = session.lastWristBloodPressure?.id;
+    const visitId = session.visitId;
+    const measurement = sameVisit(session.lastMeasurement, visitId) ? session.lastMeasurement : null;
+    const oximeter = sameVisit(session.lastOximeter, visitId) ? session.lastOximeter : null;
+    const bloodPressure = sameVisit(session.lastBloodPressure, visitId) ? session.lastBloodPressure : null;
+    const wristBloodPressure = sameVisit(session.lastWristBloodPressure, visitId) ? session.lastWristBloodPressure : null;
+    const measurementId = measurement?.id;
+    const oximeterId = oximeter?.id;
+    const oximeterWave = oximeter?.waveform;
+    const bloodPressureId = bloodPressure?.id;
+    const bloodPressureEcg = bloodPressure?.ecg_mv;
+    const wristBloodPressureId = wristBloodPressure?.id;
+
+    useEffect(() => {
+        if (session.lastMeasurement && !measurement) setLastMeasurement(null);
+        if (session.lastOximeter && !oximeter) setLastOximeter(null);
+        if (session.lastBloodPressure && !bloodPressure) setLastBloodPressure(null);
+        if (session.lastWristBloodPressure && !wristBloodPressure) setLastWristBloodPressure(null);
+    }, [
+        session.lastMeasurement,
+        session.lastOximeter,
+        session.lastBloodPressure,
+        session.lastWristBloodPressure,
+        measurement,
+        oximeter,
+        bloodPressure,
+        wristBloodPressure,
+        setLastMeasurement,
+        setLastOximeter,
+        setLastBloodPressure,
+        setLastWristBloodPressure,
+    ]);
 
     useEffect(() => {
         if (!personId || !measurementId) return;
         let cancelled = false;
         fetchPersonMeasurements(personId)
             .then((rows) => {
-                if (cancelled || !rows[0]) return;
-                const match = rows.find((row) => row.id === measurementId) ?? rows[0];
+                const match = findVisitRow(rows, measurementId, visitId);
+                if (cancelled || !match) return;
                 setLastMeasurement(match);
             })
             .catch(() => undefined);
         return () => {
             cancelled = true;
         };
-    }, [personId, measurementId, setLastMeasurement]);
+    }, [personId, visitId, measurementId, setLastMeasurement]);
 
     useEffect(() => {
-        if (!personId) return;
+        if (!personId || !oximeterId) return;
         let cancelled = false;
         fetchPersonOximeter(personId)
             .then((rows) => {
-                if (cancelled || !rows[0]) return;
-                const match = oximeterId
-                    ? rows.find((row) => row.id === oximeterId)
-                    : recentRow(rows[0]);
-                if (!match) return;
+                const match = findVisitRow(rows, oximeterId, visitId);
+                if (cancelled || !match) return;
                 setLastOximeter({ ...match, waveform: oximeterWave ?? match.waveform });
             })
             .catch(() => undefined);
         return () => {
             cancelled = true;
         };
-    }, [personId, oximeterId, oximeterWave, setLastOximeter]);
+    }, [personId, visitId, oximeterId, oximeterWave, setLastOximeter]);
 
     useEffect(() => {
         if (!personId || !bloodPressureId) return;
         let cancelled = false;
         fetchPersonBloodPressure(personId)
             .then((rows) => {
-                if (cancelled || !rows[0]) return;
-                const match = rows.find((row) => row.id === bloodPressureId) ?? rows[0];
+                const match = findVisitRow(rows, bloodPressureId, visitId);
+                if (cancelled || !match) return;
                 setLastBloodPressure({ ...match, ecg_mv: bloodPressureEcg ?? match.ecg_mv });
             })
             .catch(() => undefined);
         return () => {
             cancelled = true;
         };
-    }, [personId, bloodPressureId, bloodPressureEcg, setLastBloodPressure]);
+    }, [personId, visitId, bloodPressureId, bloodPressureEcg, setLastBloodPressure]);
 
     useEffect(() => {
         if (!personId || !wristBloodPressureId) return;
         let cancelled = false;
         fetchPersonBloodPressure(personId)
             .then((rows) => {
-                if (cancelled || !rows[0]) return;
-                const match = rows.find((row) => row.id === wristBloodPressureId);
-                if (match) setLastWristBloodPressure(match);
+                const match = findVisitRow(rows, wristBloodPressureId, visitId);
+                if (cancelled || !match) return;
+                setLastWristBloodPressure(match);
             })
             .catch(() => undefined);
         return () => {
             cancelled = true;
         };
-    }, [personId, wristBloodPressureId, setLastWristBloodPressure]);
+    }, [personId, visitId, wristBloodPressureId, setLastWristBloodPressure]);
 
     if (!session.person) return <Navigate to="/matricula" replace />;
     if (!hasReportData) return <Navigate to="/menu" replace />;
@@ -103,10 +125,10 @@ export function ReportPage() {
                     instrumentLog: mental.instrumentLog,
                     gateItems: mental.gate.length ? gateItemsFromScores(mental.gate) : [],
                 } : null}
-                measurement={session.lastMeasurement}
-                oximeter={session.lastOximeter}
-                bloodPressure={session.lastBloodPressure}
-                wristBloodPressure={session.lastWristBloodPressure}
+                measurement={measurement}
+                oximeter={oximeter}
+                bloodPressure={bloodPressure}
+                wristBloodPressure={wristBloodPressure}
             />
             <div className="kiosk-report-actions no-print" style={{ padding: '0 0 1.5rem' }}>
                 <button type="button" className="kiosk-btn kiosk-btn-primary" onClick={() => window.print()}>
@@ -119,10 +141,4 @@ export function ReportPage() {
             </div>
         </KioskLayout>
     );
-}
-
-function recentRow(row: OximeterReading): OximeterReading | undefined {
-    const t = Date.parse(row.created_at);
-    if (!Number.isFinite(t) || Date.now() - t > 45 * 60 * 1000) return undefined;
-    return row;
 }

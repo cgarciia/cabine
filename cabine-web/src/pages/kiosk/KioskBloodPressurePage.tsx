@@ -11,6 +11,7 @@ import { useKiosk } from '../../kiosk/KioskContext';
 import { KioskLayout } from '../../kiosk/KioskLayout';
 import { loadDeviceAddress, saveDeviceAddress } from '../../session/deviceAddress';
 import { newVisitId } from '../../session/visitId';
+import { findVisitMatch } from '../../session/visitScope';
 import type { BloodPressureLive, BloodPressureReading } from '../../types/bloodPressure';
 import { useHem7530EcgMic } from '../../utils/hem7530EcgMic';
 
@@ -136,6 +137,7 @@ export function KioskBloodPressurePage() {
                 movement: Boolean(reading.movement),
                 irregular_heartbeat: Boolean(reading.irregular_heartbeat),
                 measured_at: reading.measured_at,
+                visit_id: session.visitId,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 ecg_mv: reading.ecg_mv,
@@ -159,8 +161,15 @@ export function KioskBloodPressurePage() {
             } catch {
                 try {
                     const rows = await fetchPersonBloodPressure(person.id);
-                    if (rows[0]) {
-                        const withEcg = { ...rows[0], ecg_mv: local.ecg_mv };
+                    const match = findVisitMatch(
+                        rows,
+                        session.visitId,
+                        (row) => row.sys_mmhg === local.sys_mmhg
+                            && row.dia_mmhg === local.dia_mmhg
+                            && row.pulse_bpm === local.pulse_bpm,
+                    );
+                    if (match) {
+                        const withEcg = { ...match, ecg_mv: local.ecg_mv };
                         setLastBloodPressure(withEcg);
                         return withEcg;
                     }

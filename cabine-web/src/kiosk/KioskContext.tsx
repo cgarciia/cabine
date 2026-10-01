@@ -2,6 +2,7 @@ import {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
     useState,
 } from 'react';
@@ -12,6 +13,7 @@ import { clearCurrentPersonId, saveCurrentPersonId } from '../session/currentPer
 import { LEGACY_STORAGE_KEYS, STORAGE_KEYS } from '../session/keys';
 import { clearVisitDrafts } from '../session/cabineSession';
 import { newVisitId } from '../session/visitId';
+import { sameVisit } from '../session/visitScope';
 import type { BloodPressureReading } from '../types/bloodPressure';
 import type { MeasurementRecord } from '../types/measurement';
 import type { MentalInstrumentId, MentalInstrumentLog, MentalResult } from '../types/mental';
@@ -78,6 +80,11 @@ function loadSession(): KioskSession {
             generalHealth: (parsed.generalHealth ?? parsed.saudeGeral ?? null) as QuestionnaireScore | null,
             mentalHealth: (parsed.mentalHealth ?? parsed.saudeMental ?? null) as MentalKioskSession | null,
         };
+        const visitId = next.visitId;
+        if (!sameVisit(next.lastMeasurement, visitId)) next.lastMeasurement = null;
+        if (!sameVisit(next.lastOximeter, visitId)) next.lastOximeter = null;
+        if (!sameVisit(next.lastBloodPressure, visitId)) next.lastBloodPressure = null;
+        if (!sameVisit(next.lastWristBloodPressure, visitId)) next.lastWristBloodPressure = null;
         if (next.person && !next.visitId) next.visitId = newVisitId();
         sessionStorage.setItem(STORAGE_KEYS.kioskSession, JSON.stringify(next));
         sessionStorage.removeItem(LEGACY_STORAGE_KEYS.kioskSession);
@@ -134,6 +141,18 @@ export function KioskProvider({ children }: { children: ReactNode }) {
         saveCurrentPersonId(person.id);
     }, []);
 
+    useEffect(() => {
+        const visitId = session.visitId;
+        const patch: Partial<KioskSession> = {};
+        if (session.lastMeasurement && !sameVisit(session.lastMeasurement, visitId)) patch.lastMeasurement = null;
+        if (session.lastOximeter && !sameVisit(session.lastOximeter, visitId)) patch.lastOximeter = null;
+        if (session.lastBloodPressure && !sameVisit(session.lastBloodPressure, visitId)) patch.lastBloodPressure = null;
+        if (session.lastWristBloodPressure && !sameVisit(session.lastWristBloodPressure, visitId)) {
+            patch.lastWristBloodPressure = null;
+        }
+        if (Object.keys(patch).length) update(patch);
+    }, [session, update]);
+
     const clearSession = useCallback(() => {
         setSession(empty);
         sessionStorage.removeItem(STORAGE_KEYS.kioskSession);
@@ -159,10 +178,10 @@ export function KioskProvider({ children }: { children: ReactNode }) {
         clearSession,
         hasReportData: Boolean(
             session.generalHealth
-            || session.lastMeasurement
-            || session.lastOximeter
-            || session.lastBloodPressure
-            || session.lastWristBloodPressure
+            || (sameVisit(session.lastMeasurement, session.visitId) && session.lastMeasurement)
+            || (sameVisit(session.lastOximeter, session.visitId) && session.lastOximeter)
+            || (sameVisit(session.lastBloodPressure, session.visitId) && session.lastBloodPressure)
+            || (sameVisit(session.lastWristBloodPressure, session.visitId) && session.lastWristBloodPressure)
             || mentalDone,
         ),
     }), [session, setPerson, beginVisit, update, clearSession, mentalDone]);
