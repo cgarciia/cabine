@@ -66,9 +66,10 @@ export function HistoryDialog({ person, records, loading, error, selected, onSel
                                     peopleType={report.people_type}
                                     weightKg={report.weight_kg}
                                     metrics={report.metrics}
-                                    supportsBia={report.adapter === 'ble_rm_rd2504a'}
+                                    supportsBia={report.adapter === 'ble_rm_rd2504a' || Boolean(report.metrics)}
                                     weightOnly={isWeightOnlyReport(report)}
                                     saved
+                                    embedded
                                     segments={report.segments ?? undefined}
                                     measuredAt={formatWhen(report.created_at)}
                                 />

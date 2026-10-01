@@ -1,6 +1,8 @@
+import { AlertTriangle } from 'lucide-react';
 import type { BiaSegment, MetricHighlight, ScaleMetrics, SegKey, WlaSegment } from '../types/measurement';
 
 type Band = 'baixo' | 'saudavel' | 'alto';
+type Tone = 'ok' | 'limite' | 'baixo' | 'alto';
 
 function isFemale(sex?: string) {
     const value = (sex || '').trim().toLowerCase();
@@ -13,30 +15,40 @@ function fmt(value?: number | null, digits = 1) {
 }
 
 function statusLabel(status?: string) {
-    if (status === 'saudavel') return 'Adequado';
+    if (status === 'saudavel' || status === 'ok') return 'Adequado';
     if (status === 'alto') return 'Acima';
     if (status === 'baixo') return 'Abaixo';
+    if (status === 'limite') return 'No limite';
     return '';
 }
 
-function bandOf(value: number, low: number, high: number): Band {
-    if (value < low) return 'baixo';
-    if (value > high) return 'alto';
-    return 'saudavel';
+function toneLabel(tone: Tone) {
+    if (tone === 'alto') return 'Acima';
+    if (tone === 'baixo') return 'Abaixo';
+    if (tone === 'limite') return 'No limite';
+    return 'Adequado';
 }
 
-function markerPct(value: number, low: number, high: number) {
-    const min = low - (high - low);
-    const max = high + (high - low);
-    if (value <= low) {
-        const span = Math.max(low - min, 0.1);
-        return Math.max(4, Math.min(28, 28 * (value - min) / span));
-    }
-    if (value >= high) {
-        const span = Math.max(max - high, 0.1);
-        return Math.max(72, Math.min(96, 72 + 28 * (value - high) / span));
-    }
-    return 28 + 44 * (value - low) / Math.max(high - low, 0.1);
+function scalePlacement(value: number, low: number, high: number) {
+    const span = Math.max(high - low, 0.1);
+    const min = low - span;
+    const max = high + span;
+    const pct = (n: number) => ((n - min) / (max - min)) * 100;
+    return {
+        bandLeft: pct(low),
+        bandWidth: pct(high) - pct(low),
+        marker: Math.max(2, Math.min(98, pct(value))),
+    };
+}
+
+function toneOf(value: number, low: number, high: number, status?: string): Tone {
+    if (value > high) return 'alto';
+    if (value < low) return 'baixo';
+    const edge = Math.max(0.05, (high - low) * 0.02);
+    if (value >= high - edge || value <= low + edge) return 'limite';
+    if (status === 'alto') return 'alto';
+    if (status === 'baixo') return 'baixo';
+    return 'ok';
 }
 
 /** Fat cutoffs from the BMI × fat% body-type matrix. */
@@ -61,11 +73,11 @@ type SegEstimate = {
 
 const SEG_ORDER: SegKey[] = ['braco_dir', 'braco_esq', 'tronco', 'perna_dir', 'perna_esq'];
 const SEG_LABEL: Record<SegKey, string> = {
-    braco_dir: 'Braço direito',
-    braco_esq: 'Braço esquerdo',
+    braco_dir: 'Braço dir.',
+    braco_esq: 'Braço esq.',
     tronco: 'Tronco',
-    perna_dir: 'Perna direita',
-    perna_esq: 'Perna esquerda',
+    perna_dir: 'Perna dir.',
+    perna_esq: 'Perna esq.',
 };
 
 function statusFromStandardPct(pct: number, key: SegKey): Band {
@@ -112,49 +124,59 @@ function idealWeightRange(heightCm: number, sex?: string) {
     };
 }
 
+const SEG_POLYGONS: Record<SegKey, string> = {
+    braco_dir: '0,67 60,67 58,137 52,167 44,187 40,227 0,227',
+    braco_esq: '118,67 176,67 176,227 143,227 133,187 125,167 119,137',
+    tronco: '60,64 118,64 119,137 125,167 133,187 130,210 46,210 44,187 52,167 58,137',
+    perna_dir: '30,210 88,210 88,384 30,384',
+    perna_esq: '88,210 150,210 150,384 88,384',
+};
+
+function segmentFill(status?: Band) {
+    if (status === 'alto') return '#f87171';
+    if (status === 'baixo') return '#fbbf24';
+    if (status === 'saudavel') return '#34d399';
+    return '#b8bec7';
+}
+
 function SegBodyFigure({
     items,
-    tone,
 }: {
     items: SegEstimate[];
     tone: 'muscle' | 'fat';
 }) {
     const byKey = Object.fromEntries(items.map((item) => [item.key, item])) as Partial<Record<SegKey, SegEstimate>>;
-    const partClass = (key: SegKey) => {
-        const status = byKey[key]?.status;
-        return `cabine-seg-part ${tone} ${status ? statusTone(status) : ''}`;
-    };
-    const callout = (key: SegKey, side: 'left' | 'right' | 'center') => {
+    const tag = (key: SegKey, side: 'left' | 'right') => {
         const item = byKey[key];
         if (!item) return null;
         return (
             <div className={`cabine-seg-callout ${side}`}>
                 <em>{item.label}</em>
                 <strong>{fmt(item.kg)} kg</strong>
-                <small>{fmt(item.vsStandardPct, 0)}% do padrão</small>
+                <small>{fmt(item.vsStandardPct, 0)}% padrão</small>
                 <span className={statusTone(item.status)}>{statusLabel(item.status) || '—'}</span>
             </div>
         );
     };
 
     return (
-        <div className={`cabine-seg-figure cabine-seg-figure--${tone}`}>
-            <div className="cabine-seg-callouts-left">
-                {callout('braco_dir', 'left')}
-                {callout('perna_dir', 'left')}
+        <div className="cabine-fig-row">
+            <div className="cabine-fig-col cabine-fig-col--left">
+                {tag('braco_dir', 'left')}
+                {tag('perna_dir', 'left')}
             </div>
-            <svg viewBox="0 0 200 320" className="cabine-seg-svg" aria-hidden>
-                <ellipse cx="100" cy="34" rx="28" ry="30" className="cabine-seg-head" />
-                <rect x="64" y="68" width="72" height="100" rx="22" className={partClass('tronco')} />
-                <rect x="18" y="78" width="42" height="100" rx="16" className={partClass('braco_dir')} />
-                <rect x="140" y="78" width="42" height="100" rx="16" className={partClass('braco_esq')} />
-                <rect x="68" y="172" width="28" height="128" rx="14" className={partClass('perna_dir')} />
-                <rect x="104" y="172" width="28" height="128" rx="14" className={partClass('perna_esq')} />
-            </svg>
-            <div className="cabine-seg-callouts-right">
-                {callout('braco_esq', 'right')}
-                {callout('tronco', 'center')}
-                {callout('perna_esq', 'right')}
+            <div className="cabine-fig-body">
+                <svg viewBox="0 0 176 384" preserveAspectRatio="none" aria-hidden>
+                    <rect width="176" height="384" fill="#b8bec7" />
+                    {SEG_ORDER.map((key) => (
+                        <polygon key={key} points={SEG_POLYGONS[key]} fill={segmentFill(byKey[key]?.status)} />
+                    ))}
+                </svg>
+            </div>
+            <div className="cabine-fig-col cabine-fig-col--right">
+                {tag('braco_esq', 'right')}
+                {tag('tronco', 'right')}
+                {tag('perna_esq', 'right')}
             </div>
         </div>
     );
@@ -170,26 +192,20 @@ function SegmentalPanel({
     if (!muscleItems.length && !fatItems.length) return null;
 
     return (
-        <section className="cabine-report-block cabine-seg-panel">
+        <div className="cabine-seg-panel">
             {muscleItems.length ? (
-                <div className="cabine-seg-card">
-                    <h3>Equilíbrio muscular</h3>
-                    <p className="cabine-metric-hint">
-                        Distribuição por região do corpo
-                    </p>
+                <div>
+                    <p className="cabine-block-title">Equilíbrio muscular</p>
                     <SegBodyFigure items={muscleItems} tone="muscle" />
                 </div>
             ) : null}
             {fatItems.length ? (
-                <div className="cabine-seg-card">
-                    <h3>Gordura segmentar</h3>
-                    <p className="cabine-metric-hint">
-                        Distribuição por região do corpo
-                    </p>
+                <div>
+                    <p className="cabine-block-title">Gordura segmentar</p>
                     <SegBodyFigure items={fatItems} tone="fat" />
                 </div>
             ) : null}
-        </section>
+        </div>
     );
 }
 
@@ -258,7 +274,7 @@ function TypeGrid({
     return (
         <div className="cabine-type-matrix" aria-label="Tipo corporal por IMC e gordura">
             <div className="cabine-type-yaxis" aria-hidden>
-                <span className="cabine-type-axis-title">IMC (kg/m²)</span>
+                <span className="cabine-type-axis-title">IMC</span>
                 <span className="cabine-type-tick cabine-type-tick--25">25,0</span>
                 <span className="cabine-type-tick cabine-type-tick--185">18,5</span>
             </div>
@@ -277,16 +293,26 @@ function TypeGrid({
                 <div className="cabine-type-xaxis" aria-hidden>
                     <span className="cabine-type-tick cabine-type-tick--fatlo">{fmt(lo, 1)}</span>
                     <span className="cabine-type-tick cabine-type-tick--fathi">{fmt(hi, 1)}</span>
-                    <span className="cabine-type-axis-title">Taxa de gordura corporal (%)</span>
+                    <span className="cabine-type-axis-title">Gordura corporal (%)</span>
                 </div>
             </div>
             {(imc != null || fatPct != null) ? (
-                <p className="cabine-metric-hint cabine-type-summary">
-                    Nesta medição:
-                    {imc != null ? ` IMC ${fmt(imc)}` : ''}
-                    {fatPct != null ? ` · gordura ${fmt(fatPct)}%` : ''}
-                    {highlight ? ` · ${TYPE_LABELS[highlight] ?? highlight}` : ''}.
-                </p>
+                <div className="cabine-type-summary">
+                    {highlight ? (
+                        <p>
+                            <strong>{TYPE_LABELS[highlight] ?? highlight}</strong>
+                            {highlight === 'saudavel'
+                                ? ' — IMC e percentual de gordura dentro da faixa adequada.'
+                                : ' — classificação estimada por IMC e percentual de gordura.'}
+                        </p>
+                    ) : null}
+                    <small>
+                        Nesta medição:
+                        {imc != null ? ` IMC ${fmt(imc)}` : ''}
+                        {fatPct != null ? ` · gordura ${fmt(fatPct)}%` : ''}
+                        {sex ? ` (faixa ${isFemale(sex) ? 'feminina' : 'masculina'} ${lo}–${hi}%)` : ''}
+                    </small>
+                </div>
             ) : null}
         </div>
     );
@@ -350,40 +376,37 @@ function deriveHighlights(metrics: ScaleMetrics): MetricHighlight[] {
 
 function RangeRow({
     label,
+    hint,
     value,
     rangeHint,
-    status,
+    tone,
+    bandLeft,
+    bandWidth,
     marker,
 }: {
     label: string;
+    hint?: string;
     value: string;
     rangeHint?: string;
-    status?: string;
+    tone: Tone;
+    bandLeft: number;
+    bandWidth: number;
     marker: number;
 }) {
     return (
-        <div className="cabine-range">
-            <div className="cabine-range-head">
-                <span>
-                    {label}
-                    {rangeHint ? <small>{rangeHint}</small> : null}
-                </span>
-                <span>
-                    {value}
-                    {status ? ` · ${statusLabel(status)}` : ''}
-                </span>
+        <div className={`cabine-ind-card${tone === 'alto' ? ' is-alto' : tone === 'baixo' ? ' is-baixo' : ''}`}>
+            <div className="cabine-ind-name">
+                <span>{label}</span>
+                {hint ? <small>{hint}</small> : null}
             </div>
-            <div className="cabine-range-track">
-                <span />
-                <span />
-                <span />
-                <i style={{ left: `${Math.max(4, Math.min(96, marker))}%` }} />
+            <strong className="cabine-ind-value">{value}</strong>
+            <div className="cabine-ind-bar">
+                <span className="cabine-ind-track" />
+                <span className="cabine-ind-band" style={{ left: `${bandLeft}%`, width: `${bandWidth}%` }} />
+                <i className={`cabine-ind-dot ${tone}`} style={{ left: `${marker}%` }} />
             </div>
-            <div className="cabine-range-captions">
-                <span>Baixo</span>
-                <span>Adequado</span>
-                <span>Alto</span>
-            </div>
+            <span className="cabine-ind-ref">{rangeHint ?? '—'}</span>
+            <span className={`cabine-ind-status ${tone}`}>{toneLabel(tone)}</span>
         </div>
     );
 }
@@ -400,6 +423,7 @@ type Props = {
     supportsBia: boolean;
     weightOnly?: boolean;
     saved?: boolean;
+    embedded?: boolean;
     segments?: BiaSegment[];
     measuredAt?: string;
 };
@@ -416,21 +440,22 @@ export function BodyReport({
     supportsBia,
     weightOnly,
     saved,
+    embedded,
     segments: _segments,
     measuredAt,
 }: Props) {
-    void _segments;    const bia = Boolean(supportsBia && !weightOnly && metrics);
-    const wla = bia && (metrics?.metodo === 'wla25' || metrics?.agua_pct != null);
-    const score = wla ? metrics?.score : undefined;
+    void _segments;
+    const bia = Boolean(supportsBia && !weightOnly && metrics);
+    const score = bia ? metrics?.score : undefined;
     const highlights = metrics ? deriveHighlights(metrics) : [];
     const fatBand = fatCuts(sex);
     const waterLo = isFemale(sex) ? 45 : 55;
     const waterHi = isFemale(sex) ? 60 : 65;
     const muscleLo = isFemale(sex) ? 38 : 44;
     const muscleHi = isFemale(sex) ? 47 : 54;
-    const waterKgBand = kgCuts(metrics, 'agua');
     const skeletalKgBand = kgCuts(metrics, 'esqueletico');
     const leanKgBand = kgCuts(metrics, 'magra');
+    const proteinKgBand = kgCuts(metrics, 'proteina');
     const proteinKg = metrics?.proteina_kg
         ?? (metrics?.proteina_pct != null && weightKg != null ? weightKg * metrics.proteina_pct / 100 : null);
     const smi = metrics?.smi;
@@ -453,12 +478,6 @@ export function BodyReport({
             ? (musclePctOfWeight / 100) * weightKg
             : null);
     const muscleStatus = metrics?.musculo_esqueletico_status;
-    const muscleStatusBand: Band | undefined =
-        muscleStatus === 'baixo' || muscleStatus === 'saudavel' || muscleStatus === 'alto'
-            ? muscleStatus
-            : (skeletalKg != null && skeletalKgBand
-                ? bandOf(skeletalKg, skeletalKgBand.lo, skeletalKgBand.hi)
-                : (musclePctOfWeight != null ? bandOf(musclePctOfWeight, muscleLo, muscleHi) : undefined));
     const leanKg = metrics?.massa_magra_kg
         ?? (weightKg != null && metrics?.gordura_kg != null ? weightKg - metrics.gordura_kg : null);
     const leanPct = leanKg != null && weightKg ? (leanKg / weightKg) * 100 : null;
@@ -471,74 +490,222 @@ export function BodyReport({
     const height = Number(heightCm);
     const weightRange = idealWeightRange(height, sex);
 
-    const showMap = wla && Boolean(metrics?.segmentos_wla?.length);
+    const showMap = bia && Boolean(metrics?.segmentos_wla?.length);
     const composeTotal = weightKg ?? 0;
     const fatKg = metrics?.gordura_kg;
     const waterKg = metrics?.agua_kg;
     const boneKg = metrics?.osso_kg;
-    const showCompose = wla && fatKg != null && waterKg != null && proteinKg != null && boneKg != null && composeTotal > 0;
+    const showCompose = bia && fatKg != null && waterKg != null && proteinKg != null && boneKg != null && composeTotal > 0;
 
-    const indexChips: { label: string; value: string }[] = [];
-    if (metrics?.musculo_kg != null) {
-        indexChips.push({
-            label: 'Massa muscular',
-            value: `${fmt(metrics.musculo_kg)} kg${metrics.musculo_pct != null ? ` · ${fmt(metrics.musculo_pct)}%` : ''}${metrics.musculo_status ? ` · ${statusLabel(metrics.musculo_status)}` : ''}`,
+    const indicators: Array<{
+        key: string;
+        label: string;
+        hint?: string;
+        value: string;
+        rangeHint: string;
+        tone: Tone;
+        bandLeft: number;
+        bandWidth: number;
+        marker: number;
+    }> = [];
+
+    const addIndicator = (
+        item: {
+            key: string;
+            label: string;
+            hint?: string;
+            value: string;
+            rangeHint: string;
+            measured: number;
+            low: number;
+            high: number;
+            status?: string;
+        },
+    ) => {
+        const place = scalePlacement(item.measured, item.low, item.high);
+        indicators.push({
+            key: item.key,
+            label: item.label,
+            hint: item.hint,
+            value: item.value,
+            rangeHint: item.rangeHint,
+            tone: toneOf(item.measured, item.low, item.high, item.status),
+            ...place,
+        });
+    };
+
+    if (metrics?.imc != null) {
+        addIndicator({
+            key: 'imc',
+            label: 'IMC',
+            hint: 'Índice de massa corporal',
+            value: fmt(metrics.imc) ?? '',
+            rangeHint: '18,5 – 24,9',
+            measured: metrics.imc,
+            low: 18.5,
+            high: 24.9,
+            status: metrics.imc_status,
         });
     }
-    if (proteinKg != null) {
-        indexChips.push({
-            label: 'Proteína',
-            value: `${fmt(proteinKg)} kg${metrics?.proteina_pct != null ? ` · ${fmt(metrics.proteina_pct)}%` : ''}${metrics?.proteina_status ? ` · ${statusLabel(metrics.proteina_status)}` : ''}`,
-        });
-    }
-    if (metrics?.gordura_subcutanea_pct != null) {
-        indexChips.push({
-            label: 'Gordura subcutânea',
-            value: `${fmt(metrics.gordura_subcutanea_pct)}%`,
-        });
-    }
-    if (metrics?.idade_corporal != null) {
-        indexChips.push({
-            label: 'Idade do corpo',
-            value: `${metrics.idade_corporal} anos`,
+    if (metrics?.gordura_pct != null) {
+        addIndicator({
+            key: 'fat',
+            label: 'Gordura corporal',
+            hint: metrics.gordura_kg != null ? `${fmt(metrics.gordura_kg)} kg total` : undefined,
+            value: `${fmt(metrics.gordura_pct)}%`,
+            rangeHint: `${fatBand.lo} – ${fatBand.hi}%`,
+            measured: metrics.gordura_pct,
+            low: fatBand.lo,
+            high: fatBand.hi,
+            status: metrics.gordura_pct_status,
         });
     }
     if (metrics?.gordura_visceral != null) {
-        indexChips.push({
+        addIndicator({
+            key: 'visceral',
             label: 'Gordura visceral',
-            value: `nível ${metrics.gordura_visceral}${metrics.gordura_visceral_status ? ` · ${statusLabel(metrics.gordura_visceral_status)}` : ''}`,
+            hint: 'Gordura entre os órgãos',
+            value: `Nível ${fmt(metrics.gordura_visceral, 0)}`,
+            rangeHint: '1 – 9',
+            measured: metrics.gordura_visceral,
+            low: 1,
+            high: 9,
+            status: metrics.gordura_visceral_status,
+        });
+    }
+    if (skeletalKg != null || musclePctOfWeight != null) {
+        if (skeletalKg != null && skeletalKgBand) {
+            addIndicator({
+                key: 'skeletal',
+                label: 'Músculo esquelético',
+                hint: `${fmt(skeletalKg)} kg total`,
+                value: musclePctOfWeight != null ? `${fmt(musclePctOfWeight)}%` : `${fmt(skeletalKg)} kg`,
+                rangeHint: `${fmt(skeletalKgBand.lo)} – ${fmt(skeletalKgBand.hi)} kg`,
+                measured: skeletalKg,
+                low: skeletalKgBand.lo,
+                high: skeletalKgBand.hi,
+                status: muscleStatus,
+            });
+        } else if (musclePctOfWeight != null) {
+            addIndicator({
+                key: 'skeletal',
+                label: 'Músculo esquelético',
+                hint: skeletalKg != null ? `${fmt(skeletalKg)} kg total` : undefined,
+                value: `${fmt(musclePctOfWeight)}%`,
+                rangeHint: `${muscleLo} – ${muscleHi}%`,
+                measured: musclePctOfWeight,
+                low: muscleLo,
+                high: muscleHi,
+                status: muscleStatus,
+            });
+        }
+    }
+    if (leanKg != null) {
+        const low = leanKgBand?.lo ?? (leanPct != null ? 100 - fatBand.hi : leanKg);
+        const high = leanKgBand?.hi ?? (leanPct != null ? 100 - fatBand.lo : leanKg);
+        addIndicator({
+            key: 'lean',
+            label: 'Massa magra',
+            hint: `${fmt(leanKg)} kg total`,
+            value: leanPct != null ? `${fmt(leanPct)}%` : `${fmt(leanKg)} kg`,
+            rangeHint: leanKgBand
+                ? `${fmt(leanKgBand.lo)} – ${fmt(leanKgBand.hi)} kg`
+                : `${100 - fatBand.hi} – ${100 - fatBand.lo}%`,
+            measured: leanKgBand ? leanKg : (leanPct ?? leanKg),
+            low,
+            high,
+            status: metrics?.massa_magra_status,
+        });
+    }
+    if (proteinKg != null && proteinKgBand) {
+        addIndicator({
+            key: 'protein',
+            label: 'Proteína',
+            value: `${fmt(proteinKg)} kg`,
+            rangeHint: `${fmt(proteinKgBand.lo)} – ${fmt(proteinKgBand.hi)} kg`,
+            measured: proteinKg,
+            low: proteinKgBand.lo,
+            high: proteinKgBand.hi,
+            status: metrics?.proteina_status,
         });
     }
     if (smi != null) {
-        indexChips.push({
-            label: 'Músculo / altura',
+        const smiMin = isFemale(sex) ? 5.7 : 7;
+        addIndicator({
+            key: 'smi',
+            label: 'Músculo / altura (SMI)',
+            hint: `Risco de perda muscular abaixo de ${String(smiMin).replace('.', ',')}`,
             value: `${fmt(smi)} kg/m²`,
+            rangeHint: `≥ ${String(smiMin).replace('.', ',')} kg/m²`,
+            measured: smi,
+            low: smiMin,
+            high: smiMin * 2.5,
+            status: smi < smiMin ? 'baixo' : 'saudavel',
+        });
+    }
+    if (metrics?.agua_pct != null) {
+        addIndicator({
+            key: 'water',
+            label: 'Água corporal',
+            hint: metrics.agua_kg != null ? `${fmt(metrics.agua_kg)} kg total` : undefined,
+            value: `${fmt(metrics.agua_pct)}%`,
+            rangeHint: `${waterLo} – ${waterHi}%`,
+            measured: metrics.agua_pct,
+            low: waterLo,
+            high: waterHi,
+            status: metrics.agua_status,
+        });
+    }
+    if (metrics?.idade_corporal != null && Number(age) > 0) {
+        const realAge = Number(age);
+        addIndicator({
+            key: 'body-age',
+            label: 'Idade do corpo',
+            hint: `Idade real: ${realAge} anos`,
+            value: `${metrics.idade_corporal} anos`,
+            rangeHint: `≤ ${realAge} anos`,
+            measured: metrics.idade_corporal,
+            low: Math.max(1, realAge * 0.7),
+            high: realAge,
+            status: metrics.idade_corporal > realAge ? 'alto' : 'saudavel',
         });
     }
 
+    const adequateCount = indicators.filter((item) => item.tone === 'ok').length;
+    const attentionLabels = indicators
+        .filter((item) => item.tone !== 'ok')
+        .map((item) => item.label);
+    const attentionLines = Array.from(
+        { length: Math.ceil(attentionLabels.length / 3) },
+        (_, i) => attentionLabels.slice(i * 3, i * 3 + 3).join(', '),
+    );
+
     return (
         <div id="scale-report" className="cabine-report">
-            <div className="cabine-report-head">
-                <div>
-                    <p className="cabine-kicker">Relatório de composição corporal</p>
-                    <h2>{personName || 'Convidado'}</h2>
-                    <p className="cabine-report-meta">
-                        {heightCm} cm · {age} anos
-                        {sex ? ` · ${isFemale(sex) ? 'Feminino' : 'Masculino'}` : ''}
-                        {measuredAt ? ` · ${measuredAt}` : ''}
-                        {scaleName ? ` · ${scaleName}` : ''}
-                    </p>
-                </div>
-                {score != null ? (
-                    <div className={`cabine-score${score < 50 ? ' is-low' : score < 70 ? ' is-mid' : ''}`} aria-label={`Pontuação de composição ${score} de 100`}>
-                        <strong>{score}</strong>
-                        <span>/100</span>
+            {!embedded ? (
+                <>
+                    <div className="cabine-report-head">
+                        <div>
+                            <p className="cabine-kicker">Relatório de composição corporal</p>
+                            <h2>{personName || 'Convidado'}</h2>
+                            <p className="cabine-report-meta">
+                                {heightCm} cm · {age} anos
+                                {sex ? ` · ${isFemale(sex) ? 'Feminino' : 'Masculino'}` : ''}
+                                {measuredAt ? ` · ${measuredAt}` : ''}
+                                {scaleName ? ` · ${scaleName}` : ''}
+                            </p>
+                        </div>
+                        {score != null ? (
+                            <div className={`cabine-score${score < 50 ? ' is-low' : score < 70 ? ' is-mid' : ''}`} aria-label={`Pontuação de composição ${score} de 100`}>
+                                <strong>{score}</strong>
+                                <span>/100</span>
+                            </div>
+                        ) : null}
                     </div>
-                ) : null}
-            </div>
-
-            {saved ? (
-                <p className="cabine-saved-pill">Avaliação salva no histórico desta pessoa</p>
+                    {saved ? (
+                        <p className="cabine-saved-pill">Avaliação salva no histórico desta pessoa</p>
+                    ) : null}
+                </>
             ) : null}
 
             {weightOnly ? (
@@ -548,7 +715,7 @@ export function BodyReport({
                 </p>
             ) : null}
 
-            {highlights.length ? (
+            {!embedded && highlights.length ? (
                 <div className="cabine-highlights">
                     {highlights.map((item) => (
                         <article key={item.codigo} className={item.gravidade === 'baixa' ? 'is-ok' : undefined}>
@@ -559,169 +726,143 @@ export function BodyReport({
                 </div>
             ) : null}
 
-            {wla ? (
+            {bia ? (
                 <>
-                    <div className="cabine-report-main">
-                        <section className="cabine-report-block">
-                            <h3>Índices corporais</h3>
-                            <div className="cabine-ranges cabine-ranges--compact">
-                                {metrics?.imc != null ? (
-                                    <RangeRow
-                                        label="IMC"
-                                        rangeHint="18,5–24,9"
-                                        value={fmt(metrics.imc) ?? ''}
-                                        status={metrics.imc_status}
-                                        marker={markerPct(metrics.imc, 18.5, 24.9)}
-                                    />
-                                ) : null}
-                                {metrics?.gordura_pct != null ? (
-                                    <RangeRow
-                                        label="Gordura corporal"
-                                        rangeHint={`${fatBand.lo}–${fatBand.hi}%`}
-                                        value={[
-                                            metrics.gordura_kg != null ? `${fmt(metrics.gordura_kg)} kg` : null,
-                                            `${fmt(metrics.gordura_pct)}%`,
-                                        ].filter(Boolean).join(' · ')}
-                                        status={metrics.gordura_pct_status}
-                                        marker={markerPct(metrics.gordura_pct, fatBand.lo, fatBand.hi)}
-                                    />
-                                ) : null}
-                                {(skeletalKg != null || musclePctOfWeight != null) ? (
-                                    <RangeRow
-                                        label="Músculo esquelético"
-                                        rangeHint={skeletalKgBand
-                                            ? `${fmt(skeletalKgBand.lo)}–${fmt(skeletalKgBand.hi)} kg`
-                                            : `${muscleLo}–${muscleHi}% do peso`}
-                                        value={[
-                                            skeletalKg != null ? `${fmt(skeletalKg)} kg` : null,
-                                            musclePctOfWeight != null ? `${fmt(musclePctOfWeight)}%` : null,
-                                        ].filter(Boolean).join(' · ')}
-                                        status={muscleStatusBand}
-                                        marker={skeletalKg != null && skeletalKgBand
-                                            ? markerPct(skeletalKg, skeletalKgBand.lo, skeletalKgBand.hi)
-                                            : (musclePctOfWeight != null ? markerPct(musclePctOfWeight, muscleLo, muscleHi) : 50)}
-                                    />
-                                ) : null}
-                                {leanKg != null ? (
-                                    <RangeRow
-                                        label="Massa magra"
-                                        rangeHint={leanKgBand ? `${fmt(leanKgBand.lo)}–${fmt(leanKgBand.hi)} kg` : undefined}
-                                        value={[
-                                            `${fmt(leanKg)} kg`,
-                                            leanPct != null ? `${fmt(leanPct)}%` : null,
-                                        ].filter(Boolean).join(' · ')}
-                                        status={metrics?.massa_magra_status
-                                            ?? (leanKgBand ? bandOf(leanKg, leanKgBand.lo, leanKgBand.hi) : undefined)
-                                            ?? (leanPct != null ? bandOf(leanPct, 100 - fatBand.hi, 100 - fatBand.lo) : undefined)}
-                                        marker={leanKgBand
-                                            ? markerPct(leanKg, leanKgBand.lo, leanKgBand.hi)
-                                            : (leanPct != null ? markerPct(leanPct, 100 - fatBand.hi, 100 - fatBand.lo) : 50)}
-                                    />
-                                ) : null}
-                                {metrics?.agua_pct != null ? (
-                                    <RangeRow
-                                        label="Água corporal"
-                                        rangeHint={waterKgBand
-                                            ? `${fmt(waterKgBand.lo)}–${fmt(waterKgBand.hi)} kg`
-                                            : `${waterLo}–${waterHi}%`}
-                                        value={[
-                                            metrics.agua_kg != null ? `${fmt(metrics.agua_kg)} kg` : null,
-                                            `${fmt(metrics.agua_pct)}%`,
-                                        ].filter(Boolean).join(' · ')}
-                                        status={metrics.agua_status}
-                                        marker={metrics.agua_kg != null && waterKgBand
-                                            ? markerPct(metrics.agua_kg, waterKgBand.lo, waterKgBand.hi)
-                                            : markerPct(metrics.agua_pct, waterLo, waterHi)}
-                                    />
-                                ) : null}
-                            </div>
-                            {indexChips.length ? (
-                                <div className="cabine-index-chips">
-                                    {indexChips.map((chip) => (
-                                        <div key={chip.label}>
-                                            <span>{chip.label}</span>
-                                            <strong>{chip.value}</strong>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : null}
-                        </section>
-
-                        <div className="cabine-report-side">
-                            {tipo ? (
-                                <section className="cabine-report-block">
-                                    <h3>Avaliação do tipo de corpo</h3>
-                                    <TypeGrid
-                                        highlight={tipo}
-                                        imc={metrics?.imc}
-                                        fatPct={metrics?.gordura_pct}
-                                        sex={sex}
-                                    />
-                                </section>
-                            ) : null}
-
-                            <section className="cabine-report-block">
-                                <h3>Controle de peso</h3>
-                                <table className="cabine-mini-table">
-                                    <tbody>
-                                        {weightKg != null ? (
-                                            <tr><th>Peso atual</th><td>{weightKg.toFixed(1)} kg</td></tr>
-                                        ) : null}
-                                        {weightRange ? (
-                                            <tr>
-                                                <th>Faixa adequada (IMC 18,5–24,9)</th>
-                                                <td>{fmt(weightRange.min)}–{fmt(weightRange.max)} kg</td>
-                                            </tr>
-                                        ) : null}
-                                        {weightRange ? (
-                                            <tr>
-                                                <th>Peso de referência (IMC {String(weightRange.refBmi).replace('.', ',')})</th>
-                                                <td>{fmt(metrics?.peso_ideal_kg ?? weightRange.ref)} kg</td>
-                                            </tr>
-                                        ) : metrics?.peso_ideal_kg != null ? (
-                                            <tr><th>Peso de referência</th><td>{fmt(metrics.peso_ideal_kg)} kg</td></tr>
-                                        ) : null}
-                                        {metrics?.controle_peso_kg != null ? (
-                                            <tr>
-                                                <th>Ajuste sugerido</th>
-                                                <td>{metrics.controle_peso_kg > 0 ? '+' : ''}{fmt(metrics.controle_peso_kg)} kg</td>
-                                            </tr>
-                                        ) : null}
-                                        {fatToLose != null ? (
-                                            <tr><th>Gordura a reduzir</th><td>{fmt(fatToLose)} kg</td></tr>
-                                        ) : null}
-                                        {muscleToGain != null ? (
-                                            <tr><th>Músculo a ganhar</th><td>{fmt(muscleToGain)} kg</td></tr>
-                                        ) : null}
-                                        {metrics?.tmb_kcal != null ? (
-                                            <tr><th>Metabolismo de repouso</th><td>{Math.round(metrics.tmb_kcal)} kcal</td></tr>
-                                        ) : null}
-                                    </tbody>
-                                </table>
-                            </section>
-                        </div>
-                    </div>
-
-                    {showMap ? (
-                        <SegmentalPanel rows={metrics?.segmentos_wla} />
-                    ) : null}
-
                     {showCompose ? (
                         <section className="cabine-report-block cabine-compose">
-                            <h3>Composição do peso</h3>
-                            <div className="cabine-compose-bar" aria-label="Composição">
-                                <span style={{ width: `${(fatKg / (fatKg + waterKg + proteinKg + boneKg)) * 100}%` }} className="is-fat" />
-                                <span style={{ width: `${(waterKg / (fatKg + waterKg + proteinKg + boneKg)) * 100}%` }} className="is-water" />
-                                <span style={{ width: `${(proteinKg / (fatKg + waterKg + proteinKg + boneKg)) * 100}%` }} className="is-protein" />
-                                <span style={{ width: `${(boneKg / (fatKg + waterKg + proteinKg + boneKg)) * 100}%` }} className="is-bone" />
-                            </div>
-                            <div className="cabine-compose-legend">
-                                <span>Gordura {fmt(fatKg)} kg</span>
-                                <span>Água {fmt(waterKg)} kg</span>
-                                <span>Proteína {fmt(proteinKg)} kg</span>
-                                <span>Osso {fmt(boneKg)} kg</span>
+                            <p className="cabine-block-title cabine-compose-title">
+                                Composição de peso — <b>{weightKg?.toFixed(1)} kg</b>
+                            </p>
+                            <div className="cabine-compose-bar" aria-label="Composição do peso">
+                                <div style={{ flex: `${fatKg} 1 0` }} className="is-fat">
+                                    <span>Gordura</span>
+                                    <strong>{metrics?.gordura_pct != null ? `${fmt(metrics.gordura_pct, 0)}%` : `${fmt(fatKg)} kg`}</strong>
+                                    <small>{fmt(fatKg)} kg</small>
+                                </div>
+                                <div style={{ flex: `${waterKg} 1 0` }} className="is-water">
+                                    <span>Água</span>
+                                    <strong>{metrics?.agua_pct != null ? `${fmt(metrics.agua_pct, 0)}%` : `${fmt(waterKg)} kg`}</strong>
+                                    <small>{fmt(waterKg)} kg</small>
+                                </div>
+                                <div style={{ flex: `${proteinKg} 1 0` }} className="is-protein">
+                                    <span>Proteína</span>
+                                    <strong>{metrics?.proteina_pct != null ? `${fmt(metrics.proteina_pct, 0)}%` : `${fmt(proteinKg)} kg`}</strong>
+                                    <small>{fmt(proteinKg)} kg</small>
+                                </div>
+                                <div style={{ flex: `${boneKg} 1 0` }} className="is-bone">
+                                    <span>Osso</span>
+                                    <strong>{weightKg ? `${fmt((boneKg / weightKg) * 100, 0)}%` : `${fmt(boneKg)} kg`}</strong>
+                                    <small>{fmt(boneKg)} kg</small>
+                                </div>
                             </div>
                         </section>
+                    ) : null}
+
+                    {showCompose ? <hr className="cabine-report-divider" /> : null}
+
+                    {indicators.length ? (
+                        <section className="cabine-report-block">
+                            <div className="cabine-ind-heading">
+                                <div>
+                                    <p className="cabine-block-title">Índices corporais</p>
+                                    <span className="cabine-ind-count">
+                                        {adequateCount} de {indicators.length} parâmetros adequados
+                                    </span>
+                                </div>
+                                {attentionLabels.length ? (
+                                    <div className="cabine-ind-alert" role="status">
+                                        <p>
+                                            <AlertTriangle size={13} aria-hidden />
+                                            <b>Pontos de atenção</b>
+                                        </p>
+                                        {attentionLines.map((line) => (
+                                            <span key={line}>{line}</span>
+                                        ))}
+                                    </div>
+                                ) : null}
+                            </div>
+                            <div className="cabine-indicators">
+                                <div className="cabine-ind-head" aria-hidden>
+                                    <span>Indicador</span>
+                                    <span>Resultado</span>
+                                    <span>Posição na faixa</span>
+                                    <span>Referência</span>
+                                    <span>Situação</span>
+                                </div>
+                                {indicators.map((indicator) => (
+                                    <RangeRow
+                                        key={indicator.key}
+                                        label={indicator.label}
+                                        hint={indicator.hint}
+                                        value={indicator.value}
+                                        rangeHint={indicator.rangeHint}
+                                        tone={indicator.tone}
+                                        bandLeft={indicator.bandLeft}
+                                        bandWidth={indicator.bandWidth}
+                                        marker={indicator.marker}
+                                    />
+                                ))}
+                            </div>
+                        </section>
+                    ) : null}
+
+                    {showMap ? (
+                        <>
+                            <hr className="cabine-report-divider" />
+                            <SegmentalPanel rows={metrics?.segmentos_wla} />
+                        </>
+                    ) : null}
+
+                    {(tipo || weightKg != null || metrics?.peso_ideal_kg != null) ? (
+                        <>
+                            <hr className="cabine-report-divider" />
+                            <div className="cabine-type-control">
+                                {tipo ? (
+                                    <section className="cabine-report-block cabine-type">
+                                        <p className="cabine-block-title">Tipo corporal</p>
+                                        <TypeGrid
+                                            highlight={tipo}
+                                            imc={metrics?.imc}
+                                            fatPct={metrics?.gordura_pct}
+                                            sex={sex}
+                                        />
+                                    </section>
+                                ) : null}
+
+                                <section className="cabine-report-block cabine-control">
+                                    <p className="cabine-block-title">Controle de peso</p>
+                                    <div className="cabine-control-rows">
+                                        {weightKg != null ? (
+                                            <div><span>Peso atual</span><b>{weightKg.toFixed(1)} kg</b></div>
+                                        ) : null}
+                                        {weightRange ? (
+                                            <div><span>Faixa adequada</span><b>{fmt(weightRange.min)}–{fmt(weightRange.max)} kg</b></div>
+                                        ) : null}
+                                        {(weightRange || metrics?.peso_ideal_kg != null) ? (
+                                            <div>
+                                                <span>Peso de referência</span>
+                                                <b>{fmt(metrics?.peso_ideal_kg ?? weightRange?.ref)} kg</b>
+                                            </div>
+                                        ) : null}
+                                        {metrics?.controle_peso_kg != null ? (
+                                            <div>
+                                                <span>Ajuste sugerido</span>
+                                                <b className="warning">{metrics.controle_peso_kg > 0 ? '+' : ''}{fmt(metrics.controle_peso_kg)} kg</b>
+                                            </div>
+                                        ) : null}
+                                        {fatToLose != null ? (
+                                            <div><span>Gordura a reduzir</span><b className="warning">{fmt(fatToLose)} kg</b></div>
+                                        ) : null}
+                                        {muscleToGain != null ? (
+                                            <div><span>Músculo a ganhar</span><b className="info">+{fmt(muscleToGain)} kg</b></div>
+                                        ) : null}
+                                        {metrics?.tmb_kcal != null ? (
+                                            <div><span>Metabolismo de repouso</span><b>{Math.round(metrics.tmb_kcal)} kcal</b></div>
+                                        ) : null}
+                                    </div>
+                                </section>
+                            </div>
+                        </>
                     ) : null}
                 </>
             ) : (
