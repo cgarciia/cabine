@@ -110,11 +110,11 @@ export function QuestionnairePage({ def }: Props) {
         const personId = session.person?.id;
         if (personId) {
             void saveFormSubmission({
-                person_id: personId,
+                user_id: personId,
                 module: 'health',
                 status: 'completed',
                 payload: healthKioskPayload(def, score),
-                visit_id: session.visitId,
+                session_id: session.sessionId,
             }).catch(() => undefined);
         }
         setCompleted(true);

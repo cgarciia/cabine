@@ -4,7 +4,7 @@ import type {
     MentalResult,
 } from '../types/mental';
 import { loadCurrentPersonId } from './currentPerson';
-import { cabineSessionKey } from './keys';
+import { cabineSessionKey, SESSION_KEY_PREFIX } from './keys';
 
 export type HealthAnswers = Record<string, string | string[]>;
 
@@ -56,7 +56,7 @@ export function patchSession(patch: Partial<CabineSession>): CabineSession {
 }
 
 export function clearVisitDrafts() {
-    const prefix = 'cabine.session.';
+    const prefix = SESSION_KEY_PREFIX;
     const stale: string[] = [];
     for (let index = 0; index < localStorage.length; index += 1) {
         const key = localStorage.key(index);

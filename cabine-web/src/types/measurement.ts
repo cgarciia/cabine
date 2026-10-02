@@ -77,8 +77,9 @@ export interface BiaSegment {
 
 export interface MeasurementRecord {
     id: string;
-    person_id: string;
-    scale_id: string | null;
+    user_id: string;
+    session_id: string;
+    device_id: string | null;
     scale_name: string;
     adapter: string;
     weight_kg: number;
@@ -93,13 +94,13 @@ export interface MeasurementRecord {
     impedances_ohm: number[] | null;
     segments: BiaSegment[] | null;
     metrics: ScaleMetrics | null;
-    visit_id?: string | null;
     created_at: string;
 }
 
 export interface MeasurementPayload {
-    person_id: string;
-    scale_id?: string | null;
+    user_id: string;
+    session_id?: string | null;
+    device_id?: string | null;
     scale_name: string;
     adapter: string;
     weight_kg: number;
@@ -114,7 +115,6 @@ export interface MeasurementPayload {
     impedances_ohm?: number[] | null;
     segments?: BiaSegment[] | null;
     metrics: ScaleMetrics | null;
-    visit_id?: string | null;
 }
 
 /** WebSocket `/ws/scale` payload (not the CRUD `ScalePayload`). */

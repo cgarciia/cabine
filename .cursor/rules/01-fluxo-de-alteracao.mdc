@@ -1,0 +1,48 @@
+---
+description: Checklist obrigatório sempre que uma alteração de código for feita (antes, durante e depois), por tipo de mudança
+alwaysApply: true
+---
+
+# Fluxo de qualquer alteração
+
+## 1. Antes de codar
+
+1. Leia a spec do assunto e o código vizinho; copie o padrão existente em vez de inventar outro.
+2. Confirme em qual pacote a mudança mora (`cabine-core` ou `cabine-web`). Regra por camada: core `rota → schema → crud/services`; web `página → api.ts/session/modules → componente`.
+3. Mudança grande ou com várias abordagens: proponha o plano antes de implementar.
+4. Estar na branch certa (`04-git-pr-commits`): nada direto em `develop`/`main`.
+
+## 2. Durante
+
+- Escopo mínimo: só o que a tarefa pede. Sem refatoração ou renomeação de carona (PR separado).
+- Não introduzir dependência, framework ou segundo cliente HTTP/gerenciador sem decisão registrada.
+- Sem comentário que narra o código; comente só intenção, trade-off ou restrição não óbvia.
+- Sem `any`, sem `print`/`console.log` de depuração, sem código morto, sem segredo.
+
+## 3. Depois: o que atualizar conforme o tipo de mudança
+
+| Mudou… | Faça também |
+|---|---|
+| Model/coluna/índice | Migration Alembic; export em `models/__init__.py`; `04-modelagem-dados.md` |
+| Schema ou rota da API | `schemas/`; `05-api.md`; `src/types/`; `src/api.ts`; **proxy em `vite.config.ts`** se o path é novo |
+| Rota nova com `user_id` | `get_scoped_user`/`load_scoped_user`; checar `typ` (`08-seguranca`) |
+| Tela/rota do front | Rota em `App.tsx` (guard + `hasModule`); `09-frontend.md`; `03-fluxos.md` se muda o fluxo |
+| Módulo/MVP | `src/config/mvp.ts`; menu, rota e etapas; `01-visao-geral.md` |
+| Aparelho/BLE | `services/<x>/`, `registry`, `device_types` (migration/seed); `07-hardware-ble.md`; teste com aparelho real |
+| Variável de ambiente | `Settings` + `.env.example` (sem valor real) + `10-ambiente-e-operacao.md` |
+| Dependência | `uv add` (core, atualiza `uv.lock`) ou `npm install` (web, atualiza lock); nunca editar lock à mão |
+| Comando/Makefile/script | `10-ambiente-e-operacao.md` |
+| Comportamento de login/token/CORS | `06-autenticacao-seguranca.md` |
+| Pendência resolvida ou descoberta | `11-estado-e-pendencias.md` |
+
+## 4. Verificação (antes de dizer que terminou)
+
+- Web: `npm run build` (inclui `tsc -b`) e `npm run lint` em `cabine-web`.
+- Core: `uvx ruff check app`; o app importa/boota (`create_app()`); `make migrate` aplica as migrations.
+- Corrija erros de lint/tipo que **você** introduziu.
+- Fluxo tocado: descreva como validou (e o que não deu para validar, ex.: hardware).
+- Releia o diff: nada acidental (debug, `.env`, logs, arquivos gerados).
+
+## 5. Definição de pronto
+
+Código funcionando, checagens verdes, specs atualizadas, migration (se houver), `.env.example`/proxy/types em dia, commits e PR no padrão (`04-git-pr-commits`).

@@ -23,13 +23,13 @@ class DeviceWsSession:
         self,
         websocket: WebSocket,
         *,
-        person_id: UUID | None,
-        visit_id: UUID | None,
+        user_id: UUID | None,
+        session_id: UUID | None,
         person_locked: bool,
     ) -> None:
         self.websocket = websocket
-        self.person_id = person_id
-        self.visit_id = visit_id
+        self.user_id = user_id
+        self.session_id = session_id
         self.person_locked = person_locked
         self._tasks: set[asyncio.Task] = set()
 
@@ -50,12 +50,12 @@ class DeviceWsSession:
 
     def apply_ids(self, raw: dict) -> None:
         if not self.person_locked:
-            pid = parse_uuid(raw.get("person_id"))
-            if pid is not None:
-                self.person_id = pid
-        vid = parse_uuid(raw.get("visit_id"))
-        if vid is not None:
-            self.visit_id = vid
+            uid = parse_uuid(raw.get("user_id"))
+            if uid is not None:
+                self.user_id = uid
+        sid = parse_uuid(raw.get("session_id"))
+        if sid is not None:
+            self.session_id = sid
 
     async def listen_person_messages(self) -> None:
         """Consume `{"type": "PERSON", ...}` messages until the socket closes."""

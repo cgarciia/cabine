@@ -1647,6 +1647,21 @@ code {
   align-self: center;
 }
 
+.kiosk-login .kiosk-field {
+  text-align: left;
+}
+
+.kiosk-login .kiosk-field input {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid #cbd5e1;
+  font-size: 1.15rem;
+  color: #0f172a;
+  background: #fff;
+  box-sizing: border-box;
+}
+
 .kiosk-form-card {
   max-width: 28rem;
   width: 100%;

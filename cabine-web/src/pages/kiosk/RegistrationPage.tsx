@@ -214,6 +214,7 @@ export function RegistrationPage() {
         setError('');
         try {
             let person: ScalePerson;
+            let openedSessionId: string | null = null;
             if (editing && session.person) {
                 person = await updatePerson(session.person.id, payload);
             } else {
@@ -223,10 +224,11 @@ export function RegistrationPage() {
                     payload.birth_date ?? '',
                 );
                 saveAccessSession(sessionRes.access_token, sessionRes.expires_in);
-                person = sessionRes.person;
+                person = sessionRes.user;
+                openedSessionId = sessionRes.session_id;
             }
             if (editing) setPerson(person);
-            else beginVisit(person);
+            else if (openedSessionId) beginVisit(person, openedSessionId);
             navigate('/menu', { replace: true });
         } catch (err) {
             setError(apiErrorMessage(err, 'Não foi possível salvar o cadastro.'));

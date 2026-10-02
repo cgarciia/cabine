@@ -53,7 +53,7 @@ export function KioskWristBloodPressurePage() {
             savedRef.current = true;
             const local: BloodPressureReading = {
                 id: newVisitId(),
-                person_id: person.id,
+                user_id: person.id,
                 device_name: reading.device_name ?? 'HEM-6161T2',
                 device_address: reading.device_address ?? null,
                 sys_mmhg: reading.sys_mmhg,
@@ -62,7 +62,7 @@ export function KioskWristBloodPressurePage() {
                 movement: Boolean(reading.movement),
                 irregular_heartbeat: Boolean(reading.irregular_heartbeat),
                 measured_at: reading.measured_at,
-                visit_id: session.visitId,
+                session_id: session.sessionId,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
             };
@@ -70,7 +70,7 @@ export function KioskWristBloodPressurePage() {
             setDone(true);
             try {
                 const saved = await saveBloodPressureReading({
-                    person_id: person.id,
+                    user_id: person.id,
                     device_name: local.device_name,
                     device_address: local.device_address,
                     sys_mmhg: local.sys_mmhg,
@@ -79,7 +79,8 @@ export function KioskWristBloodPressurePage() {
                     movement: local.movement,
                     irregular_heartbeat: local.irregular_heartbeat,
                     measured_at: local.measured_at,
-                    visit_id: session.visitId,
+                    session_id: session.sessionId,
+                    device_slug: 'blood_pressure_wrist',
                 });
                 setLastWristBloodPressure(saved);
             } catch {
@@ -87,7 +88,7 @@ export function KioskWristBloodPressurePage() {
                     const rows = await fetchPersonBloodPressure(person.id);
                     const match = findVisitMatch(
                         rows,
-                        session.visitId,
+                        session.sessionId,
                         (row) => row.sys_mmhg === local.sys_mmhg
                             && row.dia_mmhg === local.dia_mmhg
                             && row.pulse_bpm === local.pulse_bpm,
@@ -98,15 +99,15 @@ export function KioskWristBloodPressurePage() {
                 }
             }
         },
-        [person, session.visitId, setLastWristBloodPressure],
+        [person, session.sessionId, setLastWristBloodPressure],
     );
 
     const { connect, isActive } = useDeviceSocket<BloodPressureLive>(WS_PATHS.wristBloodPressure, {
         onOpen: (socket) => {
             socket.send(JSON.stringify({
                 type: 'PERSON',
-                person_id: personIdRef.current,
-                visit_id: session.visitId,
+                user_id: personIdRef.current,
+                session_id: session.sessionId,
             }));
         },
         onMessage: (payload) => {
@@ -130,13 +131,13 @@ export function KioskWristBloodPressurePage() {
             const pid = personIdRef.current;
             if (!pid || savedRef.current) return;
             if (!force && isActive()) return;
-            const params = new URLSearchParams({ person_id: pid });
-            if (session.visitId) params.set('visit_id', session.visitId);
+            const params = new URLSearchParams({ user_id: pid });
+            if (session.sessionId) params.set('session_id', session.sessionId);
             const known = loadDeviceAddress('wristBloodPressure');
             if (known) params.set('address', known);
             connect(params, true);
         },
-        [connect, isActive, session.visitId],
+        [connect, isActive, session.sessionId],
     );
 
     useEffect(() => {

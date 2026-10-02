@@ -68,7 +68,7 @@ export function MenuPage() {
                     title: 'Bioimpedância',
                     subtitle: 'Suba na balança. A tela orienta cada passo.',
                     path: '/bioimpedancia',
-                    done: sameVisit(session.lastMeasurement, session.visitId),
+                    done: sameVisit(session.lastMeasurement, session.sessionId),
                     icon: Scale,
                 },
             ];
@@ -80,7 +80,7 @@ export function MenuPage() {
                     title: 'Oxigenação',
                     subtitle: 'Coloque o dedo no oxímetro para medir oxigênio e pulso.',
                     path: '/oximetro',
-                    done: sameVisit(session.lastOximeter, session.visitId),
+                    done: sameVisit(session.lastOximeter, session.sessionId),
                     icon: Activity,
                 },
             ];
@@ -105,7 +105,7 @@ export function MenuPage() {
                     title: 'Pressão com ECG',
                     subtitle: 'Manguito no braço e dedos nos sensores.',
                     path: '/pressao',
-                    done: sameVisit(session.lastBloodPressure, session.visitId),
+                    done: sameVisit(session.lastBloodPressure, session.sessionId),
                     icon: HeartPulse,
                 },
                 {
@@ -113,7 +113,7 @@ export function MenuPage() {
                     title: 'Pressão e pulso',
                     subtitle: 'Coloque o monitor no pulso e aperte o botão.',
                     path: '/pressao-pulso',
-                    done: sameVisit(session.lastWristBloodPressure, session.visitId),
+                    done: sameVisit(session.lastWristBloodPressure, session.sessionId),
                     icon: HeartPulse,
                 },
             ];

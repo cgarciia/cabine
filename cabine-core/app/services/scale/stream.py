@@ -23,11 +23,12 @@ async def _load_scale_spec(scale_id: UUID | None) -> tuple[ScaleSpec | None, str
     async with AsyncSessionLocal() as db:
         if scale_id is not None:
             record = await scale_crud.get_by_id(db, scale_id)
+            if record is None:
+                return None, "Balança não encontrada."
         else:
             record = await scale_crud.get_default(db)
-
-        if record is None:
-            return None, "Nenhuma balança cadastrada. Cadastre uma na tela de balanças."
+            if record is None:
+                return None, "Não há equipamento padrão deste tipo nesta cabine."
 
         if not record.is_active:
             return None, f"A balança '{record.name}' está inativa."
@@ -66,8 +67,8 @@ async def stream_scale(
     people_type: str | None = None,
     birth_date: str | None = None,
     display_name: str | None = None,
-    person_id: UUID | None = None,
-    visit_id: UUID | None = None,
+    user_id: UUID | None = None,
+    session_id: UUID | None = None,
     *,
     person_locked: bool = False,
 ) -> None:
@@ -92,15 +93,15 @@ async def stream_scale(
     ]
     profile_sync_box: list[int] = [0]
     session = DeviceWsSession(
-        websocket, person_id=person_id, visit_id=visit_id, person_locked=person_locked
+        websocket, user_id=user_id, session_id=session_id, person_locked=person_locked
     )
     last_reading_box: list[dict | None] = [None]
     saved_keys: set[tuple] = set()
 
     def schedule_save(item: dict) -> None:
-        pid = session.person_id
-        if pid is None:
-            logger.warning("Medição não salva: nenhuma pessoa na sessão")
+        uid = session.user_id
+        if uid is None:
+            logger.warning("Medição não salva: nenhum usuário na sessão")
             return
         try:
             peso = round(float(item.get("weight_kg") or 0), 2)
@@ -108,7 +109,7 @@ async def stream_scale(
             return
         if peso < 10:
             return
-        key = (str(pid), peso, bool(item.get("complete")))
+        key = (str(uid), peso, bool(item.get("complete")))
         if key in saved_keys:
             return
         saved_keys.add(key)
@@ -116,10 +117,10 @@ async def stream_scale(
         async def _run() -> None:
             try:
                 await save_from_scale_event(
-                    person_id=pid,
-                    scale_id=spec.id,
+                    user_id=uid,
+                    device_id=spec.id,
                     payload=item,
-                    visit_id=session.visit_id,
+                    session_id=session.session_id,
                 )
             except Exception:
                 saved_keys.discard(key)
@@ -182,9 +183,10 @@ async def stream_scale(
 
         payload: dict = {
             "type": "WEIGHT",
-            "scale_id": str(spec.id),
+            "device_id": str(spec.id),
             "adapter": spec.adapter,
             "scale_name": spec.name,
+            "device_address": spec.address,
             "supports_bia": adapter.supports_bia,
             "weight_kg": reading.weight_kg,
             "stable": reading.stable,

@@ -1,0 +1,41 @@
+---
+description: Regras de segurança e dados pessoais (auth, tokens, segredos, LGPD) para qualquer mudança em rotas, login ou configuração
+alwaysApply: false
+globs: cabine-core/app/core/**/*.py, cabine-core/app/api/**/*.py, cabine-web/src/session/**, cabine-web/src/components/AuthGuard.tsx, **/.env*
+---
+
+# Segurança
+
+Spec: `.cursor/specs/06-autenticacao-seguranca.md`.
+
+## Auth
+
+- Dois perfis, claim `typ`: `person` (totem, 30 min) e `user` (admin, 480 min). Token sem `typ` é inválido. Só `security.py` emite token.
+- Toda rota nova declara quem acessa: `get_current_user` (admin), `require_access` (pessoa ou admin), `get_scoped_user`/`load_scoped_user` (escopo por `user_id`, 404 se fora do escopo). Rota pública é exceção e entra na lista fechada da spec.
+- Scan/CRUD de aparelhos e balanças, listagem e exclusão de usuários: só `typ=user`.
+- WebSocket: token na query; com token de pessoa o `user_id` é o `sub`.
+- Login e cadastro: rate limit só de falhas (por IP e por sujeito). Resposta 429 com `Retry-After`. Não revelar se e-mail/matrícula existe além do que `login/lookup` já define.
+- `allow_credentials=False`; token no header.
+
+## Segredos
+
+- Nunca commitar `.env`, `SECRET_KEY`, senhas ou tokens. `.env.example` só com placeholder.
+- `SECRET_KEY` ≥ 32 caracteres em qualquer ambiente real.
+- Sem MAC de laboratório, IP interno ou credencial em código, spec ou log.
+
+## Dados pessoais e saúde
+
+- Coletar só o que a spec de dados prevê (`04`). Não adicionar CPF, telefone, e-mail do usuário etc. sem decisão de produto.
+- Não logar senha, token, corpo de requisição, matrícula/nome além do necessário.
+- Texto clínico/orientação: não afirmar diagnóstico, aptidão ou risco sem aprovação do time de saúde.
+- Exclusão: histórico clínico não é apagado em cascata; rotina específica, com decisão.
+
+## Front
+
+- Token só via `session/authSession.ts`; nunca em URL (exceto WS por query), log ou texto de erro.
+- Rota autenticada dentro do `AuthGuard` correto; sair limpa token e rascunhos.
+- Não renderizar HTML vindo da API com `dangerouslySetInnerHTML`.
+
+## Checklist por mudança
+
+Quem acessa? Escopo e 404 ok? Rate limit onde há tentativa? Novo segredo fora do git? Algum dado pessoal novo? Algo sensível em log?

@@ -1,3 +1,5 @@
+> **Anexo histórico** (movido de `docs/relatorio-protocolos-balancas.md`, conteúdo original de 08/09/2026). Referências a `scales`, `ble_winrt_patch` e `ble_common` são anteriores à reorganização; o estado atual está em `../07-hardware-ble.md`. A balança em produção é a RM-RD2504A.
+
 # Relatório comparativo — protocolos de comunicação de balanças (Cabine)
 
 **Data:** 08-09-2026  

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from app.models.scale import Scale
+from app.models.device import Device
 
 
 @dataclass(frozen=True)
@@ -13,7 +13,7 @@ class ScaleSpec:
     parser: str
 
     @classmethod
-    def from_record(cls, scale: Scale) -> "ScaleSpec":
+    def from_record(cls, scale: Device) -> "ScaleSpec":
         return cls(
             id=scale.id,
             name=scale.name,

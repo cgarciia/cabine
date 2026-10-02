@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +35,7 @@ class Settings(BaseSettings):
         r")(:\d+)?"
     )
     SQL_ECHO: bool = False
+    CABIN_STATE_PATH: str = ""
 
     @property
     def ASYNC_DATABASE_URI(self) -> str:
@@ -48,3 +52,11 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def cabin_state_file() -> Path:
+    configured = settings.CABIN_STATE_PATH.strip()
+    if configured:
+        return Path(configured)
+    program_data = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
+    return Path(program_data) / "Cabine" / "cabin.json"

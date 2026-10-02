@@ -1,0 +1,65 @@
+---
+description: Padrões de implementação do cabine-core (FastAPI, SQLAlchemy async, Pydantic, camadas)
+globs: cabine-core/**/*.py
+alwaysApply: false
+---
+
+# Backend (`cabine-core`)
+
+Spec completa: `.cursor/specs/08-backend.md`, `05-api.md`, `04-modelagem-dados.md`.
+
+## Camadas
+
+```
+rota (api/routes) → schema (schemas) → crud e/ou services
+```
+
+- **Rota fina**: valida entrada, injeta `get_db` e dependências de auth, chama crud/service, devolve `response_model`. Sem `select()`, sem Bleak, sem regra de negócio.
+- **crud**: funções `async`, recebem `AsyncSession`, fazem `commit`/`refresh`. Não importam FastAPI nem `services` (dívida conhecida: `crud/cabin.py`, não replicar).
+- **services**: domínio e I/O (BLE, parsers, pareamento, estado da cabine).
+- Rota não importa rota; helper compartilhado vai para `schemas/` ou `services/`.
+
+## Padrões de código
+
+- Python ≥ 3.12, tipagem em assinaturas, `str | None` (não `Optional`).
+- SQLAlchemy 2 **async** (`select()`, `await db.execute(...)`); nunca `psycopg2`/engine síncrono.
+- Pydantic v2: `*Create`, `*Update`, `*Response`; Response com `ConfigDict(from_attributes=True)`.
+- Models herdam `Base` (UUID + timestamps). Sem `index=True` em `id`. Sem PK inteira.
+- IDs `UUID` no path/body; erro 404 quando o recurso não é do escopo do usuário (não vazar existência).
+- Config só via `app/core/config.py` (`Settings`); nunca `os.environ` espalhado.
+- Datas com timezone (`datetime` aware); persistência em UTC.
+- `HTTPException(status_code=status.HTTP_..., detail="mensagem em português")`.
+- Criação `201`, exclusão `204`, conflito `409`, escopo/permissão `403`/`404`, rate limit `429`.
+- Paths em inglês, sem barra final; listagem de filhos só em `/users/{id}/*`.
+- `async def` em rota/crud; trabalho bloqueante fora do event loop. Task de persistência disparada por stream usa `session.spawn(...)`.
+- Logging com `logging.getLogger(__name__)`; nunca logar senha, token, corpo de requisição ou dado pessoal desnecessário.
+- Nomes: arquivos/funções `snake_case`, classes `PascalCase`, tabelas plural `snake_case`.
+
+## Exemplo de rota (padrão do projeto)
+
+```python
+router = APIRouter(prefix="/cabins", tags=["Cabins"])
+
+@router.patch("/current", response_model=CabinResponse)
+async def rename_cabin(
+    payload: CabinName,
+    db: AsyncSession = Depends(get_db),
+    _: Admin = Depends(get_current_user),
+):
+    try:
+        return await cabin_crud.rename(db, payload.description)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+```
+
+Referência viva: `app/api/routes/cabins.py`, `app/crud/cabin.py`.
+
+## Novo recurso REST (ordem)
+
+Model + export → migration → schema → crud → rota + `include_router` em `api/router.py` → proxy no Vite → types/`api.ts` no web → specs.
+
+## Proibido
+
+Lógica BLE na rota; SQL na rota; segundo gerenciador de dependências (`uv` é a fonte); secrets ou MAC de laboratório em config; log de debug de sessão BLE; rota FHIR; `GET /measurements?user_id=`; criar segundo uvicorn para separar módulo.
+
+Dependências: `uv add <pacote>` (atualiza `pyproject.toml` e `uv.lock`). Sem `pip install` direto.

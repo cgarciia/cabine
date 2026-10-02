@@ -8,6 +8,7 @@ from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 
 from app.schemas.ble import BleDevice
+from app.services.ble import ble_radio_lock
 from app.services.ble.connect import connect_with_fallback
 from app.services.ble.scanner import advertised_name, as_ble_devices, scan_devices, wait_for_device
 from app.services.blood_pressure.gatt_bp import BP_MEASUREMENT_UUID
@@ -81,6 +82,11 @@ def _matches(device: BLEDevice, advertisement: AdvertisementData) -> bool:
 
 async def scan_hem6161(timeout: float = 12.0) -> list[BleDevice]:
     return as_ble_devices(await scan_devices(_matches, timeout), DEVICE_LABEL)
+
+
+async def scan_hem6161_locked(timeout: float = 12.0) -> list[BleDevice]:
+    async with ble_radio_lock:
+        return await scan_hem6161(timeout)
 
 
 async def wait_for_hem6161(

@@ -1,0 +1,57 @@
+---
+description: Padrões de implementação do cabine-web (React 19, TypeScript, Vite, Axios, sessão, kiosk x admin)
+globs: cabine-web/src/**/*.{ts,tsx,css}
+alwaysApply: false
+---
+
+# Frontend (`cabine-web`)
+
+Spec completa: `.cursor/specs/09-frontend.md`, `03-fluxos.md`.
+
+## Camadas
+
+```
+página → api.ts / session / modules → componente de UI
+```
+
+- Página orquestra estado e chama `api`/helpers. Componente reutilizável não conhece URL da API.
+- **Sem store global**: sem Redux, Zustand, React Query. Estado local + `KioskContext` (andamento da visita).
+- Um único Axios em `src/api.ts`. Nada de `fetch` para a API, nada de `localhost:8000` hardcoded.
+- WebSocket de aparelho: `deviceSocket()` + `WS_PATHS` + hook `useDeviceSocket`. Nunca `new WebSocket` à mão.
+
+## Padrões de código
+
+- TypeScript estrito. **Sem `any`**; use tipos de `src/types/` (interfaces com campos `snake_case`, espelhando a API). Estado de formulário em camelCase; converter na borda (`personFormToPayload`).
+- Páginas: `FooPage.tsx` com `export function FooPage`. Componentes: PascalCase, **named export**. Sem default export novo.
+- Erros de API: `apiErrorMessage(error, 'fallback em português')`. Não engolir erro (exceção: persistência best-effort com sessão local).
+- Texto de UI, mensagens e erros em **português**. Rotas da SPA em português/kebab.
+- Storage: chaves só em `session/keys.ts`, prefixo `cabine.`. JWT via `authSession.ts`.
+- CSS: totem `kiosk-*`, operador `cabine-*`; não misturar na mesma tela. Sem Tailwind/MUI/CSS modules novos sem decisão.
+- Composição corporal: **não** calcular no front; exibir `metrics` do core.
+- Questionário de saúde só em `modules/health/questionnaires.ts`; payload via `formPayload.ts` (`module`: `health | mental`). Texto clínico só muda com aprovação do time de saúde.
+- Módulo/etapa do MVP: condicionar rota/menu com `hasModule(...)` de `config/mvp.ts`.
+- Rotas autenticadas dentro do `AuthGuard` com o `typ` certo (`person` → `/matricula`; `user` → `/admin/login`). Sair = `clearSession()` + `clearAccessSession()`.
+- Ícones: `lucide-react`.
+- Hooks do React: respeitar `eslint-plugin-react-hooks` (deps corretas, sem setState em render). Limpar timers/sockets no cleanup do `useEffect`.
+- Acessibilidade de totem: alvos de toque grandes, feedback claro de estado do aparelho, mensagens simples.
+
+## Exemplo de chamada
+
+```ts
+export async function fetchPersonForms(id: string): Promise<FormSubmission[]> {
+  const { data } = await api.get<FormSubmission[]>(`/users/${id}/forms`);
+  return data;
+}
+```
+
+Referência viva: `src/api.ts`.
+
+## Nova tela
+
+Página (named export) → rota em `App.tsx` (guard + `hasModule`) → tipo em `types/` → função em `api.ts` → proxy em `vite.config.ts` se path novo → specs.
+
+## Proibido
+
+Segundo Axios/`fetch` solto; Redux/Zustand/React Query/Tailwind/MUI sem decisão; lógica Bleak/SQL/FHIR; duplicar questionário; chave de storage sem prefixo; `any`; default export em página; calcular BIA no front; `console.log` esquecido.
+
+Dependências: `npm install <pacote>` em `cabine-web` (atualiza `package-lock.json`). Não misturar gerenciadores.

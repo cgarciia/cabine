@@ -1,4 +1,3 @@
-from app.models.scale import Scale
 from app.schemas.measurement import MeasurementCreate
 
 BIA_ADAPTER = "ble_rm_rd2504a"
@@ -18,9 +17,9 @@ BIA_ONLY_METRICS = frozenset({
 })
 
 
-def sanitize_measurement(payload: MeasurementCreate, scale: Scale | None) -> MeasurementCreate:
+def sanitize_measurement(payload: MeasurementCreate, adapter: str | None = None) -> MeasurementCreate:
     """Drop BIA data a weight-only scale cannot have produced."""
-    adapter = (scale.adapter if scale else payload.adapter) or ""
+    adapter = adapter or payload.adapter or ""
     if adapter == BIA_ADAPTER or payload.impedances_ohm:
         return payload
     metrics = None

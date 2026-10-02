@@ -1,0 +1,103 @@
+---
+description: Fluxo Git do projeto - criação de branch, formato de commit, abertura de PR e envio para develop/main
+alwaysApply: false
+---
+
+# Git: branches, commits e PRs
+
+Padrão = **Conventional Commits 1.0** (commits e título de PR) + **Conventional Branch** (nomes de branch) + **squash merge** com o título do PR como mensagem final. É o que o histórico já usa (`feat: … (#10)`, `refactor: …`, `fix: …`, branches `feat/…`, `refactor/…`, `cursor/…`), agora formalizado.
+
+Repositório: `https://github.com/cgarciia/cabine` (remoto `origin`).
+
+## 1. Branches fixas
+
+| Branch | Papel | Regra |
+|---|---|---|
+| `main` | Produção/estável (HEAD do remoto) | Só recebe `develop` (release) ou `hotfix/*`, por PR |
+| `develop` | Integração | Base de toda branch de trabalho. Recebe PRs por **squash merge** |
+
+**Nunca** commitar nem dar push direto em `develop` ou `main`. **Nunca** `push --force` nelas.
+
+## 2. Criar branch
+
+```
+<tipo>/<descricao-em-kebab-case>
+```
+
+- Sempre a partir de `develop` atualizada: `git switch develop && git pull && git switch -c feat/pareamento-cabine`.
+- Tipos: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `perf`, `hotfix` (urgente, parte de `main`), `release` (`release/vX.Y.Z`, preparar versão). Branches de agente: `cursor/<descricao>`.
+- Só minúsculas, números e hífens; sem acento, espaço ou `_`; curta (2 a 5 palavras); em português ou inglês técnico, mas coerente com o assunto. Ticket opcional: `fix/123-erro-login`.
+- Uma branch = um assunto. Vida curta; apague após o merge.
+- Exemplos do histórico: `feat/modulos-mvps`, `feat/monitor-pa-hem`, `feat/ecg-omron`, `refactor/production-cleanup`, `feat/modelagem-multi-cabine`.
+
+## 3. Commits
+
+Formato:
+
+```
+<tipo>[(escopo)][!]: <descrição>
+
+[corpo]
+
+[rodapés]
+```
+
+- **Idioma: português.** Descrição no presente do indicativo, minúscula, sem ponto final, ≤ 72 caracteres, dizendo **o que muda e por quê** (não "arrumei coisas").
+- Tipos: `feat` (funcionalidade nova), `fix` (correção), `refactor` (sem mudar comportamento), `docs`, `style` (só formatação), `perf`, `test`, `build` (deps, Makefile, Docker), `ci`, `chore` (manutenção), `revert`.
+- Escopo opcional, um substantivo de área: `core`, `web`, `db`, `ble`, `auth`, `kiosk`, `admin`, `specs`. Ex.: `fix(ble): reconecta o oxímetro após queda do rádio`.
+- Corpo (opcional): linha em branco após a descrição; explique motivo e efeito, não o diff. Quebre em ~72 colunas.
+- Quebra de compatibilidade: `!` antes dos dois-pontos **e/ou** rodapé `BREAKING CHANGE: …` (ex.: rota removida, coluna renomeada sem compat).
+- Referências: `Refs #123` / `Closes #123` no rodapé.
+- Commits pequenos e atômicos, um propósito cada; migration + model + schema do mesmo recurso podem ir juntos. Não misturar refatoração com feature.
+- Proibido: mensagens vagas ("alterações", "ajustes", "refatoração" sozinhos), `WIP` em branch compartilhada, arquivos de segredo (`.env`, chaves), `*.log`, `node_modules`, `.venv`.
+- Rodapé `Co-authored-by:` é opcional (ferramentas/agentes podem adicionar).
+
+Bons exemplos (seguem o histórico):
+
+```
+feat: adota a modelagem multi-cabine preservando o histórico
+fix: ignora leitura antiga na memória do monitor de pulso
+refactor(core): unifica scan e conexão BLE em services/ble
+docs(specs): move docs/ e SPEC.md para .cursor/specs
+feat(db)!: renomeia people para users
+
+BREAKING CHANGE: o front deve chamar /users no lugar de /people.
+```
+
+## 4. Antes de abrir o PR
+
+1. Sincronize com a base: `git fetch origin && git rebase origin/develop` (ou merge, se a branch já é compartilhada). Resolva conflitos localmente.
+2. Rode as verificações (`01-fluxo-de-alteracao` §4): `npm run build && npm run lint` (web); `uvx ruff check app`, boot do app e `make migrate` (core).
+3. Specs, `.env.example`, proxy, types e migration em dia.
+4. Releia o diff completo (`git diff origin/develop...HEAD`).
+
+## 5. Abrir o PR
+
+- **Base: `develop`** (exceto `hotfix/*` → `main`, e release `develop` → `main`).
+- **Título = mensagem de commit final** no formato Conventional Commits em português (ele vira o commit do squash). Ex.: `feat: uma API para os dois MVPs e a leitura da visita`.
+- Um PR = um assunto, pequeno o bastante para revisar. PR grande: divida.
+- Corpo (template em `.github/pull_request_template.md`):
+
+```
+## Summary
+- 1 a 3 bullets: o que muda e por quê (foco no motivo e no comportamento).
+```
+
+- Inclua no corpo: migrations (e como aplicar), variáveis de ambiente novas, rotas/contratos alterados, `BREAKING CHANGE`, o que **não** foi validado (ex.: hardware real).
+- Use *Draft* enquanto incompleto. Marque revisor. Nenhum PR com secrets, `.env`, debug ou arquivos gerados.
+- Aberto por CLI (`gh pr create --base develop --title "..." --body "$(cat <<'EOF' ... EOF)"`), mesma estrutura.
+
+## 6. Merge e envio para `develop`
+
+- **Squash and merge** em `develop`; a mensagem do squash é o título do PR (`… (#N)`). Apague a branch depois.
+- `develop` → `main`: PR de release, merge commit (preserva os squashes); tag `vX.Y.Z` (SemVer: `fix` = patch, `feat` = minor, `BREAKING CHANGE` = major).
+- Revert: `revert: <descrição>` com `Refs: <sha>` no rodapé, via PR.
+
+## 7. Regras para o agente
+
+- **Só commitar/dar push quando o usuário pedir.** Nunca em `develop`/`main`.
+- Nunca alterar `git config`, nunca `--no-verify`, nunca `push --force` (especialmente em `main`/`develop`), nunca `reset --hard` sem pedido explícito.
+- Antes de commitar: `git status`, `git diff` e `git log -5` para seguir o estilo; stage só os arquivos do assunto.
+- Mensagem sempre via HEREDOC; corpo explica o porquê.
+- `git commit --amend` só no último commit **seu**, ainda não enviado.
+- Não commitar `.env`, `*.log` nem `.cursor/debug-*`.

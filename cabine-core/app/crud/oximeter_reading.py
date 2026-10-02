@@ -5,21 +5,33 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import base
+from app.crud import device as device_crud
+from app.crud import session as session_crud
 from app.models.oximeter_reading import OximeterReading
 from app.schemas.oximeter import OximeterReadingCreate
 
 
 async def create(db: AsyncSession, data: OximeterReadingCreate) -> OximeterReading:
+    session_id = await session_crud.attach_session(db, data.user_id, data.session_id)
+    device = await device_crud.resolve_for_reading(db, "oximeter", data.device_id, data.device_address)
+    data = data.model_copy(
+        update={
+            "session_id": session_id,
+            "device_id": device.id,
+            "device_address": device.address,
+            "device_name": data.device_name or device.description,
+        }
+    )
     return await base.create_from_schema(db, OximeterReading, data)
 
 
-async def list_by_person(db: AsyncSession, person_id: UUID) -> list[OximeterReading]:
-    return await base.list_by_person(db, OximeterReading, person_id)
+async def list_by_user(db: AsyncSession, user_id: UUID) -> list[OximeterReading]:
+    return await base.list_by_user(db, OximeterReading, user_id)
 
 
 async def recently_saved(
     db: AsyncSession,
-    person_id: UUID,
+    user_id: UUID,
     spo2_pct: int,
     pulse_bpm: int,
     *,
@@ -29,7 +41,7 @@ async def recently_saved(
     result = await db.execute(
         select(OximeterReading)
         .where(
-            OximeterReading.person_id == person_id,
+            OximeterReading.user_id == user_id,
             OximeterReading.spo2_pct == spo2_pct,
             OximeterReading.pulse_bpm == pulse_bpm,
             OximeterReading.created_at >= cutoff,

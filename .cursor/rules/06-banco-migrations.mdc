@@ -1,0 +1,35 @@
+---
+description: Models SQLAlchemy e migrations Alembic do projeto (padrões, comandos, cuidados)
+globs: cabine-core/app/models/**/*.py, cabine-core/alembic/**/*.py
+alwaysApply: false
+---
+
+# Banco e migrations
+
+Spec: `.cursor/specs/04-modelagem-dados.md`. Postgres 16, `postgresql+asyncpg`.
+
+## Models
+
+- Herdam `Base` (UUID `id` + `created_at`/`updated_at`). Sem `index=True` em `id`, sem PK inteira, sem timestamps manuais.
+- Tabelas plural `snake_case` em inglês; classes `PascalCase`; um model por arquivo em `app/models/` e **export em `models/__init__.py`** (o `alembic/env.py` lê a metadata dali).
+- Integridade no banco: FKs, `UNIQUE`, `CHECK` e índices parciais (ver `devices`: único parcial em `is_default` + CHECK). Não confiar só na API.
+- Leitura (`*_readings`, `scale_measurements`, `form_submissions`) aponta para `user_id` e `session_id` e **copia** nome/MAC do aparelho da hora.
+- JSONB para payloads variáveis (`metrics`, `waveform`, `payload`); colunas reais para o que é filtrado/indexado.
+- FK com histórico não cascateia exclusão silenciosamente: apagar `users`/`sessions` com leitura é recusado.
+
+## Migrations
+
+1. Toda mudança de schema = nova revision em `cabine-core/alembic/versions/`. Nunca só o model.
+2. Gere com `make makemigrations m="slug_da_mudanca"` (em `cabine-core`) e **revise à mão** (autogenerate erra índices parciais, CHECKs, JSONB e enums).
+3. Uma revision por mudança coesa; nome em `snake_case` descritivo. Mantenha a cadeia linear (um só `head`): `uv run alembic heads` deve listar um.
+4. Nunca editar revision já aplicada em ambiente compartilhado/`develop`: crie outra.
+5. Implemente `downgrade` quando viável; se não for reversível, diga no PR.
+6. Seeds idempotentes (reaplicar não duplica nem quebra).
+7. Dados + schema grandes: separar em duas revisions; alteração destrutiva de coluna em etapas (adicionar → backfill → remover).
+8. Aplicar: `make migrate`. Banco local sujo: `make db-reset` (**apaga o volume**; só em dev).
+9. Teste do zero: `make db-reset` e login do admin seed funcionando.
+10. Migration é citada no PR com como aplicar e se exige passo manual.
+
+## Proibido
+
+Alterar schema sem migration; `Base.metadata.create_all` fora de teste; editar revision antiga aplicada; SQL com dado pessoal de produção em seed; `index=True` em `id`.

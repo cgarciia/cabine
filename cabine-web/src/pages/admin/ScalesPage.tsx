@@ -65,7 +65,9 @@ export function ScalesPage() {
     }
 
     useEffect(() => {
-        load().catch(() => setError('Não foi possível carregar as balanças.'));
+        load().catch((err: unknown) => {
+            setError(apiErrorMessage(err, 'Não foi possível carregar as balanças.'));
+        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

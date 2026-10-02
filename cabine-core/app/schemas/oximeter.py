@@ -6,7 +6,9 @@ from app.schemas.ble import DeviceReadingResponseBase
 
 
 class OximeterReadingCreate(BaseModel):
-    person_id: UUID
+    user_id: UUID
+    session_id: UUID | None = None
+    device_id: UUID | None = None
     device_name: str = Field(min_length=1, max_length=120)
     device_address: str | None = Field(default=None, max_length=40)
     spo2_pct: int = Field(ge=35, le=100)
@@ -14,7 +16,6 @@ class OximeterReadingCreate(BaseModel):
     pi_pct: float | None = Field(default=None, ge=0, le=30)
     stable: bool = True
     waveform: list[int] | None = Field(default=None, max_length=480)
-    visit_id: UUID | None = None
 
     @field_validator("waveform")
     @classmethod

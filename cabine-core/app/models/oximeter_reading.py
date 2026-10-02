@@ -10,9 +10,19 @@ from app.models.base import Base
 class OximeterReading(Base):
     __tablename__ = "oximeter_readings"
 
-    person_id: Mapped[UUID] = mapped_column(
-        ForeignKey("people.id", ondelete="CASCADE"),
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
+        index=True,
+    )
+    session_id: Mapped[UUID] = mapped_column(
+        ForeignKey("sessions.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    device_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"),
+        nullable=True,
         index=True,
     )
     device_name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -22,6 +32,5 @@ class OximeterReading(Base):
     pi_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     stable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     waveform: Mapped[list | None] = mapped_column(JSONB, nullable=True)
-    visit_id: Mapped[UUID | None] = mapped_column(index=True, nullable=True)
 
-    person = relationship("ScalePerson", back_populates="oximeter_readings")
+    user = relationship("User", back_populates="oximeter_readings")

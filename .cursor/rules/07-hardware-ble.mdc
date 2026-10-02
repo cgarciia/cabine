@@ -1,0 +1,28 @@
+---
+description: Regras de implementação para BLE e aparelhos (balança, oxímetro, pressão), rádio compartilhado e WebSockets
+globs: cabine-core/app/services/**/*.py, cabine-core/app/api/routes/{scale,oximeter,blood_pressure,devices}.py
+alwaysApply: false
+---
+
+# Hardware e BLE
+
+Spec: `.cursor/specs/07-hardware-ble.md`. Estudo de protocolos: `.cursor/specs/anexos/relatorio-protocolos-balancas.md`.
+
+## Regras
+
+1. Um rádio por PC: todo scan/connect passa por `ble_radio_lock` (`services/ble/common.py`). Nunca abrir `BleakScanner`/`BleakClient` fora de `services/ble/`.
+2. Reutilize `services/ble/`: `scan_devices`/`wait_for_device`, `connect_with_fallback`, `DeviceWsSession`. O patch WinRT é aplicado no import do pacote; não duplicar.
+3. Rota WebSocket fina: autentica (`authenticate_websocket`), carrega o necessário, **libera a sessão do banco**, e delega a `services/<x>/stream.py`.
+4. Fechou o WebSocket → cancela o adapter BLE (`watch_websocket_closed`, `cancel_and_wait`). Sem tasks órfãs.
+5. Persistência disparada pelo stream: `session.spawn(...)`, para ser aguardada ao fechar.
+6. Parsers são funções puras (bytes → leitura): fáceis de testar sem hardware; escreva teste ao mexer neles quando houver suíte.
+7. Cada aparelho tem **adapter + parser** registrados no `registry`; validação em `schemas/scale.py` / `registry.resolve_transport`. Nova balança não muda a rota.
+8. Novo tipo de periférico: `device_types` (migration + seed), `services/<x>/`, rota WS, proxy no Vite, tipos e página no web, specs.
+9. Nunca gravar MAC de laboratório em `Settings`, `.env.example`, código ou spec. MAC vem da tela (`localStorage` no front) ou do pareamento.
+10. Sem log de debug de sessão BLE em `app/`. Sondas ficam em `cabine-core/scripts/`.
+11. Monitor de pulso: aceitar só leitura **desta sessão**. HEM-7530T: EEPROM só para medições desta sessão.
+12. Mensagens de status ao usuário em português, simples (`friendlyScaleStatus`); sem jargão de Bluetooth.
+
+## Teste
+
+Mudou BLE → testar com o aparelho real no totem (Windows) e descrever no PR: aparelho, modelo, o que foi medido e o que não deu para testar. Se balança/oxímetro/pressão falham juntos, investigue o lock no core antes do front.

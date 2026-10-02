@@ -1,103 +1,90 @@
 from uuid import UUID
 
-from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.scale import Scale
+from app.crud import device as device_crud
+from app.crud import session as session_crud
+from app.models.device import Device
 from app.schemas.scale import ScaleCreate, ScaleUpdate
 
-
-async def list_all(db: AsyncSession) -> list[Scale]:
-    result = await db.execute(select(Scale).order_by(Scale.name))
-    return list(result.scalars().all())
+SCALE_SLUG = "scale"
 
 
-async def get_by_id(db: AsyncSession, scale_id: UUID) -> Scale | None:
-    return await db.get(Scale, scale_id)
+async def list_all(db: AsyncSession) -> list[Device]:
+    return await device_crud.list_by_slug(db, SCALE_SLUG)
 
 
-async def get_by_address(db: AsyncSession, address: str) -> Scale | None:
-    result = await db.execute(select(Scale).where(Scale.address == address))
-    return result.scalars().first()
+async def get_by_id(db: AsyncSession, scale_id: UUID) -> Device | None:
+    device = await device_crud.get_by_id(db, scale_id)
+    if device is None or device.device_type is None or device.device_type.slug != SCALE_SLUG:
+        return None
+    cabin = await session_crud.get_local_cabin(db)
+    if cabin is None or device.cabin_id != cabin.id:
+        return None
+    return device
 
 
-async def get_default(db: AsyncSession) -> Scale | None:
-    result = await db.execute(
-        select(Scale).where(Scale.is_default.is_(True), Scale.is_active.is_(True))
-    )
-    scale = result.scalars().first()
-    if scale:
-        return scale
-    result = await db.execute(
-        select(Scale).where(Scale.is_active.is_(True)).order_by(Scale.created_at)
-    )
-    return result.scalars().first()
+async def get_by_address(db: AsyncSession, address: str) -> Device | None:
+    device = await device_crud.get_by_address(db, address)
+    if device is None or device.device_type is None or device.device_type.slug != SCALE_SLUG:
+        return None
+    return device
 
 
-async def _clear_default(db: AsyncSession, except_id: UUID | None = None) -> None:
-    stmt = update(Scale).where(Scale.is_default.is_(True))
-    if except_id is not None:
-        stmt = stmt.where(Scale.id != except_id)
-    await db.execute(stmt.values(is_default=False))
+async def get_default(db: AsyncSession) -> Device | None:
+    return await device_crud.get_default(db, SCALE_SLUG)
 
 
-async def create(db: AsyncSession, data: ScaleCreate) -> Scale:
-    existing = await list_all(db)
-    is_default = data.is_default or not existing
-    if is_default:
-        await _clear_default(db)
-
-    scale = Scale(
-        name=data.name,
-        adapter=data.adapter.value,
+async def create(db: AsyncSession, data: ScaleCreate) -> Device:
+    device = await device_crud.save_paired(
+        db,
+        slug=SCALE_SLUG,
+        description=data.name,
         address=data.address,
+        adapter=data.adapter.value,
         parser=data.parser.value,
-        is_active=data.is_active,
-        is_default=is_default,
+        make_default=data.is_active and (data.is_default or not await list_all(db)),
     )
-    db.add(scale)
-    await db.commit()
-    await db.refresh(scale)
-    return scale
+    if not data.is_active:
+        device.is_active = False
+        device.is_default = False
+        await db.commit()
+        await db.refresh(device)
+    return device
 
 
 async def update_scale(
     db: AsyncSession,
-    scale: Scale,
+    scale: Device,
     data: ScaleUpdate,
     transport: tuple[str, str, str],
-) -> Scale:
-    """`transport` is the already-validated (adapter, address, parser) triple."""
+) -> Device:
     adapter, address, parser = transport
     if address != scale.address:
-        other = await get_by_address(db, address)
+        other = await device_crud.get_by_address(db, address)
         if other and other.id != scale.id:
             raise ValueError("Já existe uma balança com este endereço.")
-
     scale.adapter = adapter
     scale.address = address
     scale.parser = parser
     if data.name is not None:
-        scale.name = data.name
-    if data.is_active is not None:
-        scale.is_active = data.is_active
-    if data.is_default is True:
-        await _clear_default(db, except_id=scale.id)
-        scale.is_default = True
-    elif data.is_default is False:
+        scale.description = data.name
+    if data.is_active is False:
+        scale.is_active = False
         scale.is_default = False
-
+    elif data.is_active is True:
+        scale.is_active = True
+    if data.is_default is True:
+        if scale.cabin_id is None:
+            raise ValueError("Aparelho sem cabine não pode ser o padrão.")
+        await device_crud.mark_default(db, scale)
+        return scale
+    if data.is_default is False:
+        scale.is_default = False
     await db.commit()
     await db.refresh(scale)
     return scale
 
 
-async def delete_scale(db: AsyncSession, scale: Scale) -> None:
-    was_default = scale.is_default
-    await db.delete(scale)
-    await db.commit()
-    if was_default:
-        replacement = await get_default(db)
-        if replacement and not replacement.is_default:
-            replacement.is_default = True
-            await db.commit()
+async def delete_scale(db: AsyncSession, scale: Device) -> None:
+    await device_crud.delete_device(db, scale)

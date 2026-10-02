@@ -1,18 +1,17 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, WebSocket, status
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import authenticate_websocket, get_current_user, load_scoped_person, require_access
-from app.models.person import ScalePerson
+from app.core.deps import authenticate_websocket, get_current_user, load_scoped_user, require_access
+from app.models.admin import Admin
 from app.models.user import User
 from app.schemas.ble import BleScanResponse
 from app.schemas.oximeter import OximeterReadingCreate, OximeterReadingResponse
-from app.services.ble import ble_radio_lock
-from app.services.oximeter.ble import scan_oximeters
-from app.services.oximeter.persist import store_oximeter_reading
 from app.services.devices import resolve_paired_address
+from app.services.oximeter.ble import scan_oximeters_locked
+from app.services.oximeter.persist import store_oximeter_reading
 from app.services.oximeter.stream import stream_oximeter
 
 router = APIRouter(tags=["Oximeter"])
@@ -24,8 +23,7 @@ router = APIRouter(tags=["Oximeter"])
     dependencies=[Depends(get_current_user)],
 )
 async def scan_nearby_oximeters():
-    async with ble_radio_lock:
-        devices = await scan_oximeters(timeout=10.0)
+    devices = await scan_oximeters_locked(timeout=10.0)
     return BleScanResponse(devices=devices)
 
 
@@ -33,18 +31,21 @@ async def scan_nearby_oximeters():
 async def create_oximeter_reading(
     payload: OximeterReadingCreate,
     db: AsyncSession = Depends(get_db),
-    actor: ScalePerson | User = Depends(require_access),
+    actor: User | Admin = Depends(require_access),
 ):
-    await load_scoped_person(db, actor, payload.person_id)
-    return await store_oximeter_reading(db, payload)
+    await load_scoped_user(db, actor, payload.user_id)
+    try:
+        return await store_oximeter_reading(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.websocket("/ws/oximeter")
 async def oximeter_endpoint(
     websocket: WebSocket,
-    person_id: UUID | None = None,
+    user_id: UUID | None = None,
     address: str | None = None,
-    visit_id: UUID | None = None,
+    session_id: UUID | None = None,
     token: str | None = None,
 ):
     principal = await authenticate_websocket(websocket, token)
@@ -53,8 +54,8 @@ async def oximeter_endpoint(
     resolved = (address or "").strip() or await resolve_paired_address("oximeter")
     await stream_oximeter(
         websocket,
-        person_id=principal.bound_person_id(person_id),
+        user_id=principal.bound_user_id(user_id),
         address=resolved,
-        visit_id=visit_id,
+        session_id=session_id,
         person_locked=principal.person_locked,
     )

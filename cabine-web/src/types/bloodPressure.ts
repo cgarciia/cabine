@@ -1,6 +1,6 @@
 export interface BloodPressureReading {
     id: string;
-    person_id: string;
+    user_id: string;
     device_name: string;
     device_address: string | null;
     sys_mmhg: number;
@@ -9,7 +9,7 @@ export interface BloodPressureReading {
     movement: boolean;
     irregular_heartbeat: boolean;
     measured_at: string;
-    visit_id?: string | null;
+    session_id?: string | null;
     created_at: string;
     updated_at: string;
     /** Traço de ECG da sessão (mV). Fica no totem/relatório, não no POST da API. */

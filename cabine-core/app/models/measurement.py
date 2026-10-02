@@ -11,18 +11,24 @@ from app.models.base import Base
 class ScaleMeasurement(Base):
     __tablename__ = "scale_measurements"
 
-    person_id: Mapped[UUID] = mapped_column(
-        ForeignKey("people.id", ondelete="CASCADE"),
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
-    scale_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("scales.id", ondelete="SET NULL"),
+    session_id: Mapped[UUID] = mapped_column(
+        ForeignKey("sessions.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    device_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"),
         nullable=True,
         index=True,
     )
     scale_name: Mapped[str] = mapped_column(String(120), nullable=False)
     adapter: Mapped[str] = mapped_column(String(40), nullable=False)
+    device_address: Mapped[str | None] = mapped_column(String(120), nullable=True)
     weight_kg: Mapped[float] = mapped_column(Float, nullable=False)
     height_cm: Mapped[float] = mapped_column(Float, nullable=False)
     age: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -35,6 +41,5 @@ class ScaleMeasurement(Base):
     impedances_ohm: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     segments: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     metrics: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    visit_id: Mapped[UUID | None] = mapped_column(index=True, nullable=True)
 
-    person = relationship("ScalePerson", back_populates="measurements")
+    user = relationship("User", back_populates="measurements")

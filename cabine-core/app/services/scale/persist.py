@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
 from app.crud import measurement as measurement_crud
-from app.crud import person as person_crud
+from app.crud import user as user_crud
 from app.schemas.measurement import MeasurementCreate
 from app.services.scale.rm_rd2504a import has_bia_impedances
 
@@ -41,7 +41,7 @@ async def _is_recent_duplicate(
     db: AsyncSession, data: MeasurementCreate, *, seconds: int = DUPLICATE_WINDOW_SECONDS
 ) -> bool:
     """Same weight within the window is a repeat, unless it now brings BIA the previous one lacked."""
-    latest = await measurement_crud.latest_since(db, data.person_id, seconds)
+    latest = await measurement_crud.latest_since(db, data.user_id, seconds)
     if latest is None or abs(float(latest.weight_kg) - data.weight_kg) >= DUPLICATE_WEIGHT_DELTA_KG:
         return False
     if has_bia_impedances(_impedances(latest.impedances_ohm)):
@@ -51,10 +51,10 @@ async def _is_recent_duplicate(
 
 async def save_from_scale_event(
     *,
-    person_id: UUID,
-    scale_id: UUID | None,
+    user_id: UUID,
+    device_id: UUID | None,
     payload: dict,
-    visit_id: UUID | None = None,
+    session_id: UUID | None = None,
 ) -> None:
     raw_weight = payload.get("weight_kg")
     try:
@@ -69,14 +69,15 @@ async def save_from_scale_event(
     age = int(profile.get("age") or 0)
     sex = str(profile.get("sex") or "")
     if height <= 0 or age <= 0 or not sex:
-        logger.warning("Skipped measurement save: incomplete profile person=%s", person_id)
+        logger.warning("Skipped measurement save: incomplete profile user=%s", user_id)
         return
 
     data = MeasurementCreate(
-        person_id=person_id,
-        scale_id=scale_id,
+        user_id=user_id,
+        device_id=device_id,
         scale_name=str(payload.get("scale_name") or "Scale")[:120],
         adapter=str(payload.get("adapter") or "ble_rm_rd2504a")[:40],
+        device_address=payload.get("device_address"),
         weight_kg=weight_kg,
         height_cm=height,
         age=age,
@@ -89,16 +90,20 @@ async def save_from_scale_event(
         impedances_ohm=jsonable(payload.get("impedances_ohm")),
         segments=jsonable(payload.get("segments")),
         metrics=jsonable(payload.get("metrics")),
-        visit_id=visit_id,
+        session_id=session_id,
     )
 
     async with AsyncSessionLocal() as db:
-        person = await person_crud.get_by_id(db, person_id)
-        if not person:
-            logger.warning("Skipped measurement save: person %s does not exist", person_id)
+        user = await user_crud.get_by_id(db, user_id)
+        if not user:
+            logger.warning("Skipped measurement save: user %s does not exist", user_id)
             return
         if await _is_recent_duplicate(db, data):
-            logger.info("Skipped duplicate measurement person=%s weight=%.2f", person_id, weight_kg)
+            logger.info("Skipped duplicate measurement user=%s weight=%.2f", user_id, weight_kg)
             return
-        record = await measurement_crud.create(db, data)
-        logger.info("Saved measurement id=%s person=%s weight=%.2f", record.id, person_id, weight_kg)
+        try:
+            record = await measurement_crud.create(db, data)
+        except ValueError as exc:
+            logger.warning("Skipped measurement save: %s", exc)
+            return
+        logger.info("Saved measurement id=%s user=%s weight=%.2f", record.id, user_id, weight_kg)

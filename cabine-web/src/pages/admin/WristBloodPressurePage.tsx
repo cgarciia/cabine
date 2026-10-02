@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { fetchPersonBloodPressure, WS_PATHS } from '../../api';
+import { apiErrorMessage, fetchPersonBloodPressure, WS_PATHS } from '../../api';
 import { AppLayout } from '../../components/AppLayout';
 import { PersonPicker } from '../../components/PersonPicker';
 import { useDeviceSocket } from '../../hooks/useDeviceSocket';
@@ -23,7 +23,7 @@ export function WristBloodPressurePage() {
 
     const { connect, isActive } = useDeviceSocket<BloodPressureLive>(WS_PATHS.wristBloodPressure, {
         onOpen: (socket) => {
-            socket.send(JSON.stringify({ type: 'PERSON', person_id: personIdRef.current }));
+            socket.send(JSON.stringify({ type: 'PERSON', user_id: personIdRef.current }));
         },
         onMessage: (payload) => {
             if (payload.type === 'STATUS' && payload.msg) {
@@ -46,7 +46,10 @@ export function WristBloodPressurePage() {
         }
         fetchPersonBloodPressure(personId)
             .then((rows) => setHistory(rows.filter((row) => isWristMonitor(row.device_name))))
-            .catch(() => setHistory([]));
+            .catch((err: unknown) => {
+                setHistory([]);
+                setStatus(apiErrorMessage(err, 'Não foi possível carregar o histórico.'));
+            });
     }, [personId, sys]);
 
     const start = useCallback((force = false) => {
@@ -56,7 +59,7 @@ export function WristBloodPressurePage() {
             return;
         }
         if (!force && isActive()) return;
-        const params = new URLSearchParams({ person_id: pid });
+        const params = new URLSearchParams({ user_id: pid });
         const known = loadDeviceAddress('wristBloodPressure');
         if (known) params.set('address', known);
         connect(params, true);

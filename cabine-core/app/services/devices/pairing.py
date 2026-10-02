@@ -8,13 +8,11 @@ from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud import paired_device as paired_crud
-from app.crud import scale as scale_crud
-from app.models.paired_device import PairedDevice
-from app.models.scale import Scale
+from app.crud import device as device_crud
+from app.models.device import Device
 from app.schemas.ble import BleDevice
 from app.schemas.devices import DeviceKind
-from app.schemas.scale import ScaleAdapter, ScaleCreate, ScaleParser
+from app.schemas.scale import ScaleAdapter, ScaleParser
 from app.services.ble import ble_radio_lock, normalize_mac
 from app.services.ble.connect import connect_with_fallback
 from app.services.ble.scanner import advertised_name, as_ble_devices, scan_devices
@@ -109,41 +107,31 @@ async def _pair_client(kind: DeviceKind, address: str) -> str:
     return mac
 
 
-async def _remember_scale(db: AsyncSession, name: str, address: str) -> Scale:
-    existing = await scale_crud.get_by_address(db, address)
-    if existing:
-        if not existing.is_default:
-            await scale_crud._clear_default(db)
-            existing.is_default = True
-        existing.is_active = True
-        if name:
-            existing.name = name
-        await db.commit()
-        await db.refresh(existing)
-        return existing
-    default = await scale_crud.get_default(db)
-    if default is not None:
-        default.address = address
-        default.is_active = True
-        if name:
-            default.name = name
-        await db.commit()
-        await db.refresh(default)
-        return default
-    return await scale_crud.create(
-        db,
-        ScaleCreate(
-            name=name or "RM-RD2504A",
-            adapter=ScaleAdapter.ble_rm_rd2504a,
+_DRIVERS = {
+    DeviceKind.scale: (ScaleAdapter.ble_rm_rd2504a.value, ScaleParser.rm_rd2504a_ffb2.value),
+    DeviceKind.oximeter: ("ble_oximeter", "pc60nw"),
+    DeviceKind.blood_pressure_ecg: ("ble_hem7530", "hem7530"),
+    DeviceKind.blood_pressure_wrist: ("ble_hem6161", "hem6161"),
+}
+
+
+async def _remember_device(db: AsyncSession, kind: DeviceKind, name: str, address: str) -> Device:
+    adapter, parser = _DRIVERS[kind]
+    try:
+        return await device_crud.save_paired(
+            db,
+            slug=kind.value,
+            description=name,
             address=address,
-            parser=ScaleParser.rm_rd2504a_ffb2,
-            is_active=True,
-            is_default=True,
-        ),
-    )
+            adapter=adapter,
+            parser=parser,
+            make_default=True,
+        )
+    except ValueError as exc:
+        raise PairingError(str(exc)) from exc
 
 
-async def pair_kind(db: AsyncSession, kind: DeviceKind, address: str, name: str | None = None) -> PairedDevice | Scale:
+async def pair_kind(db: AsyncSession, kind: DeviceKind, address: str, name: str | None = None) -> Device:
     try:
         mac = await _pair_client(kind, address)
     except PairingError:
@@ -160,9 +148,7 @@ async def pair_kind(db: AsyncSession, kind: DeviceKind, address: str, name: str 
         raise PairingError("O aparelho não respondeu. Aperte o botão de novo e pareie em seguida.") from exc
 
     label = (name or "").strip() or _default_name(kind)
-    if kind is DeviceKind.scale:
-        return await _remember_scale(db, label, mac)
-    return await paired_crud.upsert(db, kind.value, label, mac)
+    return await _remember_device(db, kind, label, mac)
 
 
 def _default_name(kind: DeviceKind) -> str:

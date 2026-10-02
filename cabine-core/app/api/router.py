@@ -1,15 +1,15 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    admins,
     auth,
     blood_pressure,
+    cabins,
     devices,
-    fhir_patients,
     forms,
     health,
     measurements,
     oximeter,
-    people,
     scale,
     users,
 )
@@ -17,9 +17,9 @@ from app.api.routes import (
 api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(auth.router)
+api_router.include_router(admins.router)
+api_router.include_router(cabins.router)
 api_router.include_router(users.router)
-api_router.include_router(fhir_patients.router)
-api_router.include_router(people.router)
 api_router.include_router(oximeter.router)
 api_router.include_router(devices.router)
 api_router.include_router(forms.router)

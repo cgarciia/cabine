@@ -27,7 +27,7 @@ import type { MentalInstrumentId, MentalInstrumentLog, MentalResult } from '../.
 
 type Step = 'invite' | 'gate' | 'instrument' | 'optional' | 'safety' | 'result' | 'done';
 
-export function KioskMentalHealthPage() {
+export function MentalHealthPage() {
     const navigate = useNavigate();
     const { session, setMentalHealth } = useKiosk();
     const started = useMemo(() => new Date().toISOString(), []);
@@ -84,11 +84,11 @@ export function KioskMentalHealthPage() {
         patchSession({ mental: payload });
         try {
             await saveFormSubmission({
-                person_id: personId,
+                user_id: personId,
                 module: 'mental',
                 status,
                 payload: mentalPayload(payload),
-                visit_id: session.visitId,
+                session_id: session.sessionId,
             });
         } catch {
             /* sessão local permanece */

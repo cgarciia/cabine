@@ -66,15 +66,15 @@ def _reading_payload(
 
 async def stream_oximeter(
     websocket: WebSocket,
-    person_id: UUID | None = None,
+    user_id: UUID | None = None,
     address: str | None = None,
-    visit_id: UUID | None = None,
+    session_id: UUID | None = None,
     *,
     person_locked: bool = False,
 ) -> None:
     await websocket.accept()
     session = DeviceWsSession(
-        websocket, person_id=person_id, visit_id=visit_id, person_locked=person_locked
+        websocket, user_id=user_id, session_id=session_id, person_locked=person_locked
     )
     send_status = session.send_status
     cancelled = session.cancelled
@@ -147,21 +147,21 @@ async def stream_oximeter(
                                 hits = 1
                             if hits >= STABLE_HITS:
                                 stable = True
-                                pid = session.person_id
-                                if pid is not None and not saved:
+                                uid = session.user_id
+                                if uid is not None and not saved:
                                     saved = True
                                     wave_snapshot = list(wave_acc[-220:])
 
                                     async def _persist() -> None:
                                         try:
                                             await save_oximeter_reading(
-                                                person_id=pid,
+                                                user_id=uid,
                                                 device_name=device_name,
                                                 device_address=device_address,
                                                 spo2_pct=sample.spo2_pct,
                                                 pulse_bpm=sample.pulse_bpm,
                                                 pi_pct=sample.pi_pct,
-                                                visit_id=session.visit_id,
+                                                session_id=session.session_id,
                                                 waveform=wave_snapshot or None,
                                             )
                                         except Exception:

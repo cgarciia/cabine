@@ -1,0 +1,33 @@
+---
+description: Lint, type-check, build e testes do projeto; o que rodar e como escrever testes quando existirem
+alwaysApply: false
+---
+
+# Qualidade e testes
+
+Spec: `.cursor/specs/10-ambiente-e-operacao.md` §5. Estado atual: sem testes e sem CI; qualidade depende de lint, type-check, build e revisão.
+
+## Comandos
+
+| Pacote | Comando | Exigência |
+|---|---|---|
+| `cabine-web` | `npm run build` (`tsc -b && vite build`) | Sem erro |
+| `cabine-web` | `npm run lint` | Sem erro **novo** (há erros herdados; não aumentar; zerar quando tocar o arquivo) |
+| `cabine-core` | `uvx ruff check app` | Sem erro novo |
+| `cabine-core` | `uv run python -c "from app.main import create_app; create_app()"` | Boota |
+| `cabine-core` | `make migrate` | Migrations aplicam |
+
+Corrija lint/tipo que você introduziu antes de concluir. Não desligar regra de lint para passar sem justificar.
+
+## Quando houver testes
+
+- Core: `cabine-core/tests/`, pytest + pytest-asyncio, espelhando `app/` (`tests/crud`, `tests/services`, `tests/api`). Banco de teste separado e descartável, nunca o de dev.
+- Web: ao lado do módulo ou em `src/**/__tests__/`.
+- Prioridade: lógica pura sem hardware (parsers BLE, `wla25`/`metrics`, `rate_limit`, `cabin_state`, `modules/mental/scoring`, `formPayload`, `utils/*`) → contratos de rota críticos (login, escopo por `typ`, pareamento/padrão único) → regressões de bug.
+- Bug corrigido = teste que falha antes e passa depois (quando já houver suíte).
+- Sem teste que dependa de hardware, rede externa, relógio real ou ordem entre testes. Hardware real é checklist manual do PR.
+- Nome descritivo em português ou inglês coerente com o arquivo; um comportamento por teste.
+
+## Meta de CI (a implantar)
+
+GitHub Actions em PRs para `develop`: `npm ci && npm run build && npm run lint`; `uv sync && ruff check app`; boot do app; `alembic upgrade head` em Postgres de serviço; validação do título do PR (Conventional Commits). Ao criar, documentar em `10-ambiente-e-operacao.md` e remover a pendência de `11`.

@@ -1,13 +1,13 @@
 export interface OximeterReading {
     id: string;
-    person_id: string;
+    user_id: string;
     device_name: string;
     device_address: string | null;
     spo2_pct: number;
     pulse_bpm: number;
     pi_pct: number | null;
     stable: boolean;
-    visit_id?: string | null;
+    session_id?: string | null;
     created_at: string;
     updated_at: string;
     /** Amostras da onda de pulso capturadas na sessão (não vêm da API). */

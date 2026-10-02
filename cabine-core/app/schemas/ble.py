@@ -18,10 +18,11 @@ class DeviceReadingResponseBase(BaseModel):
     """Fields shared by every reading captured from a BLE peripheral."""
 
     id: UUID
-    person_id: UUID
+    user_id: UUID
+    session_id: UUID
+    device_id: UUID | None = None
     device_name: str
     device_address: str | None
-    visit_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
 

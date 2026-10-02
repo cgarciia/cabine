@@ -1,0 +1,46 @@
+---
+description: Visão geral do projeto Cabine, idiomas, fontes de verdade e mapa das specs e rules
+alwaysApply: true
+---
+
+# Projeto Cabine
+
+Monorepo: `cabine-core/` (FastAPI + Postgres + BLE), `cabine-web/` (React + Vite: totem e painel), `scripts/`, `.cursor/` (specs e rules).
+
+## Fontes de verdade
+
+1. **Código** > 2. **`.cursor/specs/`** (numeradas) > 3. `.cursor/specs/anexos/` (histórico).
+Antes de mudar algo, leia a spec do assunto (índice em `.cursor/specs/README.md`). Se código e spec divergirem, o código manda e a spec deve ser corrigida no mesmo trabalho.
+
+| Assunto | Spec |
+|---|---|
+| Escopo, MVPs, glossário | `01-visao-geral.md` |
+| Topologia, stack | `02-arquitetura.md` |
+| Fluxos de ponta a ponta | `03-fluxos.md` |
+| Tabelas e migrations | `04-modelagem-dados.md` |
+| Endpoints | `05-api.md` |
+| Auth e segurança | `06-autenticacao-seguranca.md` |
+| BLE e aparelhos | `07-hardware-ble.md` |
+| Estrutura do core | `08-backend.md` |
+| Estrutura do web | `09-frontend.md` |
+| Comandos, env, qualidade | `10-ambiente-e-operacao.md` |
+| Pendências e dívidas | `11-estado-e-pendencias.md` |
+
+## Idiomas (inegociável)
+
+- Identificadores, tabelas, colunas, paths REST, chamadas HTTP: **inglês**.
+- JSON da API: **snake_case**.
+- `detail` de erro, texto de UI, textos clínicos, commits e PRs: **português**.
+- Rotas da SPA: português em kebab (`/saude-mental`).
+
+## Regras de ouro
+
+- Um único processo de API (`:8000`) para todos os módulos; recorte de MVP só no front (`cabine-web/src/config/mvp.ts`).
+- Um rádio BLE por PC, serializado por `ble_radio_lock`.
+- Postgres só atrás da API. Segredos e MAC de laboratório nunca no git.
+- Não alterar texto clínico (perguntas, respostas, orientações) sem aprovação do time de saúde.
+- Responda e documente em português do Brasil, em tom direto.
+
+## Regras relacionadas
+
+`01-fluxo-de-alteracao` (sempre), `02-backend-python`, `03-frontend-react`, `04-git-pr-commits`, `05-documentacao`, `06-banco-migrations`, `07-hardware-ble`, `08-seguranca`, `09-qualidade-testes`.
