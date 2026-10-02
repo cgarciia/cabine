@@ -14,7 +14,7 @@ export default defineConfig({
     proxy: {
       '/ws': { target: backend, ws: true, changeOrigin: true },
       '/scales': { target: backend, changeOrigin: true },
-      '/people': { target: backend, changeOrigin: true },
+      '/admins': { target: backend, changeOrigin: true },
       '/measurements': { target: backend, changeOrigin: true },
       '/forms': { target: backend, changeOrigin: true },
       '/oximeters': { target: backend, changeOrigin: true },
@@ -23,7 +23,6 @@ export default defineConfig({
       '/devices': { target: backend, changeOrigin: true },
       '/login': { target: backend, changeOrigin: true },
       '/health': { target: backend, changeOrigin: true },
-      '/fhir': { target: backend, changeOrigin: true },
     },
   },
 })

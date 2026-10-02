@@ -9,12 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, get_db
-from app.crud import person as person_crud
+from app.crud import admin as admin_crud
 from app.crud import user as user_crud
-from app.models.person import ScalePerson
+from app.models.admin import Admin
 from app.models.user import User
 
-# tokenUrl drives Swagger's password flow (operator). The kiosk uses POST /login/registration.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 oauth2_optional = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)
 
@@ -28,24 +27,24 @@ _UNAUTHORIZED_OPERATOR = HTTPException(
     detail="Sessão de operador inválida ou expirada.",
     headers={"WWW-Authenticate": "Bearer"},
 )
-_FORBIDDEN_PERSON = HTTPException(
+_FORBIDDEN_USER = HTTPException(
     status_code=status.HTTP_403_FORBIDDEN,
-    detail="Esta sessão não pode acessar dados de outra pessoa.",
+    detail="Esta sessão não pode acessar dados de outro usuário.",
 )
-_PERSON_NOT_FOUND = HTTPException(
+_USER_NOT_FOUND = HTTPException(
     status_code=status.HTTP_404_NOT_FOUND,
-    detail="Pessoa não encontrada.",
+    detail="Usuário não encontrado.",
 )
 
 
 @dataclass(frozen=True)
 class AccessPrincipal:
     kind: Literal["person", "user"]
-    person_id: UUID | None = None
+    user_id: UUID | None = None
 
-    def bound_person_id(self, requested: UUID | None) -> UUID | None:
+    def bound_user_id(self, requested: UUID | None) -> UUID | None:
         if self.kind == "person":
-            return self.person_id
+            return self.user_id
         return requested
 
     @property
@@ -63,79 +62,75 @@ def _decode_payload(token: str) -> dict | None:
     return payload
 
 
-async def resolve_person_from_token(token: str, db: AsyncSession) -> ScalePerson | None:
+async def resolve_person_from_token(token: str, db: AsyncSession) -> User | None:
     payload = _decode_payload(token)
-    if payload is None:
-        return None
-    if payload.get("typ") != "person":
+    if payload is None or payload.get("typ") != "person":
         return None
     sub = payload.get("sub")
     if not isinstance(sub, str):
         return None
     try:
-        person_id = UUID(sub)
+        user_id = UUID(sub)
     except ValueError:
         return None
-    return await person_crud.get_by_id(db, person_id)
+    return await user_crud.get_by_id(db, user_id)
 
 
-async def resolve_user_from_token(token: str, db: AsyncSession) -> User | None:
+async def resolve_user_from_token(token: str, db: AsyncSession) -> Admin | None:
     payload = _decode_payload(token)
-    if payload is None:
-        return None
-    if payload.get("typ") != "user":
+    if payload is None or payload.get("typ") != "user":
         return None
     email = payload.get("sub")
     if not isinstance(email, str):
         return None
-    user = await user_crud.get_by_email(db, email)
-    if user is None or not user.is_active:
+    admin = await admin_crud.get_by_email(db, email)
+    if admin is None or not admin.is_active:
         return None
-    return user
+    return admin
 
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
-) -> User:
-    user = await resolve_user_from_token(token, db)
-    if user is None:
+) -> Admin:
+    admin = await resolve_user_from_token(token, db)
+    if admin is None:
         raise _UNAUTHORIZED_OPERATOR
-    return user
+    return admin
 
 
 async def require_access(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
-) -> ScalePerson | User:
-    """Accept a kiosk registration session or a system user."""
+) -> User | Admin:
+    """Accept a kiosk registration session or an admin."""
     person = await resolve_person_from_token(token, db)
     if person is not None:
         return person
-    user = await resolve_user_from_token(token, db)
-    if user is not None:
-        return user
+    admin = await resolve_user_from_token(token, db)
+    if admin is not None:
+        return admin
     raise _UNAUTHORIZED
 
 
-async def load_scoped_person(
-    db: AsyncSession, actor: ScalePerson | User, person_id: UUID
-) -> ScalePerson:
-    """Person sessions only reach their own record; operators reach anyone."""
-    if isinstance(actor, ScalePerson) and actor.id != person_id:
-        raise _FORBIDDEN_PERSON
-    person = await person_crud.get_by_id(db, person_id)
-    if person is None:
-        raise _PERSON_NOT_FOUND
-    return person
+async def load_scoped_user(
+    db: AsyncSession, actor: User | Admin, user_id: UUID
+) -> User:
+    """Kiosk sessions only reach their own record; admins reach anyone."""
+    if isinstance(actor, User) and actor.id != user_id:
+        raise _FORBIDDEN_USER
+    user = await user_crud.get_by_id(db, user_id)
+    if user is None:
+        raise _USER_NOT_FOUND
+    return user
 
 
-async def get_scoped_person(
-    person_id: UUID,
+async def get_scoped_user(
+    user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    actor: ScalePerson | User = Depends(require_access),
-) -> ScalePerson:
-    return await load_scoped_person(db, actor, person_id)
+    actor: User | Admin = Depends(require_access),
+) -> User:
+    return await load_scoped_user(db, actor, user_id)
 
 
 async def authenticate_websocket(websocket: WebSocket, token: str | None) -> AccessPrincipal | None:
@@ -145,9 +140,9 @@ async def authenticate_websocket(websocket: WebSocket, token: str | None) -> Acc
     async with AsyncSessionLocal() as db:
         person = await resolve_person_from_token(token, db)
         if person is not None:
-            return AccessPrincipal(kind="person", person_id=person.id)
-        user = await resolve_user_from_token(token, db)
-        if user is not None:
+            return AccessPrincipal(kind="person", user_id=person.id)
+        admin = await resolve_user_from_token(token, db)
+        if admin is not None:
             return AccessPrincipal(kind="user")
     await websocket.close(code=4401)
     return None

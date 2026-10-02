@@ -9,11 +9,11 @@ export type KioskStepId =
     | 'bloodPressure'
     | 'wristBloodPressure';
 
-type VisitReading = { visit_id?: string | null } | null;
+type VisitReading = { session_id?: string | null } | null;
 
 /** Kiosk session fields used to know which steps are already done. */
 export type VisitProgressInput = {
-    visitId?: string | null;
+    sessionId?: string | null;
     generalHealth: unknown;
     mentalHealth: { completedAt?: string; refused?: boolean } | null;
     lastMeasurement: VisitReading;
@@ -58,10 +58,10 @@ function isStepDone(session: VisitProgressInput, id: KioskStepId, justFinished?:
     if (justFinished === id) return true;
     if (id === 'generalHealth') return Boolean(session.generalHealth);
     if (id === 'mentalHealth') return isMentalDone(session);
-    if (id === 'bia') return sameVisit(session.lastMeasurement, session.visitId);
-    if (id === 'oximeter') return sameVisit(session.lastOximeter, session.visitId);
-    if (id === 'bloodPressure') return sameVisit(session.lastBloodPressure, session.visitId);
-    return sameVisit(session.lastWristBloodPressure, session.visitId);
+    if (id === 'bia') return sameVisit(session.lastMeasurement, session.sessionId);
+    if (id === 'oximeter') return sameVisit(session.lastOximeter, session.sessionId);
+    if (id === 'bloodPressure') return sameVisit(session.lastBloodPressure, session.sessionId);
+    return sameVisit(session.lastWristBloodPressure, session.sessionId);
 }
 
 export function isVisitComplete(session: VisitProgressInput, justFinished?: KioskStepId): boolean {

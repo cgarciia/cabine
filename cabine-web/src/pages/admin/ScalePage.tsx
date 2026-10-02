@@ -169,8 +169,8 @@ export function ScalePage() {
         setSavingReport(true);
         setSaveMsg('');
         const payload: MeasurementPayload = {
-            person_id: session.selectedPersonId,
-            scale_id: session.selectedId || null,
+            user_id: session.selectedPersonId,
+            device_id: session.selectedId || null,
             scale_name: reading.scale_name || session.scaleName || 'Balança',
             adapter: session.adapter || 'ble_rm_rd2504a',
             weight_kg: reading.weight_kg,
@@ -223,7 +223,7 @@ export function ScalePage() {
         send({
             type: 'PROFILE',
             apply,
-            person_id: snapshotRef.current.selectedPersonId || undefined,
+            user_id: snapshotRef.current.selectedPersonId || undefined,
             height_cm: height,
             age: Number.isFinite(years) && years > 0 ? years : undefined,
             sex: profile.sex,
@@ -308,7 +308,7 @@ export function ScalePage() {
         if (profile.birthDate) params.set('birth_date', profile.birthDate);
         if (profile.expectedWeight) params.set('expected_weight_kg', profile.expectedWeight);
         if (profile.displayName) params.set('display_name', profile.displayName);
-        if (selectedPersonId) params.set('person_id', selectedPersonId);
+        if (selectedPersonId) params.set('user_id', selectedPersonId);
         connect(params, true);
 
         return () => {

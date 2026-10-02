@@ -105,8 +105,8 @@ export function KioskBloodPressurePage() {
         onOpen: (socket) => {
             socket.send(JSON.stringify({
                 type: 'PERSON',
-                person_id: personIdRef.current,
-                visit_id: session.visitId,
+                user_id: personIdRef.current,
+                session_id: session.sessionId,
             }));
         },
         onMessage: (payload) => handleMessage(payload),
@@ -128,7 +128,7 @@ export function KioskBloodPressurePage() {
             if (!person) return null;
             const local: BloodPressureReading = {
                 id: newVisitId(),
-                person_id: person.id,
+                user_id: person.id,
                 device_name: reading.device_name ?? 'HEM-7530T',
                 device_address: reading.device_address ?? null,
                 sys_mmhg: reading.sys_mmhg,
@@ -137,7 +137,7 @@ export function KioskBloodPressurePage() {
                 movement: Boolean(reading.movement),
                 irregular_heartbeat: Boolean(reading.irregular_heartbeat),
                 measured_at: reading.measured_at,
-                visit_id: session.visitId,
+                session_id: session.sessionId,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 ecg_mv: reading.ecg_mv,
@@ -145,7 +145,7 @@ export function KioskBloodPressurePage() {
             setLastBloodPressure(local);
             try {
                 const saved = await saveBloodPressureReading({
-                    person_id: person.id,
+                    user_id: person.id,
                     device_name: local.device_name,
                     device_address: local.device_address,
                     sys_mmhg: local.sys_mmhg,
@@ -154,7 +154,7 @@ export function KioskBloodPressurePage() {
                     movement: local.movement,
                     irregular_heartbeat: local.irregular_heartbeat,
                     measured_at: local.measured_at,
-                    visit_id: session.visitId,
+                    session_id: session.sessionId,
                 });
                 setLastBloodPressure({ ...saved, ecg_mv: local.ecg_mv });
                 return { ...saved, ecg_mv: local.ecg_mv };
@@ -163,7 +163,7 @@ export function KioskBloodPressurePage() {
                     const rows = await fetchPersonBloodPressure(person.id);
                     const match = findVisitMatch(
                         rows,
-                        session.visitId,
+                        session.sessionId,
                         (row) => row.sys_mmhg === local.sys_mmhg
                             && row.dia_mmhg === local.dia_mmhg
                             && row.pulse_bpm === local.pulse_bpm,
@@ -179,7 +179,7 @@ export function KioskBloodPressurePage() {
                 return local;
             }
         },
-        [person, session.visitId, setLastBloodPressure],
+        [person, session.sessionId, setLastBloodPressure],
     );
 
     const finish = useCallback(
@@ -261,13 +261,13 @@ export function KioskBloodPressurePage() {
             setListening(true);
             setStatus('Coloque o manguito e os dedos. Depois aperte START/STOP no aparelho.');
 
-            const params = new URLSearchParams({ person_id: pid });
-            if (session.visitId) params.set('visit_id', session.visitId);
+            const params = new URLSearchParams({ user_id: pid });
+            if (session.sessionId) params.set('session_id', session.sessionId);
             const known = loadDeviceAddress('bloodPressure');
             if (known) params.set('address', known);
             connect(params, true);
         },
-        [connect, isActive, session.visitId],
+        [connect, isActive, session.sessionId],
     );
 
     useEffect(() => {

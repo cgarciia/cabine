@@ -21,14 +21,14 @@ async def create_from_schema(db: AsyncSession, model: type[ModelT], data: BaseMo
     return await save(db, model(**data.model_dump()))
 
 
-async def list_by_person(
+async def list_by_user(
     db: AsyncSession,
     model: type[ModelT],
-    person_id: UUID,
+    user_id: UUID,
     order_by: Any | None = None,
 ) -> list[ModelT]:
     column = order_by if order_by is not None else model.created_at
     result = await db.execute(
-        select(model).where(model.person_id == person_id).order_by(column.desc())
+        select(model).where(model.user_id == user_id).order_by(column.desc())
     )
     return result.scalars().all()

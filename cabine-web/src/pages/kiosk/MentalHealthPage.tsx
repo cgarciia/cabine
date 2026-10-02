@@ -84,11 +84,11 @@ export function KioskMentalHealthPage() {
         patchSession({ mental: payload });
         try {
             await saveFormSubmission({
-                person_id: personId,
+                user_id: personId,
                 module: 'mental',
                 status,
                 payload: mentalPayload(payload),
-                visit_id: session.visitId,
+                session_id: session.sessionId,
             });
         } catch {
             /* sessão local permanece */

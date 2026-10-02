@@ -42,7 +42,7 @@ export function groupSavedVisits(
         pieces.push({
             t: timeOf(item.created_at),
             at: item.created_at,
-            visitId: item.visit_id ?? null,
+            visitId: item.session_id ?? null,
             kind: 'measurement',
             measurement: item,
         });
@@ -51,7 +51,7 @@ export function groupSavedVisits(
         pieces.push({
             t: timeOf(item.created_at),
             at: item.created_at,
-            visitId: item.visit_id ?? null,
+            visitId: item.session_id ?? null,
             kind: 'oximeter',
             oximeter: item,
         });
@@ -60,7 +60,7 @@ export function groupSavedVisits(
         pieces.push({
             t: timeOf(item.measured_at || item.created_at),
             at: item.measured_at || item.created_at,
-            visitId: item.visit_id ?? null,
+            visitId: item.session_id ?? null,
             kind: 'bloodPressure',
             bloodPressure: item,
         });
@@ -70,7 +70,7 @@ export function groupSavedVisits(
         pieces.push({
             t: timeOf(item.created_at),
             at: item.created_at,
-            visitId: item.visit_id ?? null,
+            visitId: item.session_id ?? null,
             kind: item.module,
             form: item,
         });

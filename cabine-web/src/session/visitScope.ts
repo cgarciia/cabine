@@ -1,31 +1,31 @@
-/** Leitura gravada com a visita. Sem `visit_id` fica: foi montada nesta aba antes do POST. */
+/** Leitura gravada nesta sessão. Sem `session_id` fica: foi montada nesta aba antes do POST. */
 export function sameVisit(
-    reading: { visit_id?: string | null } | null | undefined,
-    visitId: string | null | undefined,
+    reading: { session_id?: string | null } | null | undefined,
+    sessionId: string | null | undefined,
 ): boolean {
     if (!reading) return false;
-    if (!visitId || !reading.visit_id) return true;
-    return reading.visit_id === visitId;
+    if (!sessionId || !reading.session_id) return true;
+    return reading.session_id === sessionId;
 }
 
-/** Acha a linha desta visita pelo id. Não usa a mais recente da pessoa. */
-export function findVisitRow<T extends { id: string; visit_id?: string | null }>(
+/** Acha a linha desta sessão pelo id. Não usa a mais recente da pessoa. */
+export function findVisitRow<T extends { id: string; session_id?: string | null }>(
     rows: T[],
     id: string | undefined,
-    visitId: string | null | undefined,
+    sessionId: string | null | undefined,
 ): T | undefined {
     if (!id) return undefined;
     const row = rows.find((item) => item.id === id);
-    if (!row || !sameVisit(row, visitId)) return undefined;
+    if (!row || !sameVisit(row, sessionId)) return undefined;
     return row;
 }
 
-/** Entre as leituras desta visita, a que tem os mesmos números. A lista vem da mais nova para a mais antiga. */
-export function findVisitMatch<T extends { visit_id?: string | null }>(
+/** Entre as leituras desta sessão, a que tem os mesmos números. A lista vem da mais nova para a mais antiga. */
+export function findVisitMatch<T extends { session_id?: string | null }>(
     rows: T[],
-    visitId: string | null | undefined,
+    sessionId: string | null | undefined,
     predicate: (row: T) => boolean,
 ): T | undefined {
-    if (!visitId) return undefined;
-    return rows.find((row) => row.visit_id === visitId && predicate(row));
+    if (!sessionId) return undefined;
+    return rows.find((row) => row.session_id === sessionId && predicate(row));
 }

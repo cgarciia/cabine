@@ -80,7 +80,7 @@ export function OximeterPage() {
         setListening(true);
         setStatus(SEARCHING);
 
-        const params = new URLSearchParams({ person_id: pid });
+        const params = new URLSearchParams({ user_id: pid });
         const known = loadDeviceAddress('oximeter');
         if (known) params.set('address', known);
         connect(params, true);

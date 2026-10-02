@@ -1,7 +1,7 @@
 [project]
 name = "cabine-core"
 version = "0.1.0"
-description = "API do ecossistema Cabine (FastAPI + FHIR)"
+description = "API do ecossistema Cabine"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.19.1",
@@ -10,7 +10,6 @@ dependencies = [
     "bleak>=3.0.2",
     "email-validator>=2.3.0",
     "fastapi>=0.141.1",
-    "fhir-resources>=7.0.0",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
     "python-jose[cryptography]>=3.5.0",

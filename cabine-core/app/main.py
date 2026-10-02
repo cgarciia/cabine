@@ -18,7 +18,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.PROJECT_NAME,
         version=settings.PROJECT_VERSION,
-        description="API do ecossistema Cabine com FastAPI e FHIR",
+        description="API do ecossistema Cabine",
         lifespan=lifespan,
     )
     app.add_middleware(

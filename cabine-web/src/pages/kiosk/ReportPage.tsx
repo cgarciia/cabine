@@ -12,7 +12,7 @@ export function ReportPage() {
     const navigate = useNavigate();
     const { session, setLastMeasurement, setLastOximeter, setLastBloodPressure, setLastWristBloodPressure, hasReportData } = useKiosk();
     const personId = session.person?.id;
-    const visitId = session.visitId;
+    const visitId = session.sessionId;
     const measurement = sameVisit(session.lastMeasurement, visitId) ? session.lastMeasurement : null;
     const oximeter = sameVisit(session.lastOximeter, visitId) ? session.lastOximeter : null;
     const bloodPressure = sameVisit(session.lastBloodPressure, visitId) ? session.lastBloodPressure : null;

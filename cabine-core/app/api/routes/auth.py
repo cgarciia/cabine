@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -8,10 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.rate_limit import check_login_rate_limit, record_login_failure
 from app.core.security import issue_operator_token, issue_person_token, verify_password
-from app.crud import person as person_crud
+from app.crud import admin as admin_crud
+from app.crud import session as session_crud
 from app.crud import user as user_crud
-from app.schemas.person import PersonResponse
 from app.schemas.token import Token
+from app.schemas.user import UserResponse
 
 router = APIRouter(tags=["Auth"])
 
@@ -30,7 +32,8 @@ class RegistrationLogin(BaseModel):
 
 
 class RegistrationSessionResponse(Token):
-    person: PersonResponse
+    user: UserResponse
+    session_id: UUID
 
 
 def _registration_key(raw: str) -> str:
@@ -48,8 +51,8 @@ async def lookup_registration(
 ):
     check_login_rate_limit(request, "lookup")
     key = _registration_key(payload.registration)
-    person = await person_crud.get_by_registration(db, key)
-    exists = bool(person and person.registration)
+    user = await user_crud.get_by_registration(db, key)
+    exists = bool(user and user.registration)
     if not exists:
         record_login_failure(request, "lookup")
     return RegistrationLookupResponse(exists=exists)
@@ -63,12 +66,12 @@ async def login_by_registration(
 ):
     key = _registration_key(payload.registration)
     check_login_rate_limit(request, "registration", key)
-    person = await person_crud.get_by_registration(db, key)
+    user = await user_crud.get_by_registration(db, key)
     if (
-        not person
-        or not person.registration
-        or person.birth_date is None
-        or person.birth_date != payload.birth_date
+        not user
+        or not user.registration
+        or user.birth_date is None
+        or user.birth_date != payload.birth_date
     ):
         record_login_failure(request, "registration", key)
         raise HTTPException(
@@ -76,10 +79,15 @@ async def login_by_registration(
             detail="Matrícula ou data de nascimento incorretas.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = issue_person_token(person.id, person.registration)
+    try:
+        exam = await session_crud.open_session(db, user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    token = issue_person_token(user.id, user.registration)
     return RegistrationSessionResponse(
         **token.model_dump(),
-        person=PersonResponse.model_validate(person),
+        user=UserResponse.model_validate(user),
+        session_id=exam.id,
     )
 
 
@@ -89,15 +97,15 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    """Operator login (e-mail). The kiosk uses POST /login/registration."""
+    """Admin login (e-mail). The kiosk uses POST /login/registration."""
     check_login_rate_limit(request, "operator", form_data.username)
-    user = await user_crud.get_by_email(db, form_data.username)
-    password_ok = verify_password(form_data.password, user.hashed_password if user else None)
-    if not user or not user.is_active or not password_ok:
+    admin = await admin_crud.get_by_email(db, form_data.username)
+    password_ok = verify_password(form_data.password, admin.hashed_password if admin else None)
+    if not admin or not admin.is_active or not password_ok:
         record_login_failure(request, "operator", form_data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="E-mail ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return issue_operator_token(user.email)
+    return issue_operator_token(admin.email)

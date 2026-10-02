@@ -38,15 +38,15 @@ def _resolved_address(query_address: str | None) -> str | None:
 
 async def stream_blood_pressure_wrist(
     websocket: WebSocket,
-    person_id: UUID | None = None,
+    user_id: UUID | None = None,
     address: str | None = None,
-    visit_id: UUID | None = None,
+    session_id: UUID | None = None,
     *,
     person_locked: bool = False,
 ) -> None:
     await websocket.accept()
     session = DeviceWsSession(
-        websocket, person_id=person_id, visit_id=visit_id, person_locked=person_locked
+        websocket, user_id=user_id, session_id=session_id, person_locked=person_locked
     )
     send_status = session.send_status
     cancelled = session.cancelled
@@ -92,11 +92,11 @@ async def stream_blood_pressure_wrist(
             "stable": True,
         }
         await session.send_json(payload)
-        pid = session.person_id
-        if pid is not None:
+        uid = session.user_id
+        if uid is not None:
             try:
                 await save_blood_pressure_reading(
-                    person_id=pid,
+                    user_id=uid,
                     device_name=DEVICE_LABEL,
                     device_address=device_address,
                     sys_mmhg=sys_mmhg,
@@ -105,7 +105,8 @@ async def stream_blood_pressure_wrist(
                     movement=movement,
                     irregular_heartbeat=irregular_heartbeat,
                     measured_at=when,
-                    visit_id=session.visit_id,
+                    session_id=session.session_id,
+                    slug="blood_pressure_wrist",
                 )
             except Exception:
                 logger.exception("Failed to persist wrist blood pressure")

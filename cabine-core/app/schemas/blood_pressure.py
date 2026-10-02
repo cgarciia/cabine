@@ -7,7 +7,9 @@ from app.schemas.ble import DeviceReadingResponseBase
 
 
 class BloodPressureReadingCreate(BaseModel):
-    person_id: UUID
+    user_id: UUID
+    session_id: UUID | None = None
+    device_id: UUID | None = None
     device_name: str = Field(min_length=1, max_length=120)
     device_address: str | None = Field(default=None, max_length=40)
     sys_mmhg: int = Field(ge=60, le=260)
@@ -16,7 +18,6 @@ class BloodPressureReadingCreate(BaseModel):
     movement: bool = False
     irregular_heartbeat: bool = False
     measured_at: datetime
-    visit_id: UUID | None = None
 
 
 class BloodPressureReadingResponse(DeviceReadingResponseBase):

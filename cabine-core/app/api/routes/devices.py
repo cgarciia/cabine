@@ -3,9 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.crud import paired_device as paired_crud
-from app.crud import scale as scale_crud
-from app.models.scale import Scale
+from app.crud import device as device_crud
+from app.models.device import Device
 from app.schemas.devices import (
     DeviceInventoryResponse,
     DevicePairRequest,
@@ -19,20 +18,37 @@ from app.services.devices.pairing import PairingError, pair_kind, scan_kind
 router = APIRouter(tags=["Devices"], dependencies=[Depends(get_current_user)])
 
 
-def _scale_view(scale: Scale | None) -> ScalePairResponse | None:
+def _scale_view(scale: Device | None) -> ScalePairResponse | None:
     if scale is None:
         return None
-    return ScalePairResponse(id=scale.id, name=scale.name, address=scale.address)
+    return ScalePairResponse(id=scale.id, name=scale.description, address=scale.address)
+
+
+def _paired_view(device: Device) -> PairedDeviceResponse:
+    kind = device.device_type.slug if device.device_type is not None else ""
+    return PairedDeviceResponse(
+        id=device.id,
+        kind=kind,
+        name=device.description,
+        address=device.address,
+        paired_at=device.paired_at,
+        is_active=device.is_active,
+    )
+
+
+async def _inventory(db: AsyncSession) -> DeviceInventoryResponse:
+    rows = await device_crud.list_all(db)
+    peripherals = [row for row in rows if row.device_type is None or row.device_type.slug != "scale"]
+    scale = await device_crud.get_default(db, "scale")
+    return DeviceInventoryResponse(
+        devices=[_paired_view(row) for row in peripherals],
+        scale=_scale_view(scale),
+    )
 
 
 @router.get("/devices", response_model=DeviceInventoryResponse)
 async def list_devices(db: AsyncSession = Depends(get_db)):
-    rows = await paired_crud.list_all(db)
-    scale = await scale_crud.get_default(db)
-    return DeviceInventoryResponse(
-        devices=[PairedDeviceResponse.model_validate(row) for row in rows],
-        scale=_scale_view(scale),
-    )
+    return await _inventory(db)
 
 
 @router.post("/devices/scan", response_model=DeviceScanResult)
@@ -50,9 +66,4 @@ async def pair_device(payload: DevicePairRequest, db: AsyncSession = Depends(get
         await pair_kind(db, payload.kind, payload.address, payload.name)
     except PairingError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    rows = await paired_crud.list_all(db)
-    scale = await scale_crud.get_default(db)
-    return DeviceInventoryResponse(
-        devices=[PairedDeviceResponse.model_validate(row) for row in rows],
-        scale=_scale_view(scale),
-    )
+    return await _inventory(db)

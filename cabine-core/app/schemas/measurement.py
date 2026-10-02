@@ -8,10 +8,12 @@ from app.services.scale.metrics import metrics_from_stored
 
 
 class MeasurementCreate(BaseModel):
-    person_id: UUID
-    scale_id: UUID | None = None
+    user_id: UUID
+    session_id: UUID | None = None
+    device_id: UUID | None = None
     scale_name: str = Field(min_length=1, max_length=120)
     adapter: str = Field(min_length=1, max_length=40)
+    device_address: str | None = Field(default=None, max_length=120)
     weight_kg: float = Field(gt=0, le=400)
     height_cm: float = Field(gt=0, le=250)
     age: int = Field(ge=1, le=120)
@@ -24,15 +26,16 @@ class MeasurementCreate(BaseModel):
     impedances_ohm: list[float] | None = None
     segments: list[dict] | None = None
     metrics: dict | None = None
-    visit_id: UUID | None = None
 
 
 class MeasurementResponse(BaseModel):
     id: UUID
-    person_id: UUID
-    scale_id: UUID | None
+    user_id: UUID
+    session_id: UUID
+    device_id: UUID | None
     scale_name: str
     adapter: str
+    device_address: str | None = None
     weight_kg: float
     height_cm: float
     age: int
@@ -45,7 +48,6 @@ class MeasurementResponse(BaseModel):
     impedances_ohm: Any = None
     segments: Any = None
     metrics: Any = None
-    visit_id: UUID | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

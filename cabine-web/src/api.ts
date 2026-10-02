@@ -94,7 +94,8 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
 export type RegistrationSession = {
     access_token: string;
     expires_in: number;
-    person: ScalePerson;
+    user: ScalePerson;
+    session_id: string;
 };
 
 export async function lookupRegistration(registration: string): Promise<{ exists: boolean }> {
@@ -127,22 +128,22 @@ export async function loginOperator(email: string, password: string): Promise<{
 }
 
 export async function fetchPeople(): Promise<ScalePerson[]> {
-    const { data } = await api.get<ScalePerson[]>('/people');
+    const { data } = await api.get<ScalePerson[]>('/users');
     return Array.isArray(data) ? data : [];
 }
 
 export async function createPerson(body: PersonPayload): Promise<ScalePerson> {
-    const { data } = await api.post<ScalePerson>('/people', body);
+    const { data } = await api.post<ScalePerson>('/users', body);
     return data;
 }
 
 export async function updatePerson(personId: string, body: Partial<PersonPayload>): Promise<ScalePerson> {
-    const { data } = await api.patch<ScalePerson>(`/people/${encodeURIComponent(personId)}`, body);
+    const { data } = await api.patch<ScalePerson>(`/users/${encodeURIComponent(personId)}`, body);
     return data;
 }
 
 export async function deletePerson(personId: string): Promise<void> {
-    await api.delete(`/people/${encodeURIComponent(personId)}`);
+    await api.delete(`/users/${encodeURIComponent(personId)}`);
 }
 
 export async function fetchScales(): Promise<Scale[]> {
@@ -228,16 +229,16 @@ export async function saveMeasurement(body: MeasurementPayload): Promise<Measure
 
 export async function fetchPersonMeasurements(personId: string): Promise<MeasurementRecord[]> {
     const id = encodeURIComponent(personId);
-    const { data } = await api.get<MeasurementRecord[]>(`/people/${id}/measurements`);
+    const { data } = await api.get<MeasurementRecord[]>(`/users/${id}/measurements`);
     return Array.isArray(data) ? data : [];
 }
 
 export async function saveFormSubmission(body: {
-    person_id: string;
+    user_id: string;
+    session_id?: string | null;
     module: 'health' | 'mental';
     status: string;
     payload: Record<string, unknown>;
-    visit_id?: string | null;
 }): Promise<FormSubmission> {
     const { data } = await api.post<FormSubmission>('/forms', body);
     return data;
@@ -245,24 +246,26 @@ export async function saveFormSubmission(body: {
 
 export async function fetchPersonForms(personId: string): Promise<FormSubmission[]> {
     const id = encodeURIComponent(personId);
-    const { data } = await api.get<FormSubmission[]>(`/people/${id}/forms`);
+    const { data } = await api.get<FormSubmission[]>(`/users/${id}/forms`);
     return Array.isArray(data) ? data : [];
 }
 
 export async function fetchPersonOximeter(personId: string): Promise<OximeterReading[]> {
     const id = encodeURIComponent(personId);
-    const { data } = await api.get<OximeterReading[]>(`/people/${id}/oximeter`);
+    const { data } = await api.get<OximeterReading[]>(`/users/${id}/oximeter`);
     return Array.isArray(data) ? data : [];
 }
 
 export async function fetchPersonBloodPressure(personId: string): Promise<BloodPressureReading[]> {
     const id = encodeURIComponent(personId);
-    const { data } = await api.get<BloodPressureReading[]>(`/people/${id}/blood-pressure`);
+    const { data } = await api.get<BloodPressureReading[]>(`/users/${id}/blood-pressure`);
     return Array.isArray(data) ? data : [];
 }
 
 export async function saveBloodPressureReading(body: {
-    person_id: string;
+    user_id: string;
+    session_id?: string | null;
+    device_id?: string | null;
     device_name: string;
     device_address?: string | null;
     sys_mmhg: number;
@@ -271,14 +274,15 @@ export async function saveBloodPressureReading(body: {
     movement?: boolean;
     irregular_heartbeat?: boolean;
     measured_at: string;
-    visit_id?: string | null;
 }): Promise<BloodPressureReading> {
     const { data } = await api.post<BloodPressureReading>('/blood-pressures', body);
     return data;
 }
 
 export async function saveOximeterReading(body: {
-    person_id: string;
+    user_id: string;
+    session_id?: string | null;
+    device_id?: string | null;
     device_name: string;
     device_address?: string | null;
     spo2_pct: number;
@@ -286,7 +290,6 @@ export async function saveOximeterReading(body: {
     pi_pct?: number | null;
     stable?: boolean;
     waveform?: number[] | null;
-    visit_id?: string | null;
 }): Promise<OximeterReading> {
     const { data } = await api.post<OximeterReading>('/oximeters', body);
     return data;

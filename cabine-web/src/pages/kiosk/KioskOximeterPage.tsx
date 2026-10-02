@@ -51,8 +51,8 @@ export function KioskOximeterPage() {
         onOpen: (socket) => {
             socket.send(JSON.stringify({
                 type: 'PERSON',
-                person_id: personIdRef.current,
-                visit_id: session.visitId,
+                user_id: personIdRef.current,
+                session_id: session.sessionId,
             }));
         },
         onMessage: (payload) => handleMessage(payload),
@@ -77,14 +77,14 @@ export function KioskOximeterPage() {
             const waveform = waveRef.current.slice(-220);
             const local: OximeterReading = {
                 id: newVisitId(),
-                person_id: person.id,
+                user_id: person.id,
                 device_name: reading.device_name ?? 'Oxímetro',
                 device_address: reading.device_address ?? null,
                 spo2_pct: reading.spo2_pct,
                 pulse_bpm: reading.pulse_bpm,
                 pi_pct: reading.pi_pct ?? null,
                 stable: true,
-                visit_id: session.visitId,
+                session_id: session.sessionId,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 waveform,
@@ -92,7 +92,7 @@ export function KioskOximeterPage() {
             setLastOximeter(local);
             try {
                 const saved = await saveOximeterReading({
-                    person_id: person.id,
+                    user_id: person.id,
                     device_name: local.device_name,
                     device_address: local.device_address,
                     spo2_pct: local.spo2_pct,
@@ -100,7 +100,7 @@ export function KioskOximeterPage() {
                     pi_pct: local.pi_pct,
                     stable: true,
                     waveform,
-                    visit_id: session.visitId,
+                    session_id: session.sessionId,
                 });
                 const withWave = { ...saved, waveform: saved.waveform?.length ? saved.waveform : waveform };
                 setLastOximeter(withWave);
@@ -110,7 +110,7 @@ export function KioskOximeterPage() {
                     const rows = await fetchPersonOximeter(person.id);
                     const match = findVisitMatch(
                         rows,
-                        session.visitId,
+                        session.sessionId,
                         (row) => row.spo2_pct === local.spo2_pct && row.pulse_bpm === local.pulse_bpm,
                     );
                     if (match) {
@@ -124,7 +124,7 @@ export function KioskOximeterPage() {
                 return local;
             }
         },
-        [person, session.visitId, setLastOximeter],
+        [person, session.sessionId, setLastOximeter],
     );
 
     const finish = useCallback(
@@ -211,13 +211,13 @@ export function KioskOximeterPage() {
             setElapsedSec(0);
             setStatus('Coloque o dedo indicador no oxímetro.');
 
-            const params = new URLSearchParams({ person_id: pid });
-            if (session.visitId) params.set('visit_id', session.visitId);
+            const params = new URLSearchParams({ user_id: pid });
+            if (session.sessionId) params.set('session_id', session.sessionId);
             const known = loadDeviceAddress('oximeter');
             if (known) params.set('address', known);
             connect(params, true);
         },
-        [connect, isActive, session.visitId],
+        [connect, isActive, session.sessionId],
     );
 
     useEffect(() => {

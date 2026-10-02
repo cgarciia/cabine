@@ -23,7 +23,7 @@ export function WristBloodPressurePage() {
 
     const { connect, isActive } = useDeviceSocket<BloodPressureLive>(WS_PATHS.wristBloodPressure, {
         onOpen: (socket) => {
-            socket.send(JSON.stringify({ type: 'PERSON', person_id: personIdRef.current }));
+            socket.send(JSON.stringify({ type: 'PERSON', user_id: personIdRef.current }));
         },
         onMessage: (payload) => {
             if (payload.type === 'STATUS' && payload.msg) {
@@ -56,7 +56,7 @@ export function WristBloodPressurePage() {
             return;
         }
         if (!force && isActive()) return;
-        const params = new URLSearchParams({ person_id: pid });
+        const params = new URLSearchParams({ user_id: pid });
         const known = loadDeviceAddress('wristBloodPressure');
         if (known) params.set('address', known);
         connect(params, true);

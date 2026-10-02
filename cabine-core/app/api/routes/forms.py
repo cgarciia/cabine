@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import load_scoped_person, require_access
+from app.core.deps import load_scoped_user, require_access
 from app.crud import form_submission as form_crud
-from app.models.person import ScalePerson
+from app.models.admin import Admin
 from app.models.user import User
 from app.schemas.form_submission import FormSubmissionCreate, FormSubmissionResponse
 
@@ -15,7 +15,10 @@ router = APIRouter(prefix="/forms", tags=["Forms"])
 async def create_form(
     payload: FormSubmissionCreate,
     db: AsyncSession = Depends(get_db),
-    actor: ScalePerson | User = Depends(require_access),
+    actor: User | Admin = Depends(require_access),
 ):
-    await load_scoped_person(db, actor, payload.person_id)
-    return await form_crud.create(db, payload)
+    await load_scoped_user(db, actor, payload.user_id)
+    try:
+        return await form_crud.create(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

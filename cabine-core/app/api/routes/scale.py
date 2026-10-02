@@ -74,7 +74,10 @@ async def delete_scale(scale_id: UUID, db: AsyncSession = Depends(get_db)):
     scale = await scale_crud.get_by_id(db, scale_id)
     if not scale:
         raise HTTPException(status_code=404, detail="Balança não encontrada.")
-    await scale_crud.delete_scale(db, scale)
+    try:
+        await scale_crud.delete_scale(db, scale)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 router.include_router(protected)
@@ -92,8 +95,8 @@ async def scale_endpoint(
     people_type: str | None = None,
     birth_date: str | None = None,
     display_name: str | None = None,
-    person_id: UUID | None = None,
-    visit_id: UUID | None = None,
+    user_id: UUID | None = None,
+    session_id: UUID | None = None,
     token: str | None = None,
 ):
     principal = await authenticate_websocket(websocket, token)
@@ -111,7 +114,7 @@ async def scale_endpoint(
         people_type=people_type,
         birth_date=birth_date,
         display_name=display_name,
-        person_id=principal.bound_person_id(person_id),
-        visit_id=visit_id,
+        user_id=principal.bound_user_id(user_id),
+        session_id=session_id,
         person_locked=principal.person_locked,
     )

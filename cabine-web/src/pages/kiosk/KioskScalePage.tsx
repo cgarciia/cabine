@@ -70,8 +70,8 @@ export function KioskScalePage() {
         if (savingRef.current && !hasBia) return;
         savingRef.current = true;
         const payload: MeasurementPayload = {
-            person_id: person.id,
-            scale_id: scale?.id ?? null,
+            user_id: person.id,
+            device_id: scale?.id ?? null,
             scale_name: reading.scale_name || scale?.name || 'Balança',
             adapter: scale?.adapter || 'ble_rm_rd2504a',
             weight_kg: reading.weight_kg,
@@ -86,7 +86,7 @@ export function KioskScalePage() {
             impedances_ohm: reading.impedances_ohm ?? null,
             segments: reading.segments ?? null,
             metrics: reading.metrics ?? null,
-            visit_id: session.visitId,
+            session_id: session.sessionId,
         };
         try {
             const data = await saveMeasurement(payload);
@@ -98,7 +98,7 @@ export function KioskScalePage() {
             setError(apiErrorMessage(err, 'Não foi possível salvar a medição.'));
             savingRef.current = false;
         }
-    }, [person, scale, session.visitId, setLastMeasurement]);
+    }, [person, scale, session.sessionId, setLastMeasurement]);
 
     const persistRef = useRef(persistAndContinue);
     persistRef.current = persistAndContinue;
@@ -112,7 +112,7 @@ export function KioskScalePage() {
             socket.send(JSON.stringify({
                 type: 'PROFILE',
                 apply: true,
-                person_id: person.id,
+                user_id: person.id,
                 height_cm: person.height_cm,
                 age: person.age,
                 sex: person.sex,
@@ -120,7 +120,7 @@ export function KioskScalePage() {
                 people_type: person.people_type || 'normal',
                 expected_weight_kg: person.expected_weight_kg ?? undefined,
                 display_name: person.name,
-                visit_id: session.visitId ?? undefined,
+                session_id: session.sessionId ?? undefined,
             }));
         },
         onError: () => setStatus('Não foi possível conectar à balança.'),
@@ -213,18 +213,18 @@ export function KioskScalePage() {
             age: String(person.age),
             sex: person.sex,
             people_type: person.people_type || 'normal',
-            person_id: person.id,
+            user_id: person.id,
             display_name: person.name,
         });
         if (person.birth_date) params.set('birth_date', person.birth_date);
         if (person.expected_weight_kg != null) {
             params.set('expected_weight_kg', String(person.expected_weight_kg));
         }
-        if (session.visitId) params.set('visit_id', session.visitId);
+        if (session.sessionId) params.set('session_id', session.sessionId);
 
         connect(params, true);
         return close;
-    }, [person, scale, session.visitId, connect, close]);
+    }, [person, scale, session.sessionId, connect, close]);
 
     if (!person) return <Navigate to="/matricula" replace />;
 

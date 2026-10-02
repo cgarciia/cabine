@@ -98,7 +98,7 @@ export function RegistrationLoginPage() {
         try {
             const data = await loginByRegistration(employeeId.trim(), iso);
             saveAccessSession(data.access_token, data.expires_in);
-            beginVisit(data.person);
+            beginVisit(data.user, data.session_id);
             navigate('/menu', { replace: true });
         } catch (err) {
             setError(apiErrorMessage(err, 'Matrícula ou data de nascimento incorretas.'));

@@ -12,7 +12,6 @@ import type { QuestionnaireScore } from '../modules/health/questionnaires';
 import { clearCurrentPersonId, saveCurrentPersonId } from '../session/currentPerson';
 import { LEGACY_STORAGE_KEYS, STORAGE_KEYS } from '../session/keys';
 import { clearVisitDrafts } from '../session/cabineSession';
-import { newVisitId } from '../session/visitId';
 import { sameVisit } from '../session/visitScope';
 import type { BloodPressureReading } from '../types/bloodPressure';
 import type { MeasurementRecord } from '../types/measurement';
@@ -32,7 +31,7 @@ export type MentalKioskSession = {
 };
 
 export type KioskSession = {
-    visitId: string | null;
+    sessionId: string | null;
     person: ScalePerson | null;
     generalHealth: QuestionnaireScore | null;
     mentalHealth: MentalKioskSession | null;
@@ -45,7 +44,7 @@ export type KioskSession = {
 type KioskContextValue = {
     session: KioskSession;
     setPerson: (person: ScalePerson | null) => void;
-    beginVisit: (person: ScalePerson) => void;
+    beginVisit: (person: ScalePerson, sessionId: string) => void;
     setGeneralHealth: (score: QuestionnaireScore | null) => void;
     setMentalHealth: (score: MentalKioskSession | null) => void;
     setLastMeasurement: (record: MeasurementRecord | null) => void;
@@ -57,7 +56,7 @@ type KioskContextValue = {
 };
 
 const empty: KioskSession = {
-    visitId: null,
+    sessionId: null,
     person: null,
     generalHealth: null,
     mentalHealth: null,
@@ -74,18 +73,19 @@ function loadSession(): KioskSession {
             || sessionStorage.getItem(LEGACY_STORAGE_KEYS.kioskSession);
         if (!raw) return empty;
         const parsed = JSON.parse(raw) as Record<string, unknown>;
+        const sessionId = (parsed.sessionId ?? parsed.visitId ?? null) as string | null;
         const next: KioskSession = {
             ...empty,
             ...parsed,
+            sessionId,
             generalHealth: (parsed.generalHealth ?? parsed.saudeGeral ?? null) as QuestionnaireScore | null,
             mentalHealth: (parsed.mentalHealth ?? parsed.saudeMental ?? null) as MentalKioskSession | null,
         };
-        const visitId = next.visitId;
-        if (!sameVisit(next.lastMeasurement, visitId)) next.lastMeasurement = null;
-        if (!sameVisit(next.lastOximeter, visitId)) next.lastOximeter = null;
-        if (!sameVisit(next.lastBloodPressure, visitId)) next.lastBloodPressure = null;
-        if (!sameVisit(next.lastWristBloodPressure, visitId)) next.lastWristBloodPressure = null;
-        if (next.person && !next.visitId) next.visitId = newVisitId();
+        if (!sameVisit(next.lastMeasurement, sessionId)) next.lastMeasurement = null;
+        if (!sameVisit(next.lastOximeter, sessionId)) next.lastOximeter = null;
+        if (!sameVisit(next.lastBloodPressure, sessionId)) next.lastBloodPressure = null;
+        if (!sameVisit(next.lastWristBloodPressure, sessionId)) next.lastWristBloodPressure = null;
+        delete (next as { visitId?: string }).visitId;
         sessionStorage.setItem(STORAGE_KEYS.kioskSession, JSON.stringify(next));
         sessionStorage.removeItem(LEGACY_STORAGE_KEYS.kioskSession);
         return next;
@@ -121,12 +121,10 @@ export function KioskProvider({ children }: { children: ReactNode }) {
     const setPerson = useCallback((person: ScalePerson | null) => {
         setSession((prev) => {
             const samePerson = Boolean(person && prev.person && prev.person.id === person.id);
-            const visitId = person
-                ? (samePerson && prev.visitId ? prev.visitId : newVisitId())
-                : null;
+            const sessionId = person && samePerson ? prev.sessionId : null;
             const next: KioskSession = samePerson
-                ? { ...prev, person, visitId }
-                : { ...empty, person, visitId };
+                ? { ...prev, person, sessionId }
+                : { ...empty, person, sessionId };
             persist(next);
             return next;
         });
@@ -134,20 +132,20 @@ export function KioskProvider({ children }: { children: ReactNode }) {
         else clearCurrentPersonId();
     }, []);
 
-    const beginVisit = useCallback((person: ScalePerson) => {
-        const next: KioskSession = { ...empty, person, visitId: newVisitId() };
+    const beginVisit = useCallback((person: ScalePerson, sessionId: string) => {
+        const next: KioskSession = { ...empty, person, sessionId };
         persist(next);
         setSession(next);
         saveCurrentPersonId(person.id);
     }, []);
 
     useEffect(() => {
-        const visitId = session.visitId;
+        const sessionId = session.sessionId;
         const patch: Partial<KioskSession> = {};
-        if (session.lastMeasurement && !sameVisit(session.lastMeasurement, visitId)) patch.lastMeasurement = null;
-        if (session.lastOximeter && !sameVisit(session.lastOximeter, visitId)) patch.lastOximeter = null;
-        if (session.lastBloodPressure && !sameVisit(session.lastBloodPressure, visitId)) patch.lastBloodPressure = null;
-        if (session.lastWristBloodPressure && !sameVisit(session.lastWristBloodPressure, visitId)) {
+        if (session.lastMeasurement && !sameVisit(session.lastMeasurement, sessionId)) patch.lastMeasurement = null;
+        if (session.lastOximeter && !sameVisit(session.lastOximeter, sessionId)) patch.lastOximeter = null;
+        if (session.lastBloodPressure && !sameVisit(session.lastBloodPressure, sessionId)) patch.lastBloodPressure = null;
+        if (session.lastWristBloodPressure && !sameVisit(session.lastWristBloodPressure, sessionId)) {
             patch.lastWristBloodPressure = null;
         }
         if (Object.keys(patch).length) update(patch);
@@ -178,10 +176,10 @@ export function KioskProvider({ children }: { children: ReactNode }) {
         clearSession,
         hasReportData: Boolean(
             session.generalHealth
-            || (sameVisit(session.lastMeasurement, session.visitId) && session.lastMeasurement)
-            || (sameVisit(session.lastOximeter, session.visitId) && session.lastOximeter)
-            || (sameVisit(session.lastBloodPressure, session.visitId) && session.lastBloodPressure)
-            || (sameVisit(session.lastWristBloodPressure, session.visitId) && session.lastWristBloodPressure)
+            || (sameVisit(session.lastMeasurement, session.sessionId) && session.lastMeasurement)
+            || (sameVisit(session.lastOximeter, session.sessionId) && session.lastOximeter)
+            || (sameVisit(session.lastBloodPressure, session.sessionId) && session.lastBloodPressure)
+            || (sameVisit(session.lastWristBloodPressure, session.sessionId) && session.lastWristBloodPressure)
             || mentalDone,
         ),
     }), [session, setPerson, beginVisit, update, clearSession, mentalDone]);
