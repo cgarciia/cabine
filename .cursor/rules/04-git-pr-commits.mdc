@@ -81,9 +81,6 @@ BREAKING CHANGE: o front deve chamar /users no lugar de /people.
 ```
 ## Summary
 - 1 a 3 bullets: o que muda e por quê (foco no motivo e no comportamento).
-
-## Test plan
-- [ ] passos objetivos para validar (marque [x] o que já foi testado)
 ```
 
 - Inclua no corpo: migrations (e como aplicar), variáveis de ambiente novas, rotas/contratos alterados, `BREAKING CHANGE`, o que **não** foi validado (ex.: hardware real).
@@ -92,7 +89,6 @@ BREAKING CHANGE: o front deve chamar /users no lugar de /people.
 
 ## 6. Merge e envio para `develop`
 
-- Aprovação de pelo menos 1 pessoa (autor não aprova o próprio PR) e checagens verdes (quando houver CI).
 - **Squash and merge** em `develop`; a mensagem do squash é o título do PR (`… (#N)`). Apague a branch depois.
 - `develop` → `main`: PR de release, merge commit (preserva os squashes); tag `vX.Y.Z` (SemVer: `fix` = patch, `feat` = minor, `BREAKING CHANGE` = major).
 - Revert: `revert: <descrição>` com `Refs: <sha>` no rodapé, via PR.

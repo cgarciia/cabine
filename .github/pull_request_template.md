@@ -7,9 +7,6 @@ Base: develop. Regras completas: .cursor/rules/04-git-pr-commits.mdc
 ## Summary
 -
 
-## Test plan
-- [ ]
-
 ## Checklist
 - [ ] `npm run build` e `npm run lint` (web) / `uvx ruff check app` e boot do app (core)
 - [ ] Migration incluída e aplicada do zero (`make migrate`), se mudou schema
