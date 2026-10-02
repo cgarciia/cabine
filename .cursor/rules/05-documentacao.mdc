@@ -1,0 +1,30 @@
+---
+description: Como manter as specs em .cursor/specs e quando atualizar documentação junto com o código
+alwaysApply: false
+globs: .cursor/specs/**/*.md, README.md, cabine-*/README.md
+---
+
+# Documentação
+
+Toda documentação técnica vive em `.cursor/specs/`. Não criar `docs/`, `SPEC.md` nem novas notas soltas pelo repositório. Os `README.md` (raiz, `cabine-core`, `cabine-web`) são curtos: o que é, como subir, e link para `.cursor/specs/README.md`.
+
+## Quando atualizar
+
+No **mesmo PR** da mudança de código (tabela completa em `01-fluxo-de-alteracao` §3). Em resumo: modelo → `04`; rota/contrato → `05`; auth/segurança → `06`; BLE/aparelho → `07`; estrutura do core → `08`; estrutura do web → `09`; comando/env/qualidade → `10`; fluxo → `03`; pendência → `11`.
+
+## Como escrever
+
+- Português, direto, no presente. Descreva o estado **atual**; o que é futuro é marcado ("alvo", "planejado", "não implementado") e listado em `11-estado-e-pendencias.md`.
+- Tabelas para catálogos (rotas, colunas, variáveis); prosa curta para regras; Mermaid para fluxo/arquitetura/ER.
+- Cite caminhos de código em crase (`app/crud/cabin.py`). **Não copie código nem versões** que o repositório já define (`pyproject.toml`, `package.json`): aponte o arquivo.
+- Um assunto por arquivo; não duplicar conteúdo entre specs, referencie por nome (`ver 05-api.md`).
+- Spec nova: numere em sequência, inclua no índice de `.cursor/specs/README.md` com "Atualizar quando".
+- Anexos (`specs/anexos/`) são material histórico: não reescrever; ao superar, registre em `11` e atualize a spec numerada.
+- Não registrar segredos, senhas, tokens ou MAC de laboratório.
+
+## Rules (`.cursor/rules/*.mdc`)
+
+- Extensão `.mdc` com frontmatter (`description`, `globs`, `alwaysApply`). `.md` solto em `rules/` é ignorado.
+- Curtas (< 500 linhas), focadas e acionáveis; apontam para a spec em vez de copiá-la.
+- `alwaysApply: true` só para o que vale em toda conversa (`00`, `01`); o resto por `globs` ou `description`.
+- Agente errou duas vezes igual? Ajuste a rule correspondente.

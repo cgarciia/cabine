@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -18,6 +19,7 @@ class BloodPressureReadingCreate(BaseModel):
     movement: bool = False
     irregular_heartbeat: bool = False
     measured_at: datetime
+    device_slug: Literal["blood_pressure_ecg", "blood_pressure_wrist"] = "blood_pressure_ecg"
 
 
 class BloodPressureReadingResponse(DeviceReadingResponseBase):

@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 
 import {
     apiErrorMessage,
+    fetchCurrentCabin,
     fetchDevices,
     pairDevice,
+    renameCabin,
     scanDevices,
     type DeviceInventory,
     type DeviceKind,
@@ -40,17 +42,22 @@ const KINDS: Array<{ kind: DeviceKind; title: string; hint: string; registers: b
 
 export function EquipmentPage() {
     const [inventory, setInventory] = useState<DeviceInventory | null>(null);
+    const [cabinName, setCabinName] = useState('');
     const [found, setFound] = useState<Partial<Record<DeviceKind, FoundBleDevice[]>>>({});
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState('');
     const [note, setNote] = useState<Partial<Record<DeviceKind, string>>>({});
 
     async function load() {
-        setInventory(await fetchDevices());
+        const [devices, cabin] = await Promise.all([fetchDevices(), fetchCurrentCabin()]);
+        setInventory(devices);
+        setCabinName(cabin.description);
     }
 
     useEffect(() => {
-        load().catch(() => setError('Não foi possível carregar os equipamentos.'));
+        load().catch((err: unknown) => {
+            setError(apiErrorMessage(err, 'Não foi possível carregar os equipamentos.'));
+        });
     }, []);
 
     async function look(kind: DeviceKind) {
@@ -99,6 +106,24 @@ export function EquipmentPage() {
         }
     }
 
+    async function saveName() {
+        const description = cabinName.trim();
+        if (!description) {
+            setError('Informe o nome da cabine.');
+            return;
+        }
+        setError('');
+        setBusy('cabin');
+        try {
+            const cabin = await renameCabin(description);
+            setCabinName(cabin.description);
+        } catch (err) {
+            setError(apiErrorMessage(err, 'Não foi possível salvar o nome da cabine.'));
+        } finally {
+            setBusy(null);
+        }
+    }
+
     function itemRegisters(kind: DeviceKind): boolean {
         return KINDS.find((item) => item.kind === kind)?.registers ?? true;
     }
@@ -124,6 +149,23 @@ export function EquipmentPage() {
                         Aperte o botão no aparelho, como no aplicativo do fabricante. O totem lê o endereço e grava o vínculo neste PC.
                     </p>
                     {error ? <p style={{ color: '#B91C1C', fontWeight: 600 }}>{error}</p> : null}
+                    <label className="cabine-field" style={{ marginTop: 16 }}>
+                        Nome desta cabine
+                        <input
+                            value={cabinName}
+                            maxLength={160}
+                            disabled={busy !== null}
+                            onChange={(event) => setCabinName(event.target.value)}
+                        />
+                    </label>
+                    <button
+                        type="button"
+                        className="cabine-btn cabine-btn-primary"
+                        disabled={busy !== null}
+                        onClick={() => void saveName()}
+                    >
+                        {busy === 'cabin' ? 'Salvando…' : 'Salvar nome'}
+                    </button>
                     <div style={{ display: 'grid', gap: '16px', marginTop: 20 }}>
                         {KINDS.map((item) => (
                             <article

@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import device as device_crud
+from app.crud import session as session_crud
 from app.models.device import Device
 from app.schemas.scale import ScaleCreate, ScaleUpdate
 
@@ -16,6 +17,9 @@ async def list_all(db: AsyncSession) -> list[Device]:
 async def get_by_id(db: AsyncSession, scale_id: UUID) -> Device | None:
     device = await device_crud.get_by_id(db, scale_id)
     if device is None or device.device_type is None or device.device_type.slug != SCALE_SLUG:
+        return None
+    cabin = await session_crud.get_local_cabin(db)
+    if cabin is None or device.cabin_id != cabin.id:
         return None
     return device
 

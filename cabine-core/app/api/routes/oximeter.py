@@ -9,10 +9,9 @@ from app.models.admin import Admin
 from app.models.user import User
 from app.schemas.ble import BleScanResponse
 from app.schemas.oximeter import OximeterReadingCreate, OximeterReadingResponse
-from app.services.ble import ble_radio_lock
-from app.services.oximeter.ble import scan_oximeters
-from app.services.oximeter.persist import store_oximeter_reading
 from app.services.devices import resolve_paired_address
+from app.services.oximeter.ble import scan_oximeters_locked
+from app.services.oximeter.persist import store_oximeter_reading
 from app.services.oximeter.stream import stream_oximeter
 
 router = APIRouter(tags=["Oximeter"])
@@ -24,8 +23,7 @@ router = APIRouter(tags=["Oximeter"])
     dependencies=[Depends(get_current_user)],
 )
 async def scan_nearby_oximeters():
-    async with ble_radio_lock:
-        devices = await scan_oximeters(timeout=10.0)
+    devices = await scan_oximeters_locked(timeout=10.0)
     return BleScanResponse(devices=devices)
 
 

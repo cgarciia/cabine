@@ -39,7 +39,9 @@ export function PeoplePage() {
     }
 
     useEffect(() => {
-        load().catch(() => setError('Não foi possível carregar as pessoas.'));
+        load().catch((err: unknown) => {
+            setError(apiErrorMessage(err, 'Não foi possível carregar as pessoas.'));
+        });
     }, []);
 
     function resetForm() {

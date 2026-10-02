@@ -4,6 +4,7 @@ from app.api.routes import (
     admins,
     auth,
     blood_pressure,
+    cabins,
     devices,
     forms,
     health,
@@ -17,6 +18,7 @@ api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(auth.router)
 api_router.include_router(admins.router)
+api_router.include_router(cabins.router)
 api_router.include_router(users.router)
 api_router.include_router(oximeter.router)
 api_router.include_router(devices.router)

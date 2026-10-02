@@ -155,6 +155,7 @@ export function KioskBloodPressurePage() {
                     irregular_heartbeat: local.irregular_heartbeat,
                     measured_at: local.measured_at,
                     session_id: session.sessionId,
+                    device_slug: 'blood_pressure_ecg',
                 });
                 setLastBloodPressure({ ...saved, ecg_mv: local.ecg_mv });
                 return { ...saved, ecg_mv: local.ecg_mv };

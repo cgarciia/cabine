@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
+import { CabinGate } from './components/CabinGate';
 import { AuthGuard } from './components/AuthGuard';
 import { adminHomePath, hasModule } from './config/mvp';
 import { KioskProvider } from './kiosk/KioskContext';
@@ -22,7 +23,7 @@ import { KioskWristBloodPressurePage } from './pages/kiosk/KioskWristBloodPressu
 import { KioskOximeterPage } from './pages/kiosk/KioskOximeterPage';
 import { KioskScalePage } from './pages/kiosk/KioskScalePage';
 import { MenuPage } from './pages/kiosk/MenuPage';
-import { KioskMentalHealthPage } from './pages/kiosk/MentalHealthPage';
+import { MentalHealthPage } from './pages/kiosk/MentalHealthPage';
 import { QuestionnairePage } from './pages/kiosk/QuestionnairePage';
 import { RecordsPage } from './pages/kiosk/RecordsPage';
 import { RegistrationLoginPage } from './pages/kiosk/RegistrationLoginPage';
@@ -37,6 +38,7 @@ export function App() {
     return (
         <KioskProvider>
             <BrowserRouter>
+            <CabinGate>
                 <Routes>
                     <Route path="/" element={<WelcomePage />} />
                     <Route path="/matricula" element={<RegistrationLoginPage />} />
@@ -54,7 +56,7 @@ export function App() {
                             />
                         )}
                         {hasModule('questionario') && (
-                            <Route path="/saude-mental" element={<KioskMentalHealthPage />} />
+                            <Route path="/saude-mental" element={<MentalHealthPage />} />
                         )}
                         {hasModule('bioimpedancia') && (
                             <Route path="/bioimpedancia" element={<KioskScalePage />} />
@@ -96,6 +98,7 @@ export function App() {
 
                     <Route path="*" element={<Navigate to="/menu" replace />} />
                 </Routes>
+            </CabinGate>
             </BrowserRouter>
         </KioskProvider>
     );

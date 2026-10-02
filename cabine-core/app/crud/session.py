@@ -8,11 +8,10 @@ from app.models.cabin import Cabin
 from app.models.session import Session
 
 
-async def get_active_cabin(db: AsyncSession) -> Cabin | None:
-    result = await db.execute(
-        select(Cabin).where(Cabin.is_active.is_(True)).order_by(Cabin.created_at)
-    )
-    return result.scalars().first()
+async def get_local_cabin(db: AsyncSession) -> Cabin | None:
+    from app.crud import cabin as cabin_crud
+
+    return await cabin_crud.get_local(db)
 
 
 async def get_open(db: AsyncSession, user_id: UUID) -> Session | None:
@@ -33,9 +32,9 @@ async def abandon_open(db: AsyncSession, user_id: UUID) -> None:
 
 async def open_session(db: AsyncSession, user_id: UUID) -> Session:
     """Fecha a sessão aberta, se houver, e abre outra na cabine ativa."""
-    cabin = await get_active_cabin(db)
+    cabin = await get_local_cabin(db)
     if cabin is None:
-        raise ValueError("Nenhuma cabine ativa.")
+        raise ValueError("Cadastre a cabine antes de continuar.")
     await abandon_open(db, user_id)
     row = Session(
         user_id=user_id,
@@ -59,9 +58,9 @@ async def attach_session(db: AsyncSession, user_id: UUID, session_id: UUID | Non
     current = await get_open(db, user_id)
     if current is not None:
         return current.id
-    cabin = await get_active_cabin(db)
+    cabin = await get_local_cabin(db)
     if cabin is None:
-        raise ValueError("Nenhuma cabine ativa.")
+        raise ValueError("Cadastre a cabine antes de continuar.")
     row = Session(
         user_id=user_id,
         cabin_id=cabin.id,

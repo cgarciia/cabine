@@ -19,15 +19,16 @@ async def create(
 ) -> BloodPressureReading:
     session_id = await session_crud.attach_session(db, data.user_id, data.session_id)
     device = await device_crud.resolve_for_reading(db, slug, data.device_id, data.device_address)
-    data = data.model_copy(
-        update={
+    payload = data.model_dump(exclude={"device_slug"})
+    payload.update(
+        {
             "session_id": session_id,
             "device_id": device.id,
             "device_address": device.address,
             "device_name": data.device_name or device.description,
         }
     )
-    return await base.create_from_schema(db, BloodPressureReading, data)
+    return await base.save(db, BloodPressureReading(**payload))
 
 
 async def list_by_user(db: AsyncSession, user_id: UUID) -> list[BloodPressureReading]:

@@ -23,11 +23,12 @@ async def _load_scale_spec(scale_id: UUID | None) -> tuple[ScaleSpec | None, str
     async with AsyncSessionLocal() as db:
         if scale_id is not None:
             record = await scale_crud.get_by_id(db, scale_id)
+            if record is None:
+                return None, "Balança não encontrada."
         else:
             record = await scale_crud.get_default(db)
-
-        if record is None:
-            return None, "Nenhuma balança cadastrada. Cadastre uma na tela de balanças."
+            if record is None:
+                return None, "Não há equipamento padrão deste tipo nesta cabine."
 
         if not record.is_active:
             return None, f"A balança '{record.name}' está inativa."

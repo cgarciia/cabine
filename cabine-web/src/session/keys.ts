@@ -10,8 +10,10 @@ export const STORAGE_KEYS = {
     kioskSession: 'cabine.kiosk-session',
 } as const;
 
+export const SESSION_KEY_PREFIX = 'cabine.session.';
+
 export function cabineSessionKey(personId?: string) {
-    return personId ? `cabine.session.${personId}` : 'cabine.session.anon';
+    return personId ? `${SESSION_KEY_PREFIX}${personId}` : `${SESSION_KEY_PREFIX}anon`;
 }
 
 /** Legacy keys; read/migrate only. */

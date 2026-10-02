@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { oximeterAdvice } from '../../advice/patientAdvice';
-import { fetchPersonOximeter, WS_PATHS } from '../../api';
+import { apiErrorMessage, fetchPersonOximeter, WS_PATHS } from '../../api';
 import { AppLayout } from '../../components/AppLayout';
 import { OximeterPulseGraph } from '../../components/OximeterPulseGraph';
 import { PersonPicker } from '../../components/PersonPicker';
@@ -60,7 +60,10 @@ export function OximeterPage() {
             setHistory([]);
             return;
         }
-        fetchPersonOximeter(personId).then(setHistory).catch(() => setHistory([]));
+        fetchPersonOximeter(personId).then(setHistory).catch((err: unknown) => {
+            setHistory([]);
+            setStatus(apiErrorMessage(err, 'Não foi possível carregar o histórico.'));
+        });
     }, [personId, stable]);
 
     const start = useCallback((force = false) => {

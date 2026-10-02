@@ -1,3 +1,5 @@
+> **Anexo histórico** (movido de `docs/cabine-profissional/requisitos.md`, conteúdo original). Portal planejado, **sem código**. Termos como `people`, `visit_id`, `role` e `/professionals/register` são do modelo anterior; no modelo atual use `users`, `sessions` e `admins` (`04-modelagem-dados.md`). As decisões dos comentários `++…++` (tabela de visitas; papéis e permissões) estão consolidadas em `../11-estado-e-pendencias.md` §4.
+
 # Requisitos do Sistema
 
 **Sistema:** Portal do Profissional de Saúde (`cabine-profissional`)  

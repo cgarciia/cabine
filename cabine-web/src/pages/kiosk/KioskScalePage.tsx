@@ -191,9 +191,15 @@ export function KioskScalePage() {
             .then((data) => {
                 const preferred = pickPreferredScale(data);
                 setScale(preferred);
-                if (!preferred) setError('Nenhuma balança cadastrada.');
+                if (!preferred) {
+                    setError(data.length
+                        ? 'Não há equipamento padrão deste tipo nesta cabine.'
+                        : 'Nenhuma balança cadastrada.');
+                }
             })
-            .catch(() => setError('Não foi possível carregar as balanças.'));
+            .catch((err: unknown) => {
+                setError(apiErrorMessage(err, 'Não foi possível carregar as balanças.'));
+            });
     }, []);
 
     useEffect(() => {

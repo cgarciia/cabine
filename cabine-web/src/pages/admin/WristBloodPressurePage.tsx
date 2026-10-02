@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { fetchPersonBloodPressure, WS_PATHS } from '../../api';
+import { apiErrorMessage, fetchPersonBloodPressure, WS_PATHS } from '../../api';
 import { AppLayout } from '../../components/AppLayout';
 import { PersonPicker } from '../../components/PersonPicker';
 import { useDeviceSocket } from '../../hooks/useDeviceSocket';
@@ -46,7 +46,10 @@ export function WristBloodPressurePage() {
         }
         fetchPersonBloodPressure(personId)
             .then((rows) => setHistory(rows.filter((row) => isWristMonitor(row.device_name))))
-            .catch(() => setHistory([]));
+            .catch((err: unknown) => {
+                setHistory([]);
+                setStatus(apiErrorMessage(err, 'Não foi possível carregar o histórico.'));
+            });
     }, [personId, sys]);
 
     const start = useCallback((force = false) => {

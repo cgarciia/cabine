@@ -22,18 +22,32 @@ async def get_type_by_slug(db: AsyncSession, slug: str) -> DeviceType | None:
     return result.scalars().first()
 
 
+async def _local_cabin_id(db: AsyncSession) -> UUID | None:
+    cabin = await session_crud.get_local_cabin(db)
+    return None if cabin is None else cabin.id
+
+
 async def list_all(db: AsyncSession) -> list[Device]:
+    cabin_id = await _local_cabin_id(db)
+    if cabin_id is None:
+        return []
     result = await db.execute(
-        select(Device).options(_with_type()).order_by(Device.description)
+        select(Device)
+        .where(Device.cabin_id == cabin_id)
+        .options(_with_type())
+        .order_by(Device.description)
     )
     return list(result.scalars().all())
 
 
 async def list_by_slug(db: AsyncSession, slug: str) -> list[Device]:
+    cabin_id = await _local_cabin_id(db)
+    if cabin_id is None:
+        return []
     result = await db.execute(
         select(Device)
         .join(DeviceType)
-        .where(DeviceType.slug == slug)
+        .where(DeviceType.slug == slug, Device.cabin_id == cabin_id)
         .options(_with_type())
         .order_by(Device.description)
     )
@@ -70,40 +84,47 @@ async def resolve_for_reading(
         device = await get_by_address(db, address)
         if device is not None:
             return device
-    cabin = await session_crud.get_active_cabin(db)
-    device = await get_default(db, slug, cabin.id if cabin else None)
+    cabin = await session_crud.get_local_cabin(db)
+    if cabin is None:
+        raise ValueError("Cadastre a cabine antes de continuar.")
+    device = await get_default(db, slug, cabin.id)
     if device is None:
         raise ValueError("Não há equipamento padrão deste tipo nesta cabine.")
     return device
 
 
 async def get_default(db: AsyncSession, slug: str, cabin_id: UUID | None = None) -> Device | None:
-    stmt = (
+    """Só o padrão ativo. Sem `cabin_id`, usa a cabine deste PC. Zero padrão devolve None."""
+    if cabin_id is None:
+        cabin_id = await _local_cabin_id(db)
+        if cabin_id is None:
+            return None
+    result = await db.execute(
         select(Device)
         .join(DeviceType)
         .where(
             DeviceType.slug == slug,
+            Device.cabin_id == cabin_id,
             Device.is_default.is_(True),
             Device.is_active.is_(True),
         )
         .options(_with_type())
     )
-    if cabin_id is not None:
-        stmt = stmt.where(Device.cabin_id == cabin_id)
-    result = await db.execute(stmt)
-    device = result.scalars().first()
-    if device is not None:
-        return device
-    fallback = (
+    return result.scalars().first()
+
+
+async def oldest_active(db: AsyncSession, slug: str, cabin_id: UUID) -> Device | None:
+    result = await db.execute(
         select(Device)
         .join(DeviceType)
-        .where(DeviceType.slug == slug, Device.is_active.is_(True))
+        .where(
+            DeviceType.slug == slug,
+            Device.cabin_id == cabin_id,
+            Device.is_active.is_(True),
+        )
         .options(_with_type())
         .order_by(Device.created_at)
     )
-    if cabin_id is not None:
-        fallback = fallback.where(Device.cabin_id == cabin_id)
-    result = await db.execute(fallback)
     return result.scalars().first()
 
 
@@ -138,9 +159,9 @@ async def save_paired(
     parser: str,
     make_default: bool,
 ) -> Device:
-    cabin = await session_crud.get_active_cabin(db)
+    cabin = await session_crud.get_local_cabin(db)
     if cabin is None:
-        raise ValueError("Nenhuma cabine ativa.")
+        raise ValueError("Cadastre a cabine antes de continuar.")
     kind = await get_type_by_slug(db, slug)
     if kind is None:
         raise ValueError("Tipo de aparelho desconhecido.")
@@ -187,7 +208,7 @@ async def delete_device(db: AsyncSession, device: Device) -> None:
         await db.rollback()
         raise ValueError(IN_USE) from exc
     if was_default and slug and cabin_id is not None:
-        replacement = await get_default(db, slug, cabin_id)
-        if replacement and not replacement.is_default and replacement.is_active:
+        replacement = await oldest_active(db, slug, cabin_id)
+        if replacement is not None and not replacement.is_default:
             replacement.is_default = True
             await db.commit()

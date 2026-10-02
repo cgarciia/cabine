@@ -259,15 +259,15 @@ export function ScalePage() {
             setScales(data);
             const preferred = pickPreferredScale(data);
             if (preferred) setSelectedId(preferred.id);
-        }).catch(() => {
-            setStatus('Não foi possível carregar as balanças cadastradas.');
+        }).catch((err: unknown) => {
+            setStatus(apiErrorMessage(err, 'Não foi possível carregar as balanças cadastradas.'));
         });
         fetchPeople().then((data) => {
             setPeople(data);
             const rememberedPerson = data.find((item) => item.id === remembered);
             if (rememberedPerson) applyPerson(rememberedPerson);
-        }).catch(() => {
-            setStatus('Não foi possível carregar as pessoas.');
+        }).catch((err: unknown) => {
+            setStatus(apiErrorMessage(err, 'Não foi possível carregar as pessoas.'));
         });
     }, [applyPerson]);
 

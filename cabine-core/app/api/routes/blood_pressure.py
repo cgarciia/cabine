@@ -9,9 +9,8 @@ from app.models.admin import Admin
 from app.models.user import User
 from app.schemas.ble import BleScanResponse
 from app.schemas.blood_pressure import BloodPressureReadingCreate, BloodPressureReadingResponse
-from app.services.ble import ble_radio_lock
-from app.services.blood_pressure.ble import scan_hem7530
-from app.services.blood_pressure.hem6161 import scan_hem6161
+from app.services.blood_pressure.ble import scan_hem7530_locked
+from app.services.blood_pressure.hem6161 import scan_hem6161_locked
 from app.services.blood_pressure.persist import store_blood_pressure_reading
 from app.services.blood_pressure.stream import stream_blood_pressure
 from app.services.blood_pressure.wrist_stream import stream_blood_pressure_wrist
@@ -26,8 +25,7 @@ router = APIRouter(tags=["BloodPressure"])
     dependencies=[Depends(get_current_user)],
 )
 async def scan_nearby_monitors():
-    async with ble_radio_lock:
-        devices = await scan_hem7530(timeout=10.0)
+    devices = await scan_hem7530_locked(timeout=10.0)
     return BleScanResponse(devices=devices)
 
 
@@ -37,8 +35,7 @@ async def scan_nearby_monitors():
     dependencies=[Depends(get_current_user)],
 )
 async def scan_nearby_wrist_monitors():
-    async with ble_radio_lock:
-        devices = await scan_hem6161(timeout=10.0)
+    devices = await scan_hem6161_locked(timeout=10.0)
     return BleScanResponse(devices=devices)
 
 
@@ -54,7 +51,7 @@ async def create_blood_pressure_reading(
 ):
     await load_scoped_user(db, actor, payload.user_id)
     try:
-        return await store_blood_pressure_reading(db, payload, slug="blood_pressure_ecg")
+        return await store_blood_pressure_reading(db, payload, slug=payload.device_slug)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

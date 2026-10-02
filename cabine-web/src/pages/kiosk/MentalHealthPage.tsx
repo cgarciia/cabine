@@ -27,7 +27,7 @@ import type { MentalInstrumentId, MentalInstrumentLog, MentalResult } from '../.
 
 type Step = 'invite' | 'gate' | 'instrument' | 'optional' | 'safety' | 'result' | 'done';
 
-export function KioskMentalHealthPage() {
+export function MentalHealthPage() {
     const navigate = useNavigate();
     const { session, setMentalHealth } = useKiosk();
     const started = useMemo(() => new Date().toISOString(), []);

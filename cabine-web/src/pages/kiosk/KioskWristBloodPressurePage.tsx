@@ -80,6 +80,7 @@ export function KioskWristBloodPressurePage() {
                     irregular_heartbeat: local.irregular_heartbeat,
                     measured_at: local.measured_at,
                     session_id: session.sessionId,
+                    device_slug: 'blood_pressure_wrist',
                 });
                 setLastWristBloodPressure(saved);
             } catch {

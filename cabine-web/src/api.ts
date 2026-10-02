@@ -91,6 +91,32 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
     return fallback;
 }
 
+export function isNotFound(error: unknown): boolean {
+    return axios.isAxiosError(error) && error.response?.status === 404;
+}
+
+export type CabinRecord = {
+    id: string;
+    description: string;
+    is_active: boolean;
+    modules: string[];
+};
+
+export async function fetchCurrentCabin(): Promise<CabinRecord> {
+    const { data } = await api.get<CabinRecord>('/cabins/current');
+    return data;
+}
+
+export async function registerCabin(description: string): Promise<CabinRecord> {
+    const { data } = await api.post<CabinRecord>('/cabins/register', { description });
+    return data;
+}
+
+export async function renameCabin(description: string): Promise<CabinRecord> {
+    const { data } = await api.patch<CabinRecord>('/cabins/current', { description });
+    return data;
+}
+
 export type RegistrationSession = {
     access_token: string;
     expires_in: number;
@@ -151,12 +177,9 @@ export async function fetchScales(): Promise<Scale[]> {
     return Array.isArray(data) ? data : [];
 }
 
-/** Default active scale first, then any active one, then whatever exists. */
+/** Balança padrão e ativa. Sem padrão, a coleta não escolhe outra. */
 export function pickPreferredScale(scales: Scale[]): Scale | null {
-    return scales.find((item) => item.is_default && item.is_active)
-        ?? scales.find((item) => item.is_active)
-        ?? scales[0]
-        ?? null;
+    return scales.find((item) => item.is_default && item.is_active) ?? null;
 }
 
 export async function fetchScaleCatalog(): Promise<ScaleCatalog> {
@@ -274,6 +297,7 @@ export async function saveBloodPressureReading(body: {
     movement?: boolean;
     irregular_heartbeat?: boolean;
     measured_at: string;
+    device_slug?: 'blood_pressure_ecg' | 'blood_pressure_wrist';
 }): Promise<BloodPressureReading> {
     const { data } = await api.post<BloodPressureReading>('/blood-pressures', body);
     return data;

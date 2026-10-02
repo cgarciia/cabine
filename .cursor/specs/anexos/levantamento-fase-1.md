@@ -1,3 +1,5 @@
+> **Anexo histórico** (movido de `docs/01-levantamento-estado-atual-fase-1.md`, conteúdo original de 25/09/2026). Descreve o sistema **antes** da modelagem multi-cabine: `people`, `visit_id`, `scales`, FHIR e `/people` não existem mais (hoje `users`, `sessions`, `devices`). Para o estado atual, use as specs numeradas e `../11-estado-e-pendencias.md`.
+
 #  CabiNet IA — Levantamento do estado atual da Fase 1
 
 **Versão do formulário:** 1.0 (modelo 2026-09-14)
